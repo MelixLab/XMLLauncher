@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+    概览卡片，观感与 XIGUASecurity 的 SecurityCard 完全一致：
+    · 白底、直角、无阴影；悬停时底色变浅灰（淡入 150ms）
+    · 悬停描边是一条 1 DIP 的径向渐变线，中心跟着鼠标走，
+      指针附近的卡片也能蹭到一点余光（见 FeatureCard.UpdateReveal）
+    · 图标 48×48，走 IconTemplate（主图形 + 状态徽章）
+-->
+<UserControl
+    x:Class="LinxLauncher.Controls.FeatureCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid
+        x:Name="Root"
+        Background="Transparent"
+        Tapped="Root_Tapped">
+
+        <Border Background="{ThemeResource CardBackgroundBrush}" />
+
+        <Border x:Name="HoverFill" Background="{ThemeResource CardHoverBackgroundBrush}" Opacity="0">
+            <Border.OpacityTransition>
+                <ScalarTransition Duration="0:0:0.15" />
+            </Border.OpacityTransition>
+        </Border>
+
+        <Border x:Name="RevealStroke" BorderThickness="1" Opacity="0">
+            <Border.OpacityTransition>
+                <ScalarTransition Duration="0:0:0.10" />
+            </Border.OpacityTransition>
+        </Border>
+
+        <!--
+            用 Grid 而不是 StackPanel：状态文字占一行还是两行，
+            底部按钮都贴在同一水平线上（StackPanel 会跟着文字顶下去）。
+        -->
+        <Grid Margin="20,16,20,16" VerticalAlignment="Center">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- 图标容器要比图标本身大，否则 56 的图塞进 48 的框会被裁掉一条边 -->
+            <ContentControl
+                Grid.Row="0"
+                Width="56"
+                Height="56"
+                HorizontalAlignment="Left"
+                Content="."
+                ContentTemplate="{x:Bind IconTemplate, Mode=OneWay}" />
+
+            <TextBlock
+                Grid.Row="1"
+                Margin="0,22,0,0"
+                Style="{StaticResource CardTitleTextStyle}"
+                Text="{x:Bind Header, Mode=OneWay}" />
+
+            <TextBlock
+                Grid.Row="2"
+                Margin="0,2,0,0"
+                Style="{StaticResource CardStatusTextStyle}"
+                Text="{x:Bind Status, Mode=OneWay}" />
+
+            <ContentPresenter
+                Grid.Row="3"
+                Margin="0,14,0,0"
+                HorizontalAlignment="Left"
+                Content="{x:Bind Actions, Mode=OneWay}" />
+        </Grid>
+    </Grid>
+</UserControl>

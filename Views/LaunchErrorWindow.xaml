@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="LinxLauncher.Views.LaunchErrorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!--
+        游戏异常退出窗口：独立顶层窗口，不依附主窗口 ——
+        游戏启动后启动器已经躲到托盘里了，这里必须自己冒出来。
+        排版沿用主界面那一套：白底、青绿主色、灰色直角卡片。
+        不放红色警告图标：红留给真正的红色提示行，标题一句话说清就够。
+    -->
+    <Grid Background="{ThemeResource PaneBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题区：只有标题 + 一句话结论 -->
+        <StackPanel
+            Grid.Row="0"
+            Padding="28,26,28,0"
+            Spacing="6">
+            <TextBlock
+                FontFamily="{StaticResource DisplayFontFamily}"
+                FontSize="24"
+                Foreground="{ThemeResource PrimaryTextBrush}"
+                Text="游戏异常退出" />
+            <TextBlock
+                x:Name="SummaryText"
+                MaxWidth="560"
+                FontFamily="{StaticResource TextFontFamily}"
+                FontSize="14"
+                Foreground="{ThemeResource TertiaryTextBrush}"
+                LineHeight="20"
+                TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- 崩溃信息（从 crash-report / 日志里解析出来的） -->
+        <Border
+            x:Name="CrashBlock"
+            Grid.Row="1"
+            Margin="28,18,28,0"
+            Padding="14,12"
+            Background="{ThemeResource BrandSoftBrush}"
+            CornerRadius="4"
+            Visibility="Collapsed">
+            <StackPanel Spacing="6">
+                <TextBlock
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="12.5"
+                    Foreground="{ThemeResource SecondaryTextBrush}"
+                    Text="崩溃信息" />
+                <TextBlock
+                    x:Name="CrashText"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="14"
+                    Foreground="{ThemeResource PrimaryTextBrush}"
+                    LineHeight="20"
+                    TextWrapping="Wrap" />
+                <TextBlock
+                    x:Name="AdviceText"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13"
+                    Foreground="{ThemeResource LinkTextBrush}"
+                    LineHeight="19"
+                    TextWrapping="Wrap"
+                    Visibility="Collapsed" />
+            </StackPanel>
+        </Border>
+
+        <!-- 关键信息 -->
+        <Border
+            Grid.Row="2"
+            Margin="28,12,28,0"
+            Padding="16,12"
+            Background="{ThemeResource ThreatCardBackgroundBrush}"
+            CornerRadius="4">
+            <Grid ColumnSpacing="16" RowSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13"
+                    Foreground="{ThemeResource SecondaryTextBrush}"
+                    Text="版本" />
+                <TextBlock
+                    x:Name="VersionValue"
+                    Grid.Column="1"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13"
+                    FontWeight="SemiBold"
+                    Foreground="{ThemeResource PrimaryTextBrush}"
+                    Text="—"
+                    TextTrimming="CharacterEllipsis" />
+
+                <TextBlock
+                    Grid.Row="1"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13"
+                    Foreground="{ThemeResource SecondaryTextBrush}"
+                    Text="退出码" />
+                <TextBlock
+                    x:Name="ExitValue"
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13"
+                    FontWeight="SemiBold"
+                    Foreground="{ThemeResource PrimaryTextBrush}"
+                    Text="—" />
+
+                <TextBlock
+                    Grid.Row="2"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13"
+                    Foreground="{ThemeResource SecondaryTextBrush}"
+                    Text="日志" />
+                <TextBlock
+                    x:Name="LogPathValue"
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13"
+                    Foreground="{ThemeResource LinkTextBrush}"
+                    Text="—"
+                    TextTrimming="CharacterEllipsis" />
+            </Grid>
+        </Border>
+
+        <!-- 日志尾部 -->
+        <Border
+            Grid.Row="3"
+            Margin="28,12,28,0"
+            Background="{ThemeResource CardBackgroundBrush}"
+            BorderBrush="{ThemeResource DividerBrush}"
+            BorderThickness="1"
+            CornerRadius="4">
+            <ScrollViewer
+                Padding="14,12"
+                HorizontalScrollBarVisibility="Auto"
+                HorizontalScrollMode="Auto"
+                VerticalScrollBarVisibility="Auto"
+                VerticalScrollMode="Auto">
+                <TextBlock
+                    x:Name="LogText"
+                    FontFamily="Consolas"
+                    FontSize="12"
+                    Foreground="{ThemeResource SecondaryTextBrush}"
+                    IsTextSelectionEnabled="True"
+                    LineHeight="17"
+                    TextWrapping="NoWrap" />
+            </ScrollViewer>
+        </Border>
+
+        <!-- 提醒 + 操作 -->
+        <Grid
+            Grid.Row="4"
+            Padding="28,14,28,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border
+                Padding="12,10"
+                Background="{ThemeResource BrandSoftBrush}"
+                CornerRadius="4">
+                <TextBlock
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13"
+                    Foreground="{ThemeResource PrimaryTextBrush}"
+                    LineHeight="19"
+                    TextWrapping="Wrap"
+                    Text="请不要截图这个界面 —— 截图看不清细节。请把上面那个日志文件发给信任的人，让他们帮你分析原因。" />
+            </Border>
+
+            <StackPanel
+                Grid.Row="1"
+                Margin="0,12,0,0"
+                HorizontalAlignment="Right"
+                Orientation="Horizontal"
+                Spacing="8">
+                <HyperlinkButton
+                    x:Name="OpenLogButton"
+                    Click="OpenLog_Click"
+                    Content="打开日志"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13" />
+                <Button
+                    x:Name="CopyButton"
+                    Click="Copy_Click"
+                    Content="复制详情"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13" />
+                <Button
+                    Click="Close_Click"
+                    Content="关闭"
+                    FontFamily="{StaticResource TextFontFamily}"
+                    FontSize="13"
+                    Style="{StaticResource AccentButtonStyle}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

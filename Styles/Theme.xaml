@@ -1,0 +1,483 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+    XIGUASecurity · 主题资源
+    配色 / 字号 全部取自 XIGUASecurity（XIGUASecurity）实际截图取样，
+    取样方法见 tools/probe.ps1 与 tools/bands.ps1。
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Default">
+            <!-- 版面 -->
+            <SolidColorBrush x:Key="PaneBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="BrandBrush" Color="#00A88E" />
+            <SolidColorBrush x:Key="BrandSoftBrush" Color="#E7F6F2" />
+                <LinearGradientBrush x:Key="TopFadeBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#FFFDFDFD" />
+        <GradientStop Offset="1" Color="#00FDFDFD" />
+    </LinearGradientBrush>
+            <SolidColorBrush x:Key="PageLayerBackgroundBrush" Color="#FDFDFD" />
+            <SolidColorBrush x:Key="PageLayerBorderBrush" Color="#F0F0F0" />
+            <!-- 开屏底色：跟着安全中心走纯白（不是页面那层 #FDFDFD） -->
+            <SolidColorBrush x:Key="SplashBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#F2F2F2" />
+            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="#EFEFEF" />
+            <SolidColorBrush x:Key="DividerBrush" Color="#E5E5E5" />
+            <SolidColorBrush x:Key="NavSelectionBackgroundBrush" Color="#F6F6F6" />
+            <SolidColorBrush x:Key="NavSelectionIndicatorBrush" Color="#00A88E" />
+            <!-- 保护历史记录 / 允许的威胁：展开的那条记录底色 -->
+            <SolidColorBrush x:Key="RecordExpandedBackgroundBrush" Color="#F2F2F2" />
+            <SolidColorBrush x:Key="RecordHoverBackgroundBrush" Color="#EDEDED" />
+            <SolidColorBrush x:Key="RecordPressedBackgroundBrush" Color="#E6E6E6" />
+            <!-- 「当前威胁」的威胁卡片：常态就是一块灰色直角卡片（与主页卡片同一观感） -->
+            <SolidColorBrush x:Key="ThreatCardBackgroundBrush" Color="#F2F2F2" />
+            <SolidColorBrush x:Key="ThreatCardHoverBackgroundBrush" Color="#EAEAEA" />
+            <!-- 扫描选项的单选按钮 -->
+            <SolidColorBrush x:Key="RadioCircleOnBrush" Color="#00A88E" />
+            <SolidColorBrush x:Key="RadioHoleBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="RadioCircleOffBrush" Color="#8A8A8A" />
+            <SolidColorBrush x:Key="RadioCircleOffPointerOverBrush" Color="#5F5F5F" />
+
+
+            <!-- 文字 -->
+            <SolidColorBrush x:Key="PrimaryTextBrush" Color="#1B1B1B" />
+            <SolidColorBrush x:Key="SecondaryTextBrush" Color="#606060" />
+            <SolidColorBrush x:Key="TertiaryTextBrush" Color="#484848" />
+            <SolidColorBrush x:Key="LinkTextBrush" Color="#006B5B" />
+            <SolidColorBrush x:Key="NoticeTextBrush" Color="#C50500" />
+
+            <!-- 语义色（图标） -->
+            <SolidColorBrush x:Key="SecurityBlueBrush" Color="#00A88E" />
+            <SolidColorBrush x:Key="SecurityGreenBrush" Color="#008A17" />
+            <SolidColorBrush x:Key="SecurityRedBrush" Color="#D82128" />
+            <SolidColorBrush x:Key="SecurityAmberBrush" Color="#FFC20A" />
+            <SolidColorBrush x:Key="SecurityInkBrush" Color="#1B1B1B" />
+
+            <!-- 主程序更新横幅（概览页）：琥珀底 + 深褐字，WinUI InfoBar 警告配色 -->
+            <SolidColorBrush x:Key="UpdateBannerBackgroundBrush" Color="#FFF7E0" />
+            <SolidColorBrush x:Key="UpdateBannerTextBrush" Color="#5F4500" />
+
+            <!-- 卡片操作按钮 -->
+            <SolidColorBrush x:Key="CardActionBackgroundBrush" Color="#D2D2D2" />
+            <SolidColorBrush x:Key="CardActionHoverBrush" Color="#C6C6C6" />
+            <SolidColorBrush x:Key="CardActionPressedBrush" Color="#B9B9B9" />
+
+            <!-- 开关：滑块在左、状态文字在右（与 Defender 一致）。
+                 模板用 WinUI 官方 DefaultToggleSwitchStyle（自带滑移动画），
+                 这里只覆盖它的配色资源。 -->
+            <!--
+                注意类型：官方模板对「悬停 / 按下」用的是
+                    ColorAnimation ... TargetProperty="(Shape.Stroke).(SolidColorBrush.Color)"
+                也就是说这几个键必须是 <Color>。写成 SolidColorBrush 时动画拿不到 Color，
+                会把外框描边直接打成空 —— 表现就是鼠标一靠近边框消失、且没有过渡动画。
+            -->
+            <SolidColorBrush x:Key="ToggleSwitchContainerBackground" Color="Transparent" />
+            <Color x:Key="ToggleSwitchContainerBackgroundPointerOver">#00FFFFFF</Color>
+            <Color x:Key="ToggleSwitchContainerBackgroundPressed">#00FFFFFF</Color>
+            <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#F5F5F5" />
+            <Color x:Key="ToggleSwitchFillOffPointerOver">#FFF0F0F0</Color>
+            <Color x:Key="ToggleSwitchFillOffPressed">#FFE9E9E9</Color>
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#8D8D8D" />
+            <Color x:Key="ToggleSwitchStrokeOffPointerOver">#FF6E6E6E</Color>
+            <Color x:Key="ToggleSwitchStrokeOffPressed">#FF5F5F5F</Color>
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="#5F5F5F" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="#4A4A4A" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPressed" Color="#3D3D3D" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#00A88E" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#005FA8" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#00569B" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobStrokeOn" Color="Transparent" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Light">
+            <SolidColorBrush x:Key="PaneBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="BrandBrush" Color="#00A88E" />
+            <SolidColorBrush x:Key="BrandSoftBrush" Color="#E7F6F2" />
+                <LinearGradientBrush x:Key="TopFadeBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#FFFDFDFD" />
+        <GradientStop Offset="1" Color="#00FDFDFD" />
+    </LinearGradientBrush>
+            <SolidColorBrush x:Key="PageLayerBackgroundBrush" Color="#FDFDFD" />
+            <SolidColorBrush x:Key="PageLayerBorderBrush" Color="#F0F0F0" />
+            <!-- 开屏底色：跟着安全中心走纯白（不是页面那层 #FDFDFD） -->
+            <SolidColorBrush x:Key="SplashBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#F2F2F2" />
+            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="#EFEFEF" />
+            <SolidColorBrush x:Key="DividerBrush" Color="#E5E5E5" />
+            <SolidColorBrush x:Key="NavSelectionBackgroundBrush" Color="#F6F6F6" />
+            <SolidColorBrush x:Key="NavSelectionIndicatorBrush" Color="#00A88E" />
+            <!-- 保护历史记录 / 允许的威胁：展开的那条记录底色 -->
+            <SolidColorBrush x:Key="RecordExpandedBackgroundBrush" Color="#F2F2F2" />
+            <SolidColorBrush x:Key="RecordHoverBackgroundBrush" Color="#EDEDED" />
+            <SolidColorBrush x:Key="RecordPressedBackgroundBrush" Color="#E6E6E6" />
+            <!-- 「当前威胁」的威胁卡片：常态就是一块灰色直角卡片（与主页卡片同一观感） -->
+            <SolidColorBrush x:Key="ThreatCardBackgroundBrush" Color="#F2F2F2" />
+            <SolidColorBrush x:Key="ThreatCardHoverBackgroundBrush" Color="#EAEAEA" />
+            <!-- 扫描选项的单选按钮 -->
+            <SolidColorBrush x:Key="RadioCircleOnBrush" Color="#00A88E" />
+            <SolidColorBrush x:Key="RadioHoleBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="RadioCircleOffBrush" Color="#8A8A8A" />
+            <SolidColorBrush x:Key="RadioCircleOffPointerOverBrush" Color="#5F5F5F" />
+
+
+            <SolidColorBrush x:Key="PrimaryTextBrush" Color="#1B1B1B" />
+            <SolidColorBrush x:Key="SecondaryTextBrush" Color="#606060" />
+            <SolidColorBrush x:Key="TertiaryTextBrush" Color="#484848" />
+            <SolidColorBrush x:Key="LinkTextBrush" Color="#006B5B" />
+            <SolidColorBrush x:Key="NoticeTextBrush" Color="#C50500" />
+
+            <SolidColorBrush x:Key="SecurityBlueBrush" Color="#00A88E" />
+            <SolidColorBrush x:Key="SecurityGreenBrush" Color="#008A17" />
+            <SolidColorBrush x:Key="SecurityRedBrush" Color="#D82128" />
+            <SolidColorBrush x:Key="SecurityAmberBrush" Color="#FFC20A" />
+            <SolidColorBrush x:Key="SecurityInkBrush" Color="#1B1B1B" />
+
+            <!-- 主程序更新横幅（概览页）：琥珀底 + 深褐字，WinUI InfoBar 警告配色 -->
+            <SolidColorBrush x:Key="UpdateBannerBackgroundBrush" Color="#FFF7E0" />
+            <SolidColorBrush x:Key="UpdateBannerTextBrush" Color="#5F4500" />
+
+            <SolidColorBrush x:Key="CardActionBackgroundBrush" Color="#D2D2D2" />
+            <SolidColorBrush x:Key="CardActionHoverBrush" Color="#C6C6C6" />
+            <SolidColorBrush x:Key="CardActionPressedBrush" Color="#B9B9B9" />
+
+            <!-- 开关：滑块在左、状态文字在右（与 Defender 一致）。
+                 模板用 WinUI 官方 DefaultToggleSwitchStyle（自带滑移动画），
+                 这里只覆盖它的配色资源。 -->
+            <!--
+                注意类型：官方模板对「悬停 / 按下」用的是
+                    ColorAnimation ... TargetProperty="(Shape.Stroke).(SolidColorBrush.Color)"
+                也就是说这几个键必须是 <Color>。写成 SolidColorBrush 时动画拿不到 Color，
+                会把外框描边直接打成空 —— 表现就是鼠标一靠近边框消失、且没有过渡动画。
+            -->
+            <SolidColorBrush x:Key="ToggleSwitchContainerBackground" Color="Transparent" />
+            <Color x:Key="ToggleSwitchContainerBackgroundPointerOver">#00FFFFFF</Color>
+            <Color x:Key="ToggleSwitchContainerBackgroundPressed">#00FFFFFF</Color>
+            <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#F5F5F5" />
+            <Color x:Key="ToggleSwitchFillOffPointerOver">#FFF0F0F0</Color>
+            <Color x:Key="ToggleSwitchFillOffPressed">#FFE9E9E9</Color>
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#8D8D8D" />
+            <Color x:Key="ToggleSwitchStrokeOffPointerOver">#FF6E6E6E</Color>
+            <Color x:Key="ToggleSwitchStrokeOffPressed">#FF5F5F5F</Color>
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="#5F5F5F" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="#4A4A4A" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPressed" Color="#3D3D3D" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#00A88E" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#005FA8" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#00569B" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobStrokeOn" Color="Transparent" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+            <!--
+                ★ 底色 = #000000，这是**故意的**，别改回 #202020。
+
+                Windows 在没启用 Mica 时，深色标题栏由 DWM 画成纯黑。
+                早先窗口底用的是 #202020、内容层 #1C1C1C，于是屏幕上方一条纯黑、
+                下方一片深灰，接缝一眼就能看出来，整体像两个程序拼起来的。
+
+                这里的取向是「内容区去对齐标题栏」，而不是反过来去改标题栏
+                （改标题栏会让浅色模式对不上 —— 已经踩过一次）。
+
+                层级不再靠「底色比黑更黑」（黑到底了，没有余量），改成靠
+                <b>卡片明度递增</b>来分层：
+                    底 #000000 → 卡片 #1C1C1C → 卡片悬停 #262626 → 选中 #2E2E2E
+                这样做的好处是：深色下卡片是「浮在黑底上的一块」，比原先
+                「深灰底上叠稍浅的灰」层次更清楚，也和 Win11 深色应用的观感一致。
+            -->
+            <SolidColorBrush x:Key="PaneBackgroundBrush" Color="#000000" />
+            <SolidColorBrush x:Key="BrandBrush" Color="#35D4BA" />
+            <SolidColorBrush x:Key="BrandSoftBrush" Color="#12332D" />
+                <LinearGradientBrush x:Key="TopFadeBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#FF000000" />
+        <GradientStop Offset="1" Color="#00000000" />
+    </LinearGradientBrush>
+            <SolidColorBrush x:Key="PageLayerBackgroundBrush" Color="#000000" />
+            <SolidColorBrush x:Key="PageLayerBorderBrush" Color="#2A2A2A" />
+            <SolidColorBrush x:Key="SplashBackgroundBrush" Color="#000000" />
+
+            <!-- 卡片：靠明度递增分层，不再依赖底色差 -->
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="#1C1C1C" />
+            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#262626" />
+            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="#303030" />
+            <SolidColorBrush x:Key="DividerBrush" Color="#2E2E2E" />
+            <SolidColorBrush x:Key="NavSelectionBackgroundBrush" Color="#262626" />
+            <SolidColorBrush x:Key="NavSelectionIndicatorBrush" Color="#35D4BA" />
+            <SolidColorBrush x:Key="RecordExpandedBackgroundBrush" Color="#1F1F1F" />
+            <SolidColorBrush x:Key="RecordHoverBackgroundBrush" Color="#262626" />
+            <SolidColorBrush x:Key="RecordPressedBackgroundBrush" Color="#2E2E2E" />
+            <!-- 「当前威胁」的威胁卡片：黑底上的一块深灰，保持与主页卡片同一观感 -->
+            <SolidColorBrush x:Key="ThreatCardBackgroundBrush" Color="#1C1C1C" />
+            <SolidColorBrush x:Key="ThreatCardHoverBackgroundBrush" Color="#262626" />
+            <!-- 扫描选项的单选按钮 -->
+            <SolidColorBrush x:Key="RadioCircleOnBrush" Color="#35D4BA" />
+            <SolidColorBrush x:Key="RadioHoleBrush" Color="#000000" />
+            <SolidColorBrush x:Key="RadioCircleOffBrush" Color="#9A9A9A" />
+            <SolidColorBrush x:Key="RadioCircleOffPointerOverBrush" Color="#CFCFCF" />
+
+
+            <SolidColorBrush x:Key="PrimaryTextBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="SecondaryTextBrush" Color="#B5B5B5" />
+            <SolidColorBrush x:Key="TertiaryTextBrush" Color="#ADADAD" />
+            <SolidColorBrush x:Key="LinkTextBrush" Color="#6CB8F6" />
+            <SolidColorBrush x:Key="NoticeTextBrush" Color="#FF99A4" />
+
+            <SolidColorBrush x:Key="SecurityBlueBrush" Color="#4CC2FF" />
+            <SolidColorBrush x:Key="SecurityGreenBrush" Color="#6CCB5F" />
+            <SolidColorBrush x:Key="SecurityRedBrush" Color="#FF6B6B" />
+            <SolidColorBrush x:Key="SecurityAmberBrush" Color="#FFD466" />
+            <SolidColorBrush x:Key="SecurityInkBrush" Color="#1A1A1A" />
+
+            <!-- 主程序更新横幅（概览页 · 深色）：暗琥珀底 + 亮琥珀字 -->
+            <SolidColorBrush x:Key="UpdateBannerBackgroundBrush" Color="#2E2708" />
+            <SolidColorBrush x:Key="UpdateBannerTextBrush" Color="#FFD466" />
+
+            <SolidColorBrush x:Key="CardActionBackgroundBrush" Color="#323232" />
+            <SolidColorBrush x:Key="CardActionHoverBrush" Color="#3D3D3D" />
+            <SolidColorBrush x:Key="CardActionPressedBrush" Color="#484848" />
+
+            <!-- 开关（深色）：同样只覆盖官方模板的配色资源 -->
+            <SolidColorBrush x:Key="ToggleSwitchContainerBackground" Color="Transparent" />
+            <Color x:Key="ToggleSwitchContainerBackgroundPointerOver">#00FFFFFF</Color>
+            <Color x:Key="ToggleSwitchContainerBackgroundPressed">#00FFFFFF</Color>
+            <SolidColorBrush x:Key="ToggleSwitchFillOff" Color="#2B2B2B" />
+            <Color x:Key="ToggleSwitchFillOffPointerOver">#FF333333</Color>
+            <Color x:Key="ToggleSwitchFillOffPressed">#FF3B3B3B</Color>
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOff" Color="#9A9A9A" />
+            <Color x:Key="ToggleSwitchStrokeOffPointerOver">#FFCFCFCF</Color>
+            <Color x:Key="ToggleSwitchStrokeOffPressed">#FFCFCFCF</Color>
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOff" Color="#B5B5B5" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPointerOver" Color="#CFCFCF" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOffPressed" Color="#E0E0E0" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#35D4BA" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#7AD4FF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#8FDAFF" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPointerOver" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleSwitchStrokeOnPressed" Color="Transparent" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#0A0A0A" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#0A0A0A" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#0A0A0A" />
+            <SolidColorBrush x:Key="ToggleSwitchKnobStrokeOn" Color="Transparent" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="PaneBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="BrandBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="BrandSoftBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="PageLayerBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="PageLayerBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SplashBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CardBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="DividerBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="NavSelectionBackgroundBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="NavSelectionIndicatorBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <!-- 侧边栏展开时的面板底色（WD 展开后是灰的，不是透明） -->
+            <SolidColorBrush x:Key="NavExpandedPaneBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <!-- 保护历史记录 / 允许的威胁：展开的那条记录底色 -->
+            <SolidColorBrush x:Key="RecordExpandedBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="RecordHoverBackgroundBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="RecordPressedBackgroundBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <!-- 「当前威胁」的威胁卡片：常态就是一块灰色直角卡片（与主页卡片同一观感） -->
+            <SolidColorBrush x:Key="ThreatCardBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="ThreatCardHoverBackgroundBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <!-- 扫描选项的单选按钮 -->
+            <SolidColorBrush x:Key="RadioCircleOnBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="RadioHoleBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="RadioCircleOffBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="RadioCircleOffPointerOverBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+
+
+            <SolidColorBrush x:Key="PrimaryTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SecondaryTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="TertiaryTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="LinkTextBrush" Color="{ThemeResource SystemColorHotlightColor}" />
+            <SolidColorBrush x:Key="NoticeTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+
+            <SolidColorBrush x:Key="SecurityBlueBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SecurityGreenBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SecurityRedBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SecurityAmberBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SecurityInkBrush" Color="{ThemeResource SystemColorWindowColor}" />
+
+            <!-- 主程序更新横幅（概览页 · 高对比）：跟随系统色，边框保证可见 -->
+            <SolidColorBrush x:Key="UpdateBannerBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="UpdateBannerTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+
+            <SolidColorBrush x:Key="CardActionBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="CardActionHoverBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="CardActionPressedBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+
+            <!--
+                开关（高对比）：这里刻意「不」覆盖 ToggleSwitch* 配色资源。
+                框架自带的高对比定义本就成对（颜色键是 <Color>、笔刷键是画笔），
+                我们自己再写一遍极容易把 ColorAnimation 用的键写成画笔而踩坑；
+                直接沿用系统高对比配色也才是正确做法。
+            -->
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- 字体 -->
+    <FontFamily x:Key="IconFontFamily">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+    <LinearGradientBrush x:Key="TopFadeBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Offset="0" Color="#FFFDFDFD" />
+        <GradientStop Offset="1" Color="#00FDFDFD" />
+    </LinearGradientBrush>
+
+    <!--
+        开关：官方 ToggleSwitch 模板默认在滑块上下各留 10 DIP 的内容边距
+        （让整控件高 40），这里压成 0，保持设置页原先实测出来的紧凑间距。
+    -->
+    <x:Double x:Key="ToggleSwitchPreContentMargin">0</x:Double>
+    <x:Double x:Key="ToggleSwitchPostContentMargin">0</x:Double>
+
+
+    <!-- ==================================================================
+         字体
+         Defender 的标题用 Segoe UI Variable Display —— 字形比传统 Segoe UI
+         更圆润，中文回退到 微软雅黑 UI。这里按同样的顺序声明字体族回退链。
+         ================================================================== -->
+    <FontFamily x:Key="DisplayFontFamily">Segoe UI Variable Display,Segoe UI Variable,Microsoft YaHei UI,Microsoft YaHei,Segoe UI,Arial</FontFamily>
+    <FontFamily x:Key="TextFontFamily">Segoe UI Variable Text,Segoe UI Variable,Microsoft YaHei UI,Microsoft YaHei,Segoe UI,Arial</FontFamily>
+    <FontFamily x:Key="NotoFontFamily">Noto Sans SC</FontFamily>
+
+    <!-- ==================================================================
+         颜色（浅色 / 深色 / 高对比）
+         ================================================================== -->
+
+    <!-- ==================================================================
+         字号 / 字重（单位 DIP，取自 Defender 截图实测）
+         ================================================================== -->
+
+    <!-- 概览页大标题：24 -->
+    <Style x:Key="OverviewTitleTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFontFamily}" />
+        <Setter Property="FontSize" Value="24" />
+        <Setter Property="LineHeight" Value="32" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{ThemeResource PrimaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 设置类页面大标题：28 -->
+    <Style x:Key="PageTitleTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFontFamily}" />
+        <Setter Property="FontSize" Value="28" />
+        <Setter Property="LineHeight" Value="36" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{ThemeResource PrimaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 概览页副标题：13，深灰 #484848 -->
+    <Style x:Key="OverviewSubtitleTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="LineHeight" Value="18" />
+        <Setter Property="Foreground" Value="{ThemeResource TertiaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 设置页副标题：14 -->
+    <Style x:Key="PageSubtitleTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource TertiaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 小节标题：20 -->
+    <Style x:Key="SectionHeaderTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFontFamily}" />
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="LineHeight" Value="26" />
+        <Setter Property="FontWeight" Value="Normal" />
+        <Setter Property="Foreground" Value="{ThemeResource PrimaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 正文：15 -->
+    <Style x:Key="BodyTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource SecondaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 正文（深色，用于状态行） -->
+    <Style x:Key="BodyStrongTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource PrimaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 辅助说明：14 -->
+    <Style x:Key="CaptionTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource SecondaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 卡片标题：15 -->
+    <Style x:Key="CardTitleTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource PrimaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 卡片状态：12 -->
+    <Style x:Key="CardStatusTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="LineHeight" Value="17" />
+        <Setter Property="Foreground" Value="{ThemeResource SecondaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- 保护历史记录里每条记录的时间戳：13 -->
+    <Style x:Key="RecordDateTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="LineHeight" Value="18" />
+        <Setter Property="Foreground" Value="{ThemeResource SecondaryTextBrush}" />
+        <Setter Property="TextWrapping" Value="NoWrap" />
+    </Style>
+
+    <!-- 红色提示行：14 -->
+    <Style x:Key="NoticeTextStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="LineHeight" Value="20" />
+        <Setter Property="Foreground" Value="{ThemeResource NoticeTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style x:Key="SectionTitleTextStyle" TargetType="TextBlock"><Setter Property="FontFamily" Value="{StaticResource DisplayFontFamily}" /><Setter Property="FontSize" Value="20" /><Setter Property="LineHeight" Value="26" /><Setter Property="Foreground" Value="{ThemeResource PrimaryTextBrush}" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
+    <Style x:Key="MetricLabelTextStyle" TargetType="TextBlock"><Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" /><Setter Property="FontSize" Value="12" /><Setter Property="LineHeight" Value="17" /><Setter Property="Foreground" Value="{ThemeResource SecondaryTextBrush}" /><Setter Property="TextWrapping" Value="NoWrap" /></Style>
+    <Style x:Key="MetricValueTextStyle" TargetType="TextBlock"><Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" /><Setter Property="FontSize" Value="14" /><Setter Property="LineHeight" Value="20" /><Setter Property="FontWeight" Value="SemiBold" /><Setter Property="Foreground" Value="{ThemeResource PrimaryTextBrush}" /><Setter Property="TextWrapping" Value="NoWrap" /></Style>
+</ResourceDictionary>

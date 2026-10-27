@@ -1,0 +1,74 @@
+## .NET / Visual Studio
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+artifacts/
+
+# Build logs
+[Ll]og/
+[Ll]ogs/
+*.log
+*.binlog
+
+# Test results
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# NuGet
+*.nupkg
+*.snupkg
+*.nuget.props
+*.nuget.targets
+project.lock.json
+
+# MSIX packaging output
+AppPackages/
+BundleArtifacts/
+*.msix
+*.msixupload
+*.appx
+*.appxbundle
+*.appxupload
+
+# Publish output
+publish/
+*.pubxml
+PublishScripts/
+
+# Code analysis and tooling
+_ReSharper*/
+*.DotSettings.user
+*.dotCover
+.idea/
+
+# Generated files
+Generated\ Files/
+*_wpftmp.csproj
+
+# ---------------------------------------------------------------
+# 本地私有配置：真实服务器地址只存在这一份，不进仓库
+# 新克隆仓库的人请把 Services\LocalSecrets.example.cs.txt
+# 复制成 Services\LocalSecrets.cs，再填自己的地址
+# ---------------------------------------------------------------
+Services/LocalSecrets.cs
+
+# 备份 / 临时文件
+*.bak
+*.bak2
+*.bak3
+*.orig
+*.tmp
+*.swp
+*~
+
+# 资源备份文件
+*.old.*
+*.orig.*

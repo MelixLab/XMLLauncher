@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "LinxLauncher.WinUI (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "LinxLauncher.WinUI (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

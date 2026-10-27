@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="LinxLauncher.Controls.LaunchProgressDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:LinxLauncher.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!--
+        启动进度对话框：外壳、宽度、按钮位置都对齐 DownloadProgressDialog，
+        内容换成 LaunchSteps（检查版本 / 定位 Java / 整理参数 / 启动进程 / 运行中）。
+        游戏起来后启动器会自动最小化到托盘，这个框会自己关掉。
+    -->
+    <local:LaunchSteps x:Name="Steps" Width="470" />
+</ContentDialog>

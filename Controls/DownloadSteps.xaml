@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="LinxLauncher.Controls.DownloadSteps"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <!--
+        下载进度的统一呈现（对话框与下载页共用）：
+        · 固定五步：准备 / 客户端 / 依赖库 / 资源文件 / 完成，同一阶段不会重复出现
+        · 已完成打绿勾、进行中用箭头、未开始是灰色空位
+        · 一条细进度条 + 速度 / 已下载 / 百分比 + 当前文件（正常字体，不用等宽）
+    -->
+    <StackPanel Spacing="10">
+        <StackPanel x:Name="StepsHost" Spacing="9" />
+
+        <ProgressBar
+            x:Name="Progress"
+            Height="3"
+            Margin="0,8,0,0"
+            CornerRadius="0" />
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock
+                x:Name="SpeedText"
+                FontSize="12.5"
+                Foreground="{ThemeResource SecondaryTextBrush}"
+                Text="—" />
+            <TextBlock
+                x:Name="SizeText"
+                Grid.Column="1"
+                Margin="16,0,0,0"
+                FontSize="12.5"
+                Foreground="{ThemeResource SecondaryTextBrush}"
+                Text="" />
+            <TextBlock
+                x:Name="PercentText"
+                Grid.Column="2"
+                FontSize="12.5"
+                Foreground="{ThemeResource SecondaryTextBrush}"
+                Text="0%" />
+        </Grid>
+
+        <TextBlock
+            x:Name="FileText"
+            FontSize="12"
+            Foreground="{ThemeResource TertiaryTextBrush}"
+            Text="—"
+            TextTrimming="CharacterEllipsis" />
+    </StackPanel>
+</UserControl>

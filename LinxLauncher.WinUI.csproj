@@ -1,0 +1,68 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>LinxLauncher</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
+    <Platforms>x86;x64;ARM64</Platforms>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant())</RuntimeIdentifier>
+    <PublishProfile Condition="Exists('Properties\PublishProfiles\win-$(Platform).pubxml')">win-$(Platform).pubxml</PublishProfile>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      整个 Assets 都要进发布目录：WinUI 的任务栏/标题栏图标是运行时 AppWindow.SetIcon 读文件，
+      不是内嵌在 exe 里的。只列 Blocks 的话发布出来只剩方块图标，
+      外面那个 exe 有图标、任务栏却是白纸一张 —— 就是这么来的。
+    -->
+    <Content Include="Assets\**" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Manifest Include="$(ApplicationManifest)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.7.1" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
+  </PropertyGroup>
+
+  <!--
+    Native AOT（可选）：
+        dotnet publish -c Release -r win-x64 -p:PublishAot=true -p:SelfContained=true
+
+    产物是原生 exe（约 15 MB），没有 coreclr.dll，冷启动更快。要守住三条：
+      1) 所有 JSON 读写必须走 Services/AppJsonContext.cs 里登记过的类型；
+         新增模型忘了登记，AOT 版会在运行时抛 NotSupportedException（普通构建看不出来）。
+      2) Assets 下的图片必须显式挂成 Content（见上面 Blocks 那条），
+         否则 publish 输出里不带这个目录，界面图标会整片消失。
+      3) 列表 / 模板里被 {Binding} 绑定的模型类要标 [Microsoft.UI.Xaml.Data.Bindable]，
+         否则裁剪掉属性元数据后，一设 ItemsSource 就抛
+         ArgumentException: Value does not fall within the expected range。
+    发布完确认一下 <输出目录>\Assets\Blocks\*.png 都在。
+  -->
+</Project>

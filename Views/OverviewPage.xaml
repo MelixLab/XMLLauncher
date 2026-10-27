@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="LinxLauncher.Views.OverviewPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:LinxLauncher.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Background="{ThemeResource PageLayerBackgroundBrush}"
+    mc:Ignorable="d">
+
+    <ScrollViewer
+        HorizontalScrollBarVisibility="Disabled"
+        HorizontalScrollMode="Disabled"
+        HorizontalContentAlignment="Stretch"
+        VerticalScrollBarVisibility="Auto"
+        VerticalScrollMode="Auto">
+        <Grid
+            x:Name="CardHost"
+            Padding="40,40,40,48"
+            PointerExited="CardHost_PointerExited"
+            PointerMoved="CardHost_PointerMoved">
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 标题 -->
+            <StackPanel Grid.Row="0" HorizontalAlignment="Left">
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="概览" />
+                <TextBlock
+                    Margin="0,11,0,0"
+                    Style="{StaticResource PageSubtitleTextStyle}"
+                    Text="了解本机的 Minecraft 版本、模组加载器与下载情况，并进行必要操作。" />
+
+            </StackPanel>
+
+            <!-- 第一行 -->
+            <Grid Grid.Row="1" Height="258" Margin="0,36,0,0" HorizontalAlignment="Left">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="232" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="232" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="232" />
+                </Grid.ColumnDefinitions>
+
+                <controls:FeatureCard
+                    x:Name="VersionCard"
+                    Grid.Column="0"
+                    IconTemplate="{StaticResource IconCardGame}"
+                    NavTag="versions">
+                    <controls:FeatureCard.Actions>
+                        <!-- 点这里弹出小浮窗选版本，选哪个就直接启动哪个 -->
+                        <Button
+                            Click="VersionPick_Click"
+                            Content="选择版本"
+                            Style="{StaticResource CardActionButtonStyle}" />
+                    </controls:FeatureCard.Actions>
+                </controls:FeatureCard>
+
+                <controls:FeatureCard
+                    x:Name="LoaderCard"
+                    Grid.Column="2"
+                    IconTemplate="{StaticResource IconCardLoader}"
+                    NavTag="versions">
+                    <controls:FeatureCard.Actions>
+                        <Button
+                            Click="GoVersions_Click"
+                            Content="安装加载器"
+                            Style="{StaticResource CardActionButtonStyle}" />
+                    </controls:FeatureCard.Actions>
+                </controls:FeatureCard>
+
+                <controls:FeatureCard
+                    x:Name="SpeedCard"
+                    Grid.Column="4"
+                    IconTemplate="{StaticResource IconCardDownload}"
+                    NavTag="settings">
+                    <controls:FeatureCard.Actions>
+                        <Button
+                            Click="GoSettings_Click"
+                            Content="下载设置"
+                            Style="{StaticResource CardActionButtonStyle}" />
+                    </controls:FeatureCard.Actions>
+                </controls:FeatureCard>
+            </Grid>
+
+            <!-- 第二行 -->
+            <Grid Grid.Row="2" Height="258" Margin="0,8,0,0" HorizontalAlignment="Left">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="232" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="232" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="232" />
+                </Grid.ColumnDefinitions>
+
+                <controls:FeatureCard
+                    x:Name="InstalledCard"
+                    Grid.Column="0"
+                    IconTemplate="{StaticResource IconCardLibrary}"
+                    NavTag="versions">
+                    <controls:FeatureCard.Actions>
+                        <Button
+                            Click="GoInstalled_Click"
+                            Content="管理版本"
+                            Style="{StaticResource CardActionButtonStyle}" />
+                    </controls:FeatureCard.Actions>
+                </controls:FeatureCard>
+
+                <controls:FeatureCard
+                    x:Name="JavaCard"
+                    Grid.Column="2"
+                    IconTemplate="{StaticResource IconCardJava}"
+                    NavTag="settings">
+                    <controls:FeatureCard.Actions>
+                        <Button
+                            Click="GoSettings_Click"
+                            Content="更换 Java"
+                            Style="{StaticResource CardActionButtonStyle}" />
+                    </controls:FeatureCard.Actions>
+                </controls:FeatureCard>
+
+                <controls:FeatureCard
+                    x:Name="TaskCard"
+                    Grid.Column="4"
+                    IconTemplate="{StaticResource IconCardTask}"
+                    NavTag="downloads">
+                    <controls:FeatureCard.Actions>
+                        <Button
+                            Click="GoDownloads_Click"
+                            Content="查看任务"
+                            Style="{StaticResource CardActionButtonStyle}" />
+                    </controls:FeatureCard.Actions>
+                </controls:FeatureCard>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</Page>
