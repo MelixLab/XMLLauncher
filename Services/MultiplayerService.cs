@@ -177,6 +177,10 @@ public static class MultiplayerService
                 // 我们自己开的监听端口（访客本地 25565、联机中继）要排除
                 if (port == GuestLocalPort) continue;
 
+                // 4445 是 Minecraft 的「局域网广播」端口，不是游戏端口：
+                // 连上去能建立 TCP，但不会回任何数据，表现就是「隧道打通了却连不上」。
+                if (port == 4445) continue;
+
                 // 优先取非回环绑定的那个（局域网世界会绑 0.0.0.0）
                 if (!local.StartsWith("127.0.0.1", StringComparison.Ordinal)) return port;
 

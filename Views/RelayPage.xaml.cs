@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using LinxLauncher.Controls;
 using LinxLauncher.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Text;
@@ -13,12 +14,13 @@ using Microsoft.UI.Xaml.Navigation;
 namespace LinxLauncher.Views;
 
 /// <summary>
-/// 联机页：三张卡片 —— 我开房间 / 公开房间 / 加入房间。
-/// 走 P2P：服务器只做大厅与地址交换，游戏数据点对点直连。
+/// 联机页：三张入口卡片（和首页同一套样式），点按钮进二级对话框做事。
+/// 开房 / 浏览大厅 / 加入房间分别是三个 ContentDialog。
 /// </summary>
 public sealed partial class RelayPage : Page
 {
     private P2PSession? _host;
+    private int _hostPort;
     private P2PSession? _guest;
     private NatInfo _nat = new(NatKind.Unknown, null, "");
     private DispatcherQueueTimer? _tick;
@@ -27,24 +29,30 @@ public sealed partial class RelayPage : Page
     public RelayPage()
     {
         InitializeComponent();
-        // 页面常驻：切页再回来时不该把房间/隧道丢掉
         NavigationCacheMode = NavigationCacheMode.Required;
     }
+
+    private FeatureCard[] _cards = Array.Empty<FeatureCard>();
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
 
-        UpdateAccountText();
-        RefreshHostPanel();
+        // 首页那套「鼠标跟随描边」是页面统一驱动的：这里也要把三张卡片收集起来
+        _cards = new[] { HostCard, LobbyCard, JoinCard };
+
+        RefreshHostCard();
 
         if (_nat.Kind == NatKind.Unknown) _ = DetectNatAsync();
         else ApplyNat(_nat);
 
-        _ = LoadLobbyAsync();
-
         _tick ??= CreateTick();
         _tick.Start();
+
+        // 自动化测试入口：设了 XML_TEST_JOIN=<房间号> 就直接加入，不用点界面
+        var autoJoin = Environment.GetEnvironmentVariable("XML_TEST_JOIN");
+        if (!string.IsNullOrWhiteSpace(autoJoin))
+            _ = DispatcherQueue.TryEnqueue(async () => await JoinFlowAsync(autoJoin.Trim()));
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
@@ -53,16 +61,32 @@ public sealed partial class RelayPage : Page
         _tick?.Stop();
     }
 
+    // ==================== 卡片悬停描边 ====================
+
+    private void CardHost_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        foreach (var card in _cards)
+        {
+            var p = e.GetCurrentPoint(card);
+            card.UpdateReveal(p.Position.X, p.Position.Y);
+        }
+    }
+
+    private void CardHost_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        foreach (var card in _cards) card.ResetReveal();
+    }
+
     private DispatcherQueueTimer CreateTick()
     {
         var timer = DispatcherQueue.CreateTimer();
         timer.Interval = TimeSpan.FromSeconds(1);
         timer.IsRepeating = true;
-        timer.Tick += (_, _) => RefreshHostPanel();
+        timer.Tick += (_, _) => RefreshHostCard();
         return timer;
     }
 
-    // ==================== 网络检测 ====================
+    // ==================== 网络 ====================
 
     private async void Redetect_Click(object sender, RoutedEventArgs e)
     {
@@ -72,8 +96,8 @@ public sealed partial class RelayPage : Page
 
     private async Task DetectNatAsync()
     {
-        NatText.Text = "检测中…";
-        PublicAddrText.Text = "—";
+        NatText.Text = "网络检测中…";
+        PublicAddrText.Text = "";
 
         try
         {
@@ -89,58 +113,74 @@ public sealed partial class RelayPage : Page
 
     private void ApplyNat(NatInfo nat)
     {
-        NatText.Text = nat.Describe();
-        PublicAddrText.Text = nat.Public?.ToString() ?? "—";
-
-        if (nat.Kind == NatKind.Symmetric)
-            NatText.Text = "对称型网络 —— 打洞大概率失败";
+        NatText.Text = nat.Kind == NatKind.Symmetric
+            ? "对称型网络 —— 打洞大概率失败"
+            : nat.Describe();
+        PublicAddrText.Text = nat.Public is null ? "" : "公网 " + nat.Public;
     }
 
-    private void UpdateAccountText()
-    {
-        // 账号状态放在卡片的状态行里：没登录就直说，登录了就显示是谁
-        HostCard.Status = LinxAccountService.IsLoggedIn
-            ? $"{LinxAccountService.DisplayName} · 开好局域网世界后点下面开房"
-            : "未登录：先在左下角登录 XML 账号";
-    }
-
-    // ==================== 房主 ====================
+    // ==================== 卡片 1：开启新世界 ====================
 
     private async void Host_Click(object sender, RoutedEventArgs e)
     {
         if (_busy) return;
 
+        if (_host is not null)
+        {
+            await StopHostAsync();
+            return;
+        }
+
         if (!LinxAccountService.IsLoggedIn)
         {
-            HostStatusText.Text = "先在左下角登录 XML 账号，联机要用它来认人。";
+            Toast("先在左下角登录 XML 账号，联机要用它认人。");
             return;
         }
 
         var lanPort = MultiplayerService.DetectLanPort();
         if (lanPort <= 0)
         {
-            HostStatusText.Text = "没找到游戏局域网端口。先在游戏里点「对局域网开放」，再回这里开房。";
+            Toast("没找到游戏局域网端口：先在游戏里点「对局域网开放」，再回来开房。");
             return;
         }
 
+        var world = new TextBox { Header = "世界名称（可留空）", MaxLength = 32, PlaceholderText = "例如：和朋友开荒" };
+        var pass = new PasswordBox { Header = "房间密码（可留空）", MaxLength = 16, PlaceholderText = "留空则谁都能进" };
+        var tip = new TextBlock
+        {
+            Text = $"{_nat.Describe()} · 游戏端口 {lanPort}",
+            FontSize = 12.5,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+        };
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "开启新世界",
+            Content = new StackPanel { Spacing = 12, MinWidth = 380, Children = { tip, world, pass } },
+            PrimaryButtonText = "开房间",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary
+        };
+        FontService.ApplyToDialog(dialog);
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
         _busy = true;
+        HostCard.Status = "正在开房…";
         HostButton.IsEnabled = false;
-        HostStatusText.Text = "正在检测网络并开房…";
 
         try
         {
-            var worldName = WorldNameBox.Text.Trim();
-            _host = await P2P.HostAsync(worldName, lanPort, HostPasswordBox.Password, CancellationToken.None);
-
-            HostPanel.Visibility = Visibility.Visible;
-            HostCodeText.Text = _host.Code;
-            HostStatusText.Text = $"房间已开，游戏端口 {lanPort}。把房间号发给朋友，或者让他在大厅里点进来。";
-            HostInfoText.Text = "";
-            _ = LoadLobbyAsync();
+            _host = await P2P.HostAsync(world.Text.Trim(), lanPort, pass.Password, CancellationToken.None);
+            _hostPort = lanPort;
+            RefreshHostCard();
+            Toast($"房间已开：{_host.Code}");
         }
         catch (Exception ex)
         {
-            HostStatusText.Text = ex.Message;
+            HostCard.Status = ex.Message;
             HostButton.IsEnabled = true;
         }
         finally
@@ -149,7 +189,7 @@ public sealed partial class RelayPage : Page
         }
     }
 
-    private async void StopHost_Click(object sender, RoutedEventArgs e)
+    private async Task StopHostAsync()
     {
         if (_host is null) return;
 
@@ -157,9 +197,9 @@ public sealed partial class RelayPage : Page
         _host.Stop();
         _host = null;
 
-        HostPanel.Visibility = Visibility.Collapsed;
+        HostCard.Status = "把你的局域网世界挂到大厅，朋友点进来就能连。";
+        HostButton.Content = "开房间";
         HostButton.IsEnabled = true;
-        HostStatusText.Text = "房间已关闭。";
 
         try
         {
@@ -168,50 +208,83 @@ public sealed partial class RelayPage : Page
         }
         catch { }
 
-        _ = LoadLobbyAsync();
+        Toast("房间已关闭。");
     }
 
-    private void RefreshHostPanel()
+    private void RefreshHostCard()
     {
         if (_host is null) return;
 
-        var nat = _host.Nat.Kind == NatKind.Cone ? "锥形网络" : "对称型网络";
-        HostInfoText.Text = $"已接入 {_host.GuestCount} 人 · {nat} · {_host.Nat.Public}";
+        HostCard.Status = $"房间 {_host.Code} · {_host.GuestCount} 人在线 · 游戏端口 {_hostPort}";
+        HostButton.Content = "关闭房间";
+        HostButton.IsEnabled = true;   // 开房过程中禁用过，这里要恢复，否则按钮一直是灰的
     }
 
-    // ==================== 大厅 ====================
+    // ==================== 卡片 2：公开房间 ====================
 
-    private async void Refresh_Click(object sender, RoutedEventArgs e) => await LoadLobbyAsync();
-
-    private async Task LoadLobbyAsync()
+    private async void Browse_Click(object sender, RoutedEventArgs e)
     {
+        var list = new StackPanel { Spacing = 6, MinWidth = 420 };
+        var hint = new TextBlock
+        {
+            Text = "正在读取大厅…",
+            FontSize = 12.5,
+            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+        };
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "公开房间",
+            Content = new StackPanel
+            {
+                Spacing = 12,
+                Children = { hint, new ScrollViewer { Height = 320, Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } }
+            },
+            CloseButtonText = "关闭"
+        };
+        FontService.ApplyToDialog(dialog);
+
+        var rooms = await FetchRoomsAsync(hint);
+
+        foreach (var room in rooms)
+        {
+            list.Children.Add(BuildRoomRow(room, dialog));
+        }
+
+        await dialog.ShowAsync();
+
+        // 关闭后把人数/状态刷一下
+        LobbyCard.Status = rooms.Count == 0
+            ? "大厅里现在没人开房。"
+            : $"大厅里有 {rooms.Count} 个房间。";
+    }
+
+    private async Task<System.Collections.Generic.List<JsonElement>> FetchRoomsAsync(TextBlock hint)
+    {
+        var result = new System.Collections.Generic.List<JsonElement>();
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var text = await Http.Client.GetStringAsync(RemoteService.BaseUrl + "/api/lobby/rooms", cts.Token);
             using var doc = JsonDocument.Parse(text);
 
-            var items = doc.RootElement.GetProperty("items");
-            LobbyList.Children.Clear();
+            foreach (var room in doc.RootElement.GetProperty("items").EnumerateArray())
+                result.Add(room.Clone());
 
-            var count = 0;
-            foreach (var room in items.EnumerateArray())
-            {
-                LobbyList.Children.Add(BuildRoomRow(room));
-                count++;
-            }
-
-            LobbyHintText.Text = count == 0
-                ? "大厅里还没有房间。开一个，或者让朋友开。"
-                : $"共 {count} 个房间 · 点\"加入\"直接进去";
+            hint.Text = result.Count == 0
+                ? "还没有人开房。你先开一个，朋友就能看到。"
+                : $"共 {result.Count} 个房间";
         }
         catch (Exception ex)
         {
-            LobbyHintText.Text = "大厅读取失败：" + ex.Message.Split('\n')[0];
+            hint.Text = "大厅读取失败：" + ex.Message.Split('\n')[0];
         }
+
+        return result;
     }
 
-    private UIElement BuildRoomRow(JsonElement room)
+    private UIElement BuildRoomRow(JsonElement room, ContentDialog dialog)
     {
         string Str(string name) => room.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString() ?? "" : "";
@@ -229,27 +302,24 @@ public sealed partial class RelayPage : Page
             Text = string.IsNullOrWhiteSpace(world) ? "未命名世界" : world,
             FontSize = 13.5,
             FontWeight = FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            TextWrapping = TextWrapping.NoWrap
+            TextTrimming = TextTrimming.CharacterEllipsis
         };
 
         var subtitle = new TextBlock
         {
             Text = $"{owner} · {players}/{maxPlayers} 人"
                    + (hasPassword ? " · 有密码" : "")
-                   + (natType == "symmetric" ? " · 对称型" : ""),
+                   + (natType == "symmetric" ? " · 对称型（可能连不上）" : ""),
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
         };
 
-        var join = new Button { Content = "加入", FontSize = 12, Padding = new Thickness(10, 4, 10, 4) };
-        join.Click += (_, _) =>
+        var join = new Button { Content = "加入", FontSize = 12, Padding = new Thickness(12, 4, 12, 4) };
+        join.Click += async (_, _) =>
         {
-            JoinCodeBox.Text = code;
-            JoinPasswordBox.Password = "";
-            JoinButton.Focus(FocusState.Programmatic);
-            GuestStatusText.Text = $"已填入房间号 {code}，点「加入」开始打洞。";
+            dialog.Hide();
+            await JoinFlowAsync(code);
         };
 
         var grid = new Grid { ColumnSpacing = 8 };
@@ -263,58 +333,82 @@ public sealed partial class RelayPage : Page
         {
             Padding = new Thickness(12, 8, 12, 8),
             CornerRadius = new CornerRadius(6),
-            Background = (Brush)Application.Current.Resources["SubtleFillColorTransparentBrush"],
             BorderBrush = (Brush)Application.Current.Resources["DividerBrush"],
             BorderThickness = new Thickness(1),
             Child = grid
         };
     }
 
-    // ==================== 访客 ====================
+    // ==================== 卡片 3：加入房间 ====================
 
-    private async void Join_Click(object sender, RoutedEventArgs e)
+    private async void Join_Click(object sender, RoutedEventArgs e) => await JoinFlowAsync("");
+
+    private async Task JoinFlowAsync(string presetCode)
     {
         if (_busy) return;
 
-        var code = JoinCodeBox.Text.Trim().ToUpperInvariant();
-        if (code.Length != 6)
+        if (!LinxAccountService.IsLoggedIn)
         {
-            GuestStatusText.Text = "房间号是 6 位。";
+            Toast("先在左下角登录 XML 账号。");
             return;
         }
 
-        if (!LinxAccountService.IsLoggedIn)
+        var codeBox = new TextBox
         {
-            GuestStatusText.Text = "先在左下角登录 XML 账号。";
+            Header = "房间号",
+            MaxLength = 6,
+            CharacterSpacing = 120,
+            PlaceholderText = "6 位",
+            Text = presetCode ?? ""
+        };
+        var passBox = new PasswordBox { Header = "密码（没有就留空）", MaxLength = 16 };
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = "加入房间",
+            Content = new StackPanel { Spacing = 12, MinWidth = 360, Children = { codeBox, passBox } },
+            PrimaryButtonText = "加入",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary
+        };
+        FontService.ApplyToDialog(dialog);
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var code = codeBox.Text.Trim().ToUpperInvariant();
+        if (code.Length != 6)
+        {
+            Toast("房间号是 6 位。");
             return;
         }
 
         _busy = true;
+        JoinCard.Status = "正在打洞…";
         JoinButton.IsEnabled = false;
-        GuestStatusText.Text = "正在加入…";
 
         try
         {
             _guest?.Stop();
-            _guest = await P2P.JoinAsync(code, JoinPasswordBox.Password, P2P.DefaultGuestPort,
-                msg => DispatcherQueue.TryEnqueue(() => GuestStatusText.Text = msg),
+            _guest = await P2P.JoinAsync(code, passBox.Password, P2P.DefaultGuestPort,
+                msg => DispatcherQueue.TryEnqueue(() => JoinCard.Status = msg),
                 CancellationToken.None);
 
-            GuestPanel.Visibility = Visibility.Visible;
-            LeaveButton.Visibility = Visibility.Visible;
-            GuestAddressText.Text = $"127.0.0.1:{_guest.LocalPort}";
-            GuestStatusText.Text = "隧道已打通。在游戏里添加服务器并用上面的地址，或者在启动器里启动游戏直接进。";
+            var address = $"127.0.0.1:{_guest.LocalPort}";
+            JoinCard.Status = $"已连接。游戏里添加服务器：{address}";
+            JoinButton.Content = "退出房间";
+            JoinButton.IsEnabled = true;
+            JoinButton.Click -= Join_Click;
+            JoinButton.Click += Leave_Click;
 
-            // 1.20+ 支持 --quickPlayMultiplayer，直接帮玩家进服
             var versionId = AppState.Current?.Id ?? "";
             if (!string.IsNullOrEmpty(versionId))
-            {
-                _ = GameSession.StartAsync(versionId, XamlRoot, $"127.0.0.1:{_guest.LocalPort}");
-            }
+                _ = GameSession.StartAsync(versionId, XamlRoot, address);
         }
         catch (Exception ex)
         {
-            GuestStatusText.Text = ex.Message;
+            // 文案别铺太满，卡片显示不开；路径用 %APPDATA%，短且能直接粘到资源管理器
+            JoinCard.Status = ex.Message + "\n日志：%APPDATA%\\LinxLauncher\\launcher.log";
             JoinButton.IsEnabled = true;
         }
         finally
@@ -325,14 +419,15 @@ public sealed partial class RelayPage : Page
 
     private async void Leave_Click(object sender, RoutedEventArgs e)
     {
-        var code = _guest?.Code ?? JoinCodeBox.Text.Trim().ToUpperInvariant();
+        var code = _guest?.Code ?? "";
 
         _guest?.Stop();
         _guest = null;
 
-        GuestPanel.Visibility = Visibility.Collapsed;
-        JoinButton.IsEnabled = true;
-        GuestStatusText.Text = "已退出房间。";
+        JoinCard.Status = "有房间号就直接输，走 P2P 直连。";
+        JoinButton.Content = "输入房间号";
+        JoinButton.Click -= Leave_Click;
+        JoinButton.Click += Join_Click;
 
         try
         {
@@ -341,4 +436,6 @@ public sealed partial class RelayPage : Page
         }
         catch { }
     }
+
+    private static void Toast(string message) => MainWindow.Instance?.Toast(message);
 }

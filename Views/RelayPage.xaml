@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LinxLauncher.Views.RelayPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -10,10 +10,7 @@
     mc:Ignorable="d">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel
-            Padding="40,36,40,40"
-            HorizontalAlignment="Left"
-            Spacing="0">
+        <StackPanel Padding="40,36,40,40" HorizontalAlignment="Left" Spacing="0">
 
             <!-- 标题 -->
             <StackPanel HorizontalAlignment="Left">
@@ -24,116 +21,82 @@
                     Text="点对点直连：服务器只帮你们交换地址，游戏数据不经过服务器。" />
             </StackPanel>
 
-            <!-- 三张卡片 -->
+            <!-- 第一行：三张入口卡片，和首页一个样式 -->
             <Grid
+                x:Name="CardHost"
                 Margin="0,36,0,0"
                 HorizontalAlignment="Left"
-                ColumnSpacing="10">
+                ColumnSpacing="8"
+                PointerMoved="CardHost_PointerMoved"
+                PointerExited="CardHost_PointerExited">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="300" />
-                    <ColumnDefinition Width="300" />
-                    <ColumnDefinition Width="300" />
+                    <ColumnDefinition Width="232" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="232" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="232" />
                 </Grid.ColumnDefinitions>
 
-                <!-- 1. 开启新世界 -->
                 <controls:FeatureCard
                     x:Name="HostCard"
+                    StatusMinHeight="38"
                     Grid.Column="0"
-                    Height="392"
+                    Height="258"
                     IconTemplate="{StaticResource IconCardGame}"
                     Header="开启新世界"
-                    Status="开好局域网世界后，让朋友从大厅进来。">
+                    Status="把你的局域网世界挂到大厅，朋友点进来就能直接连上。">
                     <controls:FeatureCard.Actions>
-                        <StackPanel Width="260" Spacing="10">
-                            <TextBox x:Name="WorldNameBox" PlaceholderText="世界名称（可留空）" MaxLength="32" />
-                            <PasswordBox x:Name="HostPasswordBox" PlaceholderText="房间密码（可留空）" MaxLength="16" />
-
-                            <Button
-                                x:Name="HostButton"
-                                Content="开房间"
-                                HorizontalAlignment="Stretch"
-                                Style="{StaticResource CardActionButtonStyle}"
-                                Click="Host_Click" />
-
-                            <StackPanel x:Name="HostPanel" Spacing="6" Visibility="Collapsed">
-                                <TextBlock x:Name="HostCodeText" FontSize="26" Foreground="{ThemeResource BrandBrush}" IsTextSelectionEnabled="True" Text="" />
-                                <TextBlock x:Name="HostInfoText" Style="{StaticResource CardStatusTextStyle}" Text="" TextWrapping="Wrap" />
-                                <Button x:Name="StopHostButton" Content="关闭房间" FontSize="12" Padding="10,4" Click="StopHost_Click" />
-                            </StackPanel>
-
-                            <TextBlock x:Name="HostStatusText" Style="{StaticResource CardStatusTextStyle}" Text="" TextWrapping="Wrap" />
-                        </StackPanel>
+                        <Button
+                            x:Name="HostButton"
+                            Content="开房间"
+                            Style="{StaticResource CardActionButtonStyle}"
+                            Click="Host_Click" />
                     </controls:FeatureCard.Actions>
                 </controls:FeatureCard>
 
-                <!-- 2. 公开房间 -->
                 <controls:FeatureCard
                     x:Name="LobbyCard"
-                    Grid.Column="1"
-                    Height="392"
+                    StatusMinHeight="38"
+                    Grid.Column="2"
+                    Height="258"
                     IconTemplate="{StaticResource IconCardLibrary}"
                     Header="公开房间"
-                    Status="大厅里正在等人的世界。">
+                    Status="看看大厅里现在有谁开着世界，点一下就能进去。">
                     <controls:FeatureCard.Actions>
-                        <StackPanel Width="260" Spacing="8">
-                            <ScrollViewer Height="220" VerticalScrollBarVisibility="Auto">
-                                <StackPanel x:Name="LobbyList" Spacing="6" />
-                            </ScrollViewer>
-
-                            <TextBlock x:Name="LobbyHintText" Style="{StaticResource CardStatusTextStyle}" Text="正在读取大厅…" TextWrapping="Wrap" />
-
-                            <Button
-                                x:Name="RefreshButton"
-                                Content="刷新大厅"
-                                FontSize="12"
-                                Padding="10,4"
-                                HorizontalAlignment="Left"
-                                Click="Refresh_Click" />
-                        </StackPanel>
+                        <Button
+                            Content="浏览大厅"
+                            Style="{StaticResource CardActionButtonStyle}"
+                            Click="Browse_Click" />
                     </controls:FeatureCard.Actions>
                 </controls:FeatureCard>
 
-                <!-- 3. 加入房间 -->
                 <controls:FeatureCard
                     x:Name="JoinCard"
-                    Grid.Column="2"
-                    Height="392"
+                    StatusMinHeight="38"
+                    Grid.Column="4"
+                    Height="258"
                     IconTemplate="{StaticResource IconCardDownload}"
                     Header="加入房间"
-                    Status="输房间号，打洞成功后自动开好本地地址。">
+                    Status="有房间号就直接输进来，走 P2P 直连，延迟就是你们两家之间。">
                     <controls:FeatureCard.Actions>
-                        <StackPanel Width="260" Spacing="10">
-                            <TextBox x:Name="JoinCodeBox" PlaceholderText="6 位房间号" MaxLength="6" CharacterSpacing="120" />
-                            <PasswordBox x:Name="JoinPasswordBox" PlaceholderText="密码（没有就留空）" MaxLength="16" />
-
-                            <Button
-                                x:Name="JoinButton"
-                                Content="加入"
-                                HorizontalAlignment="Stretch"
-                                Style="{StaticResource CardActionButtonStyle}"
-                                Click="Join_Click" />
-
-                            <StackPanel x:Name="GuestPanel" Spacing="6" Visibility="Collapsed">
-                                <TextBlock Style="{StaticResource CardStatusTextStyle}" Text="游戏里连这个地址" />
-                                <TextBlock x:Name="GuestAddressText" FontSize="18" Foreground="{ThemeResource BrandBrush}" IsTextSelectionEnabled="True" Text="" />
-                                <Button x:Name="LeaveButton" Content="退出房间" FontSize="12" Padding="10,4" HorizontalAlignment="Left" Click="Leave_Click" />
-                            </StackPanel>
-
-                            <TextBlock x:Name="GuestStatusText" Style="{StaticResource CardStatusTextStyle}" Text="" TextWrapping="Wrap" />
-                        </StackPanel>
+                        <Button
+                            x:Name="JoinButton"
+                            Content="输入房间号"
+                            Style="{StaticResource CardActionButtonStyle}"
+                            Click="Join_Click" />
                     </controls:FeatureCard.Actions>
                 </controls:FeatureCard>
             </Grid>
 
-            <!-- 网络状态（小字，不占卡片位置） -->
-            <StackPanel Margin="2,16,0,0" Orientation="Horizontal" Spacing="12">
-                <TextBlock x:Name="NatText" Style="{StaticResource CardStatusTextStyle}" Text="网络检测中…" />
-                <TextBlock x:Name="PublicAddrText" Style="{StaticResource CardStatusTextStyle}" Text="" />
+            <!-- 网络状态（小字，不抢卡片位置） -->
+            <StackPanel Margin="2,18,0,0" Orientation="Horizontal" Spacing="12">
+                <TextBlock x:Name="NatText" Style="{StaticResource CardStatusTextStyle}" Text="网络检测中…" VerticalAlignment="Center" />
+                <TextBlock x:Name="PublicAddrText" Style="{StaticResource CardStatusTextStyle}" Text="" VerticalAlignment="Center" />
                 <HyperlinkButton Padding="0" Click="Redetect_Click" Content="重新检测" FontSize="12" />
             </StackPanel>
 
             <TextBlock
-                Margin="2,10,0,0"
+                Margin="2,8,0,0"
                 MaxWidth="920"
                 HorizontalAlignment="Left"
                 Style="{StaticResource CardStatusTextStyle}"

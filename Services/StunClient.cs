@@ -126,6 +126,8 @@ public static class StunClient
     {
         IPEndPoint? first = null;
         string firstName = "";
+        string firstHost = "";
+        int firstPort = 0;
 
         foreach (var (host, port) in Servers)
         {
@@ -134,11 +136,16 @@ public static class StunClient
 
             first = mapped;
             firstName = $"{host}:{port}";
+            firstHost = host;
+            firstPort = port;
             break;
         }
 
         if (first is null)
             return new NatInfo(NatKind.Blocked, null, "所有 STUN 服务器都没响应");
+
+        var kind = NatKind.Cone;
+        var detail = $"只有 {firstName} 可用，按锥形处理";
 
         // 换一台服务器再问一次：公网端口变了就是对称型
         foreach (var (host, port) in Servers)
@@ -149,13 +156,26 @@ public static class StunClient
             if (second is null) continue;
 
             if (!second.Address.Equals(first.Address))
-                return new NatInfo(NatKind.Symmetric, first, $"两个服务器看到 {first.Address} / {second.Address}");
+            {
+                kind = NatKind.Symmetric;
+                detail = $"两个服务器看到 {first.Address} / {second.Address}";
+            }
+            else
+            {
+                detail = $"两台服务器都看到 {first.Address}";
+            }
 
-            return new NatInfo(NatKind.Cone, first, $"两台服务器都看到 {first.Address}");
+            break;
         }
 
-        // 只有一个服务器可用：没法判断对称型，按锥形处理（打洞时再验证）
-        return new NatInfo(NatKind.Cone, first, $"只有 {firstName} 可用，按锥形处理");
+        // ★ 关键一步：刚才为了判断类型，往别的 STUN 服务器发过包。
+        //   NAT 对「新的目标」可能会换一个公网端口（端口限制型 / 对称型都这样），
+        //   之前拿到的那个地址可能已经作废 —— 对方照那个地址打洞，永远打不通。
+        //   所以这里回到第一个服务器再问一次，用「当前真正有效」的地址。
+        var confirm = await QueryAsync(firstHost, firstPort, socket, ct);
+        var effective = confirm ?? first;
+
+        return new NatInfo(kind, effective, detail);
     }
 
     /// <summary>

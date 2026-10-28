@@ -63,6 +63,7 @@
             <TextBlock
                 Grid.Row="2"
                 Margin="0,2,0,0"
+                MinHeight="{x:Bind StatusMinHeight, Mode=OneWay}"
                 Style="{StaticResource CardStatusTextStyle}"
                 Text="{x:Bind Status, Mode=OneWay}" />
 

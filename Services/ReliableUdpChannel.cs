@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
@@ -42,6 +42,9 @@ public sealed class ReliableUdpChannel : IDisposable
     private uint _nextSeq;
     private uint _ackSeq;
     private uint _expectedSeq;
+    private int _rxData;
+    private int _rxAck;
+    private int _txAck;
     private volatile bool _closed;
     private long _bytesIn;
     private long _bytesOut;
@@ -89,6 +92,10 @@ public sealed class ReliableUdpChannel : IDisposable
             _outbox[seq] = payload;
             _sentAt[seq] = Environment.TickCount64;
 
+            // 立即发一包，别等重传循环：MC 的握手包就几十字节，
+            // 等 250ms 才发会让客户端以为服务器在卡。
+            SendPacket(FlagData, seq, _ackSeq, payload);
+
             offset += size;
         }
     }
@@ -125,6 +132,8 @@ public sealed class ReliableUdpChannel : IDisposable
         var buffer = new byte[1500];
         var token = _cts.Token;
 
+        Log.Info($"P2P 通道：接收循环启动（远端 {_remote}）");
+
         while (!token.IsCancellationRequested)
         {
             SocketReceiveFromResult result;
@@ -149,6 +158,13 @@ public sealed class ReliableUdpChannel : IDisposable
             var seq = BitConverter.ToUInt32(buffer, 1);
             var ack = BitConverter.ToUInt32(buffer, 5);
 
+            if ((flags & FlagAck) != 0)
+            {
+                Interlocked.Increment(ref _rxAck);
+                if (_rxAck <= 3 || _rxAck % 20 == 0)
+                    Log.Info($"P2P 通道：收到 ACK #{_rxAck}（ack={ack}，待确认 {_outbox.Count} 个）");
+            }
+
             OnAck(ack);
 
             if ((flags & FlagPunch) != 0)
@@ -162,6 +178,9 @@ public sealed class ReliableUdpChannel : IDisposable
             if ((flags & FlagData) != 0)
             {
                 var size = result.ReceivedBytes - HeaderSize;
+                Interlocked.Increment(ref _rxData);
+                if (_rxData <= 3 || _rxData % 20 == 0)
+                    Log.Info($"P2P 通道：收到 DATA #{_rxData}（seq={seq} len={size} 期望={_expectedSeq}）");
                 var payload = new byte[size];
                 Array.Copy(buffer, HeaderSize, payload, 0, size);
 
@@ -179,7 +198,10 @@ public sealed class ReliableUdpChannel : IDisposable
                 }
                 // seq < expected：重复包，丢弃
 
-                _ackSeq = _expectedSeq > 0 ? _expectedSeq - 1 : 0;
+                // ack 语义 = 下一个期望收到的序号。
+                // （之前写成 expected-1，在「一个包都没收到」时等于 0，
+                //   等于告诉对端「0 号我收到了」——对端就把 seq=0 删了，从此死等。）
+                _ackSeq = _expectedSeq;
                 SendAck();
             }
 
@@ -207,7 +229,7 @@ public sealed class ReliableUdpChannel : IDisposable
         var confirmed = new List<uint>();
         foreach (var seq in _outbox.Keys)
         {
-            if (seq <= ack) confirmed.Add(seq);
+            if (seq < ack) confirmed.Add(seq);
         }
 
         foreach (var seq in confirmed)
@@ -260,7 +282,14 @@ public sealed class ReliableUdpChannel : IDisposable
         }
     }
 
-    private void SendAck() => SendPacket(FlagAck, 0, _ackSeq, Array.Empty<byte>());
+    private void SendAck()
+    {
+        Interlocked.Increment(ref _txAck);
+        if (_txAck <= 3 || _txAck % 20 == 0)
+            Log.Info($"P2P 通道：发出 ACK #{_txAck}（ack={_ackSeq}）");
+
+        SendPacket(FlagAck, 0, _ackSeq, Array.Empty<byte>());
+    }
 
     private void SendPunch()
     {
@@ -288,7 +317,10 @@ public sealed class ReliableUdpChannel : IDisposable
             _socket.SendTo(packet, _remote);
             Interlocked.Add(ref _bytesOut, payload.Length);
         }
-        catch { /* 暂时发不出去，下一轮重传 */ }
+        catch (Exception ex)
+        {
+            if (flags != FlagAck) Log.Warn("P2P 通道：发包失败 " + ex.Message);
+        }
     }
 
     /// <summary>发 FIN 并关闭。</summary>

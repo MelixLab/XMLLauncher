@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -30,6 +30,14 @@ public sealed partial class FeatureCard : UserControl
     public static readonly DependencyProperty ActionsProperty =
         DependencyProperty.Register(nameof(Actions), typeof(object), typeof(FeatureCard),
             new PropertyMetadata(null));
+
+    /// <summary>
+    /// 状态行最少占多高。文案长度不一时，给个两行的高度，卡片里的按钮才会落在同一条线上。
+    /// 默认 0 = 按内容走（首页就是这种行为）。
+    /// </summary>
+    public static readonly DependencyProperty StatusMinHeightProperty =
+        DependencyProperty.Register(nameof(StatusMinHeight), typeof(double), typeof(FeatureCard),
+            new PropertyMetadata(0.0));
 
     public static readonly DependencyProperty NavTagProperty =
         DependencyProperty.Register(nameof(NavTag), typeof(string), typeof(FeatureCard),
@@ -67,6 +75,12 @@ public sealed partial class FeatureCard : UserControl
     {
         get => GetValue(ActionsProperty);
         set => SetValue(ActionsProperty, value);
+    }
+
+    public double StatusMinHeight
+    {
+        get => (double)GetValue(StatusMinHeightProperty);
+        set => SetValue(StatusMinHeightProperty, value);
     }
 
     public string NavTag

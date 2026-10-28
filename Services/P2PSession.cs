@@ -121,9 +121,13 @@ public static class P2P
             ["password"] = password
         }, ct);
 
-        if (publish is null) { socket.Close(); throw new IOException("发布房间失败，先登录 XML 账号。"); }
+        if (publish.data is null)
+        {
+            socket.Close();
+            throw new IOException("发布房间失败：" + publish.error);
+        }
 
-        session.Code = publish.Value.GetProperty("room").GetProperty("code").GetString() ?? "";
+        session.Code = publish.data.Value.GetProperty("room").GetProperty("code").GetString() ?? "";
         Log.Info($"P2P 房主：房间 {session.Code}，UDP {udpPort}，公网 {nat.Public}");
 
         var worker = Task.Run(() => HostLoopAsync(session, socket, nat.Public!, localAddr, ct), ct);
@@ -147,7 +151,7 @@ public static class P2P
                     lastBeat = DateTime.UtcNow;
                     var beat = await CallApiAsync("/api/lobby/heartbeat",
                         new JsonObject { ["code"] = session.Code }, ct);
-                    if (beat is null)
+                    if (beat.data is null)
                     {
                         Log.Warn("P2P 房主：续期失败，房间可能已被清理");
                     }
@@ -156,14 +160,14 @@ public static class P2P
                 var signals = await CallApiAsync(
                     $"/api/lobby/signals?code={session.Code}&since={lastSignalId}", null, ct, "GET");
 
-                if (signals is not null && signals.Value.TryGetProperty("items", out var items))
+                if (signals.data is not null && signals.data.Value.TryGetProperty("items", out var items))
                 {
                     foreach (var item in items.EnumerateArray())
                     {
                         lastSignalId = Math.Max(lastSignalId, item.GetProperty("id").GetInt32());
 
-                        var guestPublic = ParseEndPoint(item.GetProperty("public_addr").GetString());
-                        var guestLocal = ParseEndPoint(item.GetProperty("local_addr").GetString());
+                        var guestPublic = item.GetProperty("public_addr").GetString();
+                        var guestLocal = item.GetProperty("local_addr").GetString();
                         var name = item.GetProperty("user").GetString() ?? "访客";
 
                         if (guestPublic is null && guestLocal is null) continue;
@@ -205,6 +209,7 @@ public static class P2P
         try
         {
             await tcp.ConnectAsync(IPAddress.Loopback, localPort, ct);
+            Log.Info($"P2P 房主：已接上本地游戏端口 {localPort}，开始转发 {guestName} 的数据");
         }
         catch (Exception ex)
         {
@@ -259,11 +264,15 @@ public static class P2P
             ["local_addr"] = localAddr
         }, ct);
 
-        if (join is null) { socket.Close(); throw new IOException("加入失败：房间不存在，或者密码不对。"); }
+        if (join.data is null)
+        {
+            socket.Close();
+            throw new IOException("加入失败：" + join.error);
+        }
 
-        var hostPublic = ParseEndPoint(join.Value.GetProperty("host_public").GetString());
-        var hostLocal = ParseEndPoint(join.Value.GetProperty("host_local").GetString());
-        var hostName = join.Value.GetProperty("host_name").GetString() ?? "房主";
+        var hostPublic = join.data.Value.GetProperty("host_public").GetString();
+        var hostLocal = join.data.Value.GetProperty("host_local").GetString();
+        var hostName = join.data.Value.GetProperty("host_name").GetString() ?? "房主";
 
         status($"正在和 {hostName} 打洞…");
         var peer = await PunchAsync(socket, hostPublic, hostLocal, ct);
@@ -271,8 +280,8 @@ public static class P2P
         {
             socket.Close();
             throw new IOException(
-                "打洞失败：双方网络都是对称型 NAT 时打不通。\n" +
-                "可以试试让房主用手机热点，或者换一边有公网 IP 的网络。");
+                "打洞超时：20 秒没收到回包。" +
+                "可以让对面换手机热点再试，或看日志排查：");
         }
 
         session.SetPeer(peer);
@@ -286,7 +295,9 @@ public static class P2P
         var worker = Task.Run(() => GuestLoopAsync(session, socket, peer, listener, ct), ct);
         session.Attach(socket, worker);
 
-        status($"隧道已打通（{peer}），本地端口 {session.LocalPort}");
+        Log.Info($"P2P 访客：隧道已打通（对端 {peer}），本地端口 {session.LocalPort}");
+        // 打通就直接把能用的地址给出来，别让用户还要等下一步才看到端口
+        status($"隧道已通 · 游戏里添加服务器 127.0.0.1:{session.LocalPort}");
         return session;
     }
 
@@ -327,12 +338,24 @@ public static class P2P
     /// 双向打洞：同时往对方公网地址和内网地址发包，谁先回谁就是通的。
     /// 端口受限锥形要双方同时发包，所以这里是"边发边收"，不是等对方先发。
     /// </summary>
-    private static async Task<IPEndPoint?> PunchAsync(Socket socket, IPEndPoint? publicAddr,
-        IPEndPoint? localAddr, CancellationToken ct)
+    private static async Task<IPEndPoint?> PunchAsync(Socket socket, string? publicAddr,
+        string? localAddr, CancellationToken ct)
     {
-        var targets = new List<IPEndPoint>(2);
-        if (publicAddr is not null) targets.Add(publicAddr);
-        if (localAddr is not null && !localAddr.Equals(publicAddr)) targets.Add(localAddr);
+        var targets = new List<IPEndPoint>(6);
+        var mine = LocalIps();
+
+        foreach (var ep in ParseEndPoints(publicAddr)) Add(ep);
+        foreach (var ep in ParseEndPoints(localAddr)) Add(ep);
+
+        // 目标里如果混进了本机地址（比如对面也装了 VMware，网段撞了），
+        // 包会打回自己身上，徒增噪音还骗自己「收到包了」。
+        targets.RemoveAll(t => mine.Contains(t.Address));
+
+        void Add(IPEndPoint ep)
+        {
+            if (!targets.Exists(x => x.Equals(ep))) targets.Add(ep);
+        }
+
         if (targets.Count == 0) return null;
 
         var deadline = DateTime.UtcNow + PunchWindow;
@@ -341,6 +364,11 @@ public static class P2P
         packet[0] = 0x08;   // FlagPunch
 
         int sent = 0, received = 0, foreign = 0;
+
+        // 每个目标收到几个回包：排查时一眼看出是哪条路不通
+        var hits = new Dictionary<string, int>();
+        foreach (var target in targets) hits[target.ToString()] = 0;
+
         Log.Info($"P2P：开始打洞 → {string.Join(", ", targets)}");
 
         while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested)
@@ -362,14 +390,22 @@ public static class P2P
                     var from = (IPEndPoint)result.RemoteEndPoint;
                     received++;
                     // 只认我们打过的目标（防止被无关的包骗到）
-                    var known = targets.Exists(t =>
-                        t.Address.Equals(from.Address) && t.Port == from.Port);
-                    if (known)
+                    // ★ 打洞的本质就是「包从没想到的地址来」。
+                    //   对方经 NAT 转发后，源 IP/端口跟它自己报的地址经常对不上
+                    //   （实测：报 192.168.21.8:54840，实际来自 192.168.1.1:54840），
+                    //   这时候必须认，否则等于把唯一能用的那条路扔掉。
+                    if (buffer[0] == 0x08 && !mine.Contains(from.Address))
                     {
-                        Log.Info($"P2P：打洞成功（发 {sent} 包 / 收 {received} 包）");
+                        var matched = targets.Find(t => t.Port == from.Port);
+                        Log.Info(matched is null
+                            ? $"P2P：打洞成功（发 {sent} 包 / 收 {received} 包，对端 {from} —— 实际来源与预期不同，按实际地址走）"
+                            : $"P2P：打洞成功（发 {sent} 包 / 收 {received} 包，对端 {from}）");
                         return from;
                     }
+
                     foreign++;
+                    if (foreign <= 2)
+                        Log.Info($"P2P：忽略一个非打洞包（来自 {from}）");
                 }
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
@@ -377,8 +413,8 @@ public static class P2P
             catch { }
         }
 
-        Log.Warn($"P2P：打洞超时（发 {sent} 包 / 收到 {received} 个包，其中 {foreign} 个来路不明）—— "
-                 + "如果收到的是 0，多半是防火墙拦了入站 UDP，允许一下启动器再试。");
+        var detail = string.Join("；", hits.Select(kv => $"{kv.Key} 回了 {kv.Value} 个"));
+        Log.Warn($"P2P：打洞超时（发 {sent} 包 / 收到 {received} 个，其中 {foreign} 个来路不明）。各目标：{detail} —— 全是 0 的话，多半是防火墙拦了入站 UDP，或者对方已经关掉房间。");
         return null;
     }
 
@@ -415,6 +451,63 @@ public static class P2P
         finally { try { cts.Cancel(); } catch { } }
     }
 
+    /// <summary>依据网卡名判断是不是虚拟网卡（虚拟网卡上打洞毫无意义）。</summary>
+    private static bool IsVirtualAdapter(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return false;
+
+        var keys = new[]
+        {
+            "VMware", "VMnet", "VirtualBox", "Hyper-V", "vEthernet", "TAP-", "TAP ",
+            "TUN", "Wintun", "WireGuard", "OpenVPN", "Docker", "WSL", "Loopback",
+            "虚拟", "隧道"
+        };
+
+        foreach (var key in keys)
+        {
+            if (name.Contains(key, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>本机当前的 IPv4 集合，用来过滤「发给自己」的打洞目标。</summary>
+    private static HashSet<IPAddress> LocalIps()
+    {
+        var set = new HashSet<IPAddress>();
+
+        try
+        {
+            foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+
+                foreach (var info in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (info.Address.AddressFamily == AddressFamily.InterNetwork)
+                        set.Add(info.Address);
+                }
+            }
+        }
+        catch { }
+
+        return set;
+    }
+
+    private static List<IPEndPoint> ParseEndPoints(string? text)
+    {
+        var list = new List<IPEndPoint>();
+        if (string.IsNullOrWhiteSpace(text)) return list;
+
+        foreach (var part in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var ep = ParseEndPoint(part);
+            if (ep is not null) list.Add(ep);
+        }
+
+        return list;
+    }
+
     private static IPEndPoint? ParseEndPoint(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return null;
@@ -432,28 +525,59 @@ public static class P2P
     }
 
     /// <summary>本机内网地址（同一局域网的两个朋友可以直接用它，不用打洞）。</summary>
+    /// <summary>
+    /// 本机所有网卡的 IPv4 地址（都带上端口）。
+    ///
+    /// 以前只返回第一个，问题很大：装了 VMware / Hyper-V / Clash TUN 的机器上，
+    /// 第一个往往是虚拟网卡（192.168.56.x、172.x），对方往那儿发包永远石沉大海，
+    /// 表现就是「明明在同一个局域网，就是打不通」。现在全部上报，让对方逐个试。
+    /// </summary>
     private static string LocalAddress(int port)
     {
+        var list = new List<string>();
+
         try
         {
             foreach (var ni in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
             {
                 if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up) continue;
+                if (ni.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback) continue;
+
+                // 虚拟网卡一律不报：VMware / Hyper-V / VirtualBox / 代理 TUN 的地址
+                // 在对面机器上往往也存在（VMnet8 默认就是 192.168.118.1），
+                // 发过去等于打到自己身上，日志里就全是「来路不明」的包。
+                if (IsVirtualAdapter(ni.Name) || IsVirtualAdapter(ni.Description)) continue;
+
                 foreach (var info in ni.GetIPProperties().UnicastAddresses)
                 {
                     if (info.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+
                     var ip = info.Address.ToString();
                     if (ip.StartsWith("127.")) continue;
-                    return $"{ip}:{port}";
+                    if (ip.StartsWith("169.254.")) continue;   // 自动私有地址，肯定不通
+                    if (list.Contains(ip)) continue;
+
+                    list.Add(ip);
                 }
             }
         }
         catch { }
-        return "";
+
+        // 真实网卡优先：192.168 / 10. / 172.16-31 打头排前面
+        list.Sort((a, b) => Score(b).CompareTo(Score(a)));
+
+        if (list.Count == 0) return "";
+
+        return string.Join(",", list.Take(4).Select(ip => $"{ip}:{port}"));
+
+        static int Score(string ip) =>
+            ip.StartsWith("192.168.") ? 3 :
+            ip.StartsWith("10.") ? 2 :
+            ip.StartsWith("172.") ? 1 : 0;
     }
 
-    private static async Task<JsonElement?> CallApiAsync(string path, JsonObject? body, CancellationToken ct,
-        string method = "POST")
+    private static async Task<(JsonElement? data, string error)> CallApiAsync(string path, JsonObject? body,
+        CancellationToken ct, string method = "POST")
     {
         try
         {
@@ -475,13 +599,21 @@ public static class P2P
             var text = await resp.Content.ReadAsStringAsync(cts.Token);
 
             using var doc = JsonDocument.Parse(text);
-            if (!resp.IsSuccessStatusCode) return null;
-            return doc.RootElement.Clone();
+            if (!resp.IsSuccessStatusCode)
+            {
+                // 服务端会写清楚原因（房间不存在 / 密码不对 / 人满了），原样带上去
+                var message = "服务器返回 " + (int)resp.StatusCode;
+                if (doc.RootElement.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.String)
+                    message = err.GetString() ?? message;
+                return (null, message);
+            }
+
+            return (doc.RootElement.Clone(), "");
         }
         catch (Exception ex)
         {
             Log.Warn($"大厅接口失败 {path}：{ex.Message}");
-            return null;
+            return (null, "连不上服务器：" + ex.Message.Split('\n')[0]);
         }
     }
 }
