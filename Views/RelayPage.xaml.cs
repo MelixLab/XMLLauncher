@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -98,9 +98,10 @@ public sealed partial class RelayPage : Page
 
     private void UpdateAccountText()
     {
-        AccountText.Text = LinxAccountService.IsLoggedIn
-            ? LinxAccountService.DisplayName
-            : "未登录（联机需要登录 XML 账号）";
+        // 账号状态放在卡片的状态行里：没登录就直说，登录了就显示是谁
+        HostCard.Status = LinxAccountService.IsLoggedIn
+            ? $"{LinxAccountService.DisplayName} · 开好局域网世界后点下面开房"
+            : "未登录：先在左下角登录 XML 账号";
     }
 
     // ==================== 房主 ====================
