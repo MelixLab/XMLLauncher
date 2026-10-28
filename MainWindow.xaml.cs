@@ -87,22 +87,9 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Instance = this;
 
-        // 图标必须给绝对路径：单文件版里进程的工作目录是运行时解压目录，
-        // 相对路径一旦解析不到，任务栏就会退回系统默认的空白图标。
-        try
-        {
-            var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
-            if (File.Exists(iconPath)) AppWindow.SetIcon(iconPath);
-            else Log.Warn("任务栏图标缺失：" + iconPath);
-
-            // 标题栏左上角的小图标也一起换掉（只隐藏不换的话，Alt+Tab 里还是旧壳）
-            var smallIcon = Path.Combine(AppContext.BaseDirectory, "Assets", "Square44x44Logo.targetsize-48_altform-lightunplated.png");
-            if (File.Exists(smallIcon)) AppWindow.SetIcon(smallIcon);
-        }
-        catch (Exception ex)
-        {
-            Log.Warn("设置窗口图标失败：" + ex.Message);
-        }
+        // 任务栏 / Alt-Tab 的图标走 WM_SETICON：AppWindow.SetIcon 只改标题栏，
+        // 任务栏那个窗口按钮会一直是系统默认的白纸图标。
+        WindowIcon.Apply(this);
 
         // 标题栏保持系统默认（不染色、不隐藏），只去掉左上角的小图标和系统菜单，
         // 让标题栏这条和下面的侧边栏/内容区看起来是同一块 —— 参考项目的做法：

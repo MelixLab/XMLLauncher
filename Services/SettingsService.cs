@@ -29,6 +29,15 @@ public sealed class AppSettings
     /// </summary>
     public bool OnboardingDone { get; set; }
 
+    /// <summary>
+    /// 用户体验改进计划：把启动器启动、开游戏这些事件匿名上报给官方服务器。
+    /// 默认开启，向导第一页可以取消，设置页也能随时关。
+    /// </summary>
+    public bool TelemetryEnabled { get; set; } = true;
+
+    /// <summary>设备号：第一次启动随机生成，用来在后台区分「谁在线」，不含任何个人信息。</summary>
+    public string DeviceId { get; set; } = "";
+
     /// <summary>自定义头像图片（复制到配置目录后的路径），为空就用名字首字母。</summary>
     public string? AvatarPath { get; set; }
 

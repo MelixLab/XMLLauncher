@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LinxLauncher.Views.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -229,6 +229,24 @@
                     Grid.Column="2"
                     Margin="8,22,0,0"
                     Header="全屏启动" />
+            </Grid>
+
+            <!-- 隐私 -->
+            <TextBlock
+                Margin="0,24,0,4"
+                Style="{StaticResource SectionTitleTextStyle}"
+                Text="隐私" />
+            <Grid Margin="0,4,0,12">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource BodyTextStyle}" Text="参与用户体验改进计划" />
+                    <TextBlock
+                        Style="{StaticResource CaptionTextStyle}"
+                        Text="上报启动、开游戏、异常退出这些事件（含版本号、系统信息、随机设备号）；不含账号密码、存档内容和文件路径。" />
+                </StackPanel>
+                <ToggleSwitch
+                    x:Name="TelemetrySwitch"
+                    HorizontalAlignment="Right"
+                    Toggled="Telemetry_Toggled" />
             </Grid>
 
             <!-- 高级 -->

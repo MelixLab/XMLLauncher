@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -179,6 +179,9 @@ public static class GameSession
         await Task.Delay(150);
 
         // 游戏起来了：启动器让位，只留托盘图标
+        // 体验计划：记一条「开了哪个版本」，后台能看出哪些版本最常用
+        Telemetry.Report("game_start", $"启动 {versionId}");
+
         TrayService.Show($"XML Minecraft Launcher · {versionId}");
         TrayService.Notify("游戏已启动",
             $"《{versionId}》已经起来了，启动器缩到托盘（点托盘图标可以打开）。");
@@ -333,6 +336,12 @@ public static class GameSession
 
         // 日志是流式写的，进程刚退时最后几行可能还没落盘，等一小会儿再读
         var tail = ReadTail(result.LogFile, 40);
+
+        // 体验计划：正常退出也报一条，非 0 带上错误摘要（截断，不含存档路径）
+        Telemetry.Report(code == 0 ? "game_exit" : "error",
+            code == 0
+                ? $"退出 {versionId} · 正常"
+                : $"退出 {versionId} · 退出码 {code} · {FirstLine(tail)}");
 
         App.UI?.TryEnqueue(() =>
         {

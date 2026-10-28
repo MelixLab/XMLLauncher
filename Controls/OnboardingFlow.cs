@@ -86,8 +86,27 @@ public sealed class OnboardingFlow
         panel.Children.Add(Banner(
             "这个向导不会下载任何文件：不装游戏、不装 Java、不动你已有的版本库。只有你主动点登录时才会联网。"));
 
+        // 用户体验改进计划：默认开启，这一页就能取消
+        var telemetryBox = new CheckBox
+        {
+            Content = "参与用户体验改进计划",
+            IsChecked = AppState.Settings.TelemetryEnabled,
+            Margin = new Thickness(0, 4, 0, 0)
+        };
+        panel.Children.Add(telemetryBox);
+        panel.Children.Add(Text(
+            "上报启动器的启动、开游戏、异常退出这些事件，附带版本号、系统信息和随机设备号；不含账号密码、存档内容和文件路径。随时能在「设置」里关掉。",
+            12.5, 18));
+
         var dialog = Dialog("欢迎使用 XML 启动器", panel, primary: "开始设置", close: "跳过");
-        return await SafeShowAsync(dialog) == ContentDialogResult.Primary;
+        var result = await SafeShowAsync(dialog);
+
+        AppState.Settings.TelemetryEnabled = telemetryBox.IsChecked == true;
+        SettingsService.Save();
+        if (AppState.Settings.TelemetryEnabled) Telemetry.Start();
+        else Telemetry.Stop();
+
+        return result == ContentDialogResult.Primary;
     }
 
     // ================= 2. 登录方式 =================

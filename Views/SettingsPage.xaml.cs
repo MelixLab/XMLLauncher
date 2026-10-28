@@ -35,6 +35,17 @@ public sealed partial class SettingsPage : Page
         MainWindow.Instance?.ShowOnboarding(fromSettings: true);
     }
 
+    private void Telemetry_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;   // 初始化时设 IsOn 也会触发，别把设置写乱
+
+        AppState.Settings.TelemetryEnabled = TelemetrySwitch.IsOn;
+        SettingsService.Save();
+
+        if (TelemetrySwitch.IsOn) Telemetry.Start();
+        else Telemetry.Stop();
+    }
+
     private void Font_Toggled(object sender, RoutedEventArgs e)
     {
         AppState.Settings.UseNotoSans = FontSwitch.IsOn;
@@ -62,6 +73,7 @@ public sealed partial class SettingsPage : Page
 
         MirrorSwitch.IsOn = s.UseMirror;
         FontSwitch.IsOn = s.UseNotoSans;
+        TelemetrySwitch.IsOn = s.TelemetryEnabled;
 
         WidthBox.Value = s.GameWidth;
         HeightBox.Value = s.GameHeight;

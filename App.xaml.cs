@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using LinxLauncher.Services;
@@ -12,6 +13,9 @@ public partial class App : Application
 
     public App()
     {
+        // 必须在任何窗口创建之前：任务栏靠它认出「这是哪个应用」
+        WindowIcon.SetAppUserModelId("XiguaStudio.XMLLauncher", "XML Minecraft Launcher");
+
         InitializeComponent();
         UnhandledException += (_, e) =>
         {
@@ -48,5 +52,19 @@ public partial class App : Application
 
         MainWin = new MainWindow();
         MainWin.Activate();
+
+        // 用户体验改进计划：默认开启，设置里能关；关掉后这里什么都不做
+        try { Telemetry.Start(); }
+        catch (Exception ex) { Log.Warn("遥测启动失败：" + ex.Message); }
+
+        // 调试用：设置 XML_TEST_TOAST=1 启动，3 秒后弹一条托盘通知，
+        // 方便检查通知的标题和图标记没记对（正常使用不会触发）。
+        if (Environment.GetEnvironmentVariable("XML_TEST_TOAST") == "1")
+        {
+            _ = Task.Delay(3000).ContinueWith(_ => TrayService.Notify(
+                "这是一条测试通知",
+                "如果标题显示 XML Minecraft Launcher、左边是我们的图标，就说明注册好了。"),
+                TaskScheduler.Default);
+        }
     }
 }
