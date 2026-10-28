@@ -236,16 +236,23 @@
                 Margin="0,24,0,4"
                 Style="{StaticResource SectionTitleTextStyle}"
                 Text="隐私" />
-            <Grid Margin="0,4,0,12">
+            <!-- 两列：说明文字占满剩余宽度并自动换行，开关单独一列，避免压到文字上 -->
+            <Grid Margin="0,4,0,12" ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
                 <StackPanel>
                     <TextBlock Style="{StaticResource BodyTextStyle}" Text="参与用户体验改进计划" />
                     <TextBlock
                         Style="{StaticResource CaptionTextStyle}"
+                        TextWrapping="Wrap"
                         Text="上报启动、开游戏、异常退出这些事件（含版本号、系统信息、随机设备号）；不含账号密码、存档内容和文件路径。" />
                 </StackPanel>
                 <ToggleSwitch
+                    Grid.Column="1"
                     x:Name="TelemetrySwitch"
-                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
                     Toggled="Telemetry_Toggled" />
             </Grid>
 

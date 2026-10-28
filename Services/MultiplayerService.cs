@@ -422,7 +422,21 @@ public static class MultiplayerService
     private static async Task<TcpClient> DialRelayAsync(RelayRoom room, string role, CancellationToken ct)
     {
         var client = new TcpClient();
-        await client.ConnectAsync(room.Host, room.Port, ct);
+        try
+        {
+            await client.ConnectAsync(room.Host, room.Port, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // 联机不通十次有九次是中继端口的问题：把地址直接写进报错里，
+            // 省得用户只看到一句「连接尝试失败」不知道去找谁。
+            Log.Warn($"联机中继连接失败：{room.Host}:{room.Port}（{role}）· {ex.Message}");
+            throw new IOException(
+                $"连不上联机中继 {room.Host}:{room.Port}。"
+                + "请确认：① 服务器放行了这个 TCP 端口；"
+                + "② 这个域名没有走 CDN 代理（要用只解析的 A 记录，或者直接填服务器 IP）。",
+                ex);
+        }
 
         var handshake = new JsonObject
         {
