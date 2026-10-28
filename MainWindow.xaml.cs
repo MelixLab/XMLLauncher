@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Ellipse = Microsoft.UI.Xaml.Shapes.Ellipse;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 using LinxLauncher.Services;
@@ -1034,10 +1035,17 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task BuildAccountDialogAsync()
     {
+        var s = AppState.Settings;
+        var hasMs = !string.IsNullOrEmpty(s.MsRefreshToken);
+        var serverLogged = LinxAccountService.IsLoggedIn;
+
+        // 当前用哪个身份进游戏
+        var mode = AccountService.IsMicrosoft ? "ms" : "offline";
+
         // ---------- 离线账号 ----------
         var nameBox = new TextBox
         {
-            Text = AppState.Settings.PlayerName,
+            Text = s.PlayerName,
             PlaceholderText = "1–16 个字符，支持中文",
             MaxLength = 16
         };
@@ -1047,17 +1055,14 @@ public sealed partial class MainWindow : Window
         var avatarHint = new TextBlock
         {
             Text = "没设置图片时用名字首字母。正版账号会优先显示角色头像。",
-            FontSize = 12.5,
+            FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
         };
 
         // ---------- XML 账号 ----------
-        bool serverLogged = LinxAccountService.IsLoggedIn;
-
         var serverUserBox = new TextBox { PlaceholderText = "用户名（3–24 位）", Width = 170 };
         var serverPassBox = new PasswordBox { PlaceholderText = "密码（至少 6 位）", Width = 170 };
-        // 服务端注册强制邮箱验证：只支持国内邮箱，验证码 10 分钟内有效、60 秒才能再发一次
         var serverEmailBox = new TextBox { PlaceholderText = "邮箱（QQ / 163 / 126…）", Width = 200 };
         var serverCodeBox = new TextBox { PlaceholderText = "邮箱验证码", Width = 110, MaxLength = 6 };
         var serverSendCodeBtn = new Button { Content = "发送验证码" };
@@ -1071,9 +1076,7 @@ public sealed partial class MainWindow : Window
             FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"],
-            Text = serverLogged
-                ? $"已登录：{LinxAccountService.DisplayName}"
-                : "XML 账号用于登录官方服务器。注册后可以在这里直接登录。"
+            Text = serverLogged ? $"已登录：{LinxAccountService.DisplayName}" : "未登录。联机大厅和云端存档要用它。"
         };
 
         var serverGuestPanel = new StackPanel { Spacing = 8 };
@@ -1110,26 +1113,137 @@ public sealed partial class MainWindow : Window
 
         if (serverLogged) serverGuestPanel.Visibility = Visibility.Collapsed;
 
-        // ---------- 正版账号那一行 ----------
+        // ---------- 正版 ----------
         var msLoginButton = new Button { Content = "使用 Microsoft 账号登录", MinWidth = 0 };
-        var msSwitchButton = new HyperlinkButton
-        {
-            Content = "切回正版",
-            Visibility = !AccountService.IsMicrosoft && !string.IsNullOrEmpty(AppState.Settings.MsRefreshToken)
-                ? Visibility.Visible
-                : Visibility.Collapsed
-        };
         var msLogoutButton = new HyperlinkButton
         {
             Content = "退出正版账号",
             Visibility = AccountService.IsMicrosoft ? Visibility.Visible : Visibility.Collapsed
         };
-        var msRow = new StackPanel
+
+        var msStatus = new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            Children = { msLoginButton, msSwitchButton, msLogoutButton }
+            FontSize = 12.5,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"],
+            Text = AccountService.IsMicrosoft
+                ? $"已登录：{s.MsName}"
+                : (hasMs ? $"上次登录过 {s.MsName}，点保存就切回正版。" : "还没登录过微软账号。")
         };
+
+        // ---------- 两个选择卡 ----------
+        var brand = (Brush)Application.Current.Resources["BrandBrush"];
+        var divider = (Brush)Application.Current.Resources["DividerBrush"];
+        var secondary = (SolidColorBrush)Application.Current.Resources["SecondaryTextBrush"];
+        var brandWash = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(18, 0, 168, 142));
+
+        // 先声明后赋值：MakeChoice 里的 lambda 会引用它们，
+        // 直接 var 声明在下面会撞 CS0165「使用了未赋值的局部变量」。
+        StackPanel msPanel = null!, offlinePanel = null!;
+        var dots = new Dictionary<string, (Border Card, Ellipse Core)>();
+        var choices = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+
+        (Border card, TextBlock sub) MakeChoice(string tag, string title, string subtitle)
+        {
+            var ring = new Ellipse
+            {
+                Width = 16,
+                Height = 16,
+                StrokeThickness = 1.5,
+                Stroke = divider
+            };
+            var core = new Ellipse
+            {
+                Width = 8,
+                Height = 8,
+                Fill = brand,
+                Visibility = Visibility.Collapsed
+            };
+            var dotHost = new Grid { Width = 16, Height = 16 };
+            dotHost.Children.Add(ring);
+            dotHost.Children.Add(core);
+
+            var titleText = new TextBlock
+            {
+                Text = title,
+                FontSize = 13.5,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            };
+            var subText = new TextBlock
+            {
+                Text = subtitle,
+                FontSize = 12,
+                MaxWidth = 148,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Foreground = secondary
+            };
+
+            var col = new StackPanel { Spacing = 3, Children = { titleText, subText } };
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 10,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { dotHost, col }
+            };
+
+            var card = new Border
+            {
+                Width = 198,
+                Padding = new Thickness(12, 10, 12, 10),
+                CornerRadius = new CornerRadius(10),
+                BorderThickness = new Thickness(1),
+                BorderBrush = divider,
+                Child = row
+            };
+
+            card.Tapped += (_, _) => SelectMode(tag);
+            dots[tag] = (card, core);
+            return (card, subText);
+        }
+
+        var (msCard, msSub) = MakeChoice("ms", "Microsoft 正版",
+            AccountService.IsMicrosoft ? s.MsName : (hasMs ? s.MsName + "（未启用）" : "未登录"));
+        var (offlineCard, offlineSub) = MakeChoice("offline", "离线账号", s.PlayerName);
+
+        choices.Children.Add(msCard);
+        choices.Children.Add(offlineCard);
+
+        // ---------- 详情区 ----------
+        msPanel = new StackPanel
+        {
+            Spacing = 8,
+            Children = { msStatus, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { msLoginButton, msLogoutButton } } }
+        };
+
+        offlinePanel = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                new TextBlock { Text = "游戏里用的名字", FontSize = 13 },
+                nameBox,
+                avatarHint,
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { pickButton, resetButton } }
+            }
+        };
+
+        void SelectMode(string tag)
+        {
+            mode = tag;
+
+            foreach (var pair in dots)
+            {
+                var on = pair.Key == tag;
+                pair.Value.Card.BorderBrush = on ? brand : divider;
+                pair.Value.Card.BorderThickness = new Thickness(on ? 1.5 : 1);
+                pair.Value.Card.Background = on ? brandWash : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+                pair.Value.Core.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            msPanel.Visibility = tag == "ms" ? Visibility.Visible : Visibility.Collapsed;
+            offlinePanel.Visibility = tag == "offline" ? Visibility.Visible : Visibility.Collapsed;
+        }
 
         // ---------- 对话框 ----------
         var dialog = new ContentDialog
@@ -1138,53 +1252,32 @@ public sealed partial class MainWindow : Window
             Title = "账号",
             Content = new StackPanel
             {
-                Spacing = 10,
+                Spacing = 12,
                 MinWidth = 420,
                 Children =
                 {
                     new TextBlock
                     {
-                        Text = "Microsoft 账号（正版）",
-                        FontSize = 14,
-                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                        Text = "用哪个身份进游戏",
+                        FontSize = 12.5,
+                        Foreground = secondary
                     },
-                    new TextBlock
-                    {
-                        FontSize = 13,
-                        TextWrapping = TextWrapping.Wrap,
-                        Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"],
-                        Text = AccountService.IsMicrosoft
-                            ? $"已登录正版账号：{AppState.Settings.MsName}"
-                            : (string.IsNullOrEmpty(AppState.Settings.MsRefreshToken)
-                                ? "还没有登录过微软账号。"
-                                : $"上次登录过：{AppState.Settings.MsName}（已切回离线）")
-                    },
-                    msRow,
+                    choices,
+                    msPanel,
+                    offlinePanel,
                     Divider(),
-                    new TextBlock
+                    new Expander
                     {
-                        Text = "XML 账号",
-                        FontSize = 14,
-                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-                    },
-                    serverStatus,
-                    serverGuestPanel,
-                    serverMemberPanel,
-                    Divider(),
-                    new TextBlock
-                    {
-                        Text = "离线账号",
-                        FontSize = 14,
-                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-                    },
-                    new TextBlock { Text = "不登录任何账号时，游戏里用的名字。", FontSize = 13 },
-                    nameBox,
-                    avatarHint,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 8,
-                        Children = { pickButton, resetButton }
+                        Header = serverLogged
+                            ? $"XML 账号（联机服务）· 已登录 {LinxAccountService.DisplayName}"
+                            : "XML 账号（联机服务）· 未登录",
+                        IsExpanded = false,
+                        HorizontalAlignment = HorizontalAlignment.Stretch,
+                        Content = new StackPanel
+                        {
+                            Spacing = 8,
+                            Children = { serverStatus, serverGuestPanel, serverMemberPanel }
+                        }
                     }
                 }
             },
@@ -1195,6 +1288,22 @@ public sealed partial class MainWindow : Window
 
         FontService.ApplyToDialog(dialog);
 
+        // 主按钮跟品牌色走：ContentDialog 的按钮吃的是这几支 Accent 资源，
+        // 直接改 PrimaryButtonStyle 会被模板里的 ThemeResource 盖掉。
+        var brandBrush = (Brush)Application.Current.Resources["BrandBrush"];
+        var brandHover = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0, 150, 128));
+        var brandPress = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0, 132, 112));
+        var whiteBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
+
+        dialog.Resources["AccentButtonBackground"] = brandBrush;
+        dialog.Resources["AccentButtonBackgroundPointerOver"] = brandHover;
+        dialog.Resources["AccentButtonBackgroundPressed"] = brandPress;
+        dialog.Resources["AccentButtonForeground"] = whiteBrush;
+        dialog.Resources["AccentButtonForegroundPointerOver"] = whiteBrush;
+        dialog.Resources["AccentButtonForegroundPressed"] = whiteBrush;
+
+        SelectMode(mode);
+
         // ---------- 事件 ----------
         msLoginButton.Click += async (_, _) =>
         {
@@ -1203,19 +1312,8 @@ public sealed partial class MainWindow : Window
             await MicrosoftLoginAsync();
         };
 
-        msSwitchButton.Click += (_, _) =>
-        {
-            AccountService.SwitchToMicrosoft();
-            RefreshAccountUi();
-            dialog.Hide();
-            Toast("已切回正版账号");
-        };
-
         msLogoutButton.Click += async (_, _) =>
         {
-            // ★ 这个账号面板本身就是一只 ContentDialog。
-            //   不先把它关掉就弹确认框，会直接撞上「Only a single ContentDialog can be open
-            //   at any time」（COMException 0x80000019）—— 之前点「退出正版账号」报错就是这里。
             dialog.Hide();
             await Task.Delay(240);
 
@@ -1238,7 +1336,6 @@ public sealed partial class MainWindow : Window
             }
             else
             {
-                // 取消就回到账号面板，别把用户留在外面
                 await Task.Delay(220);
                 await BuildAccountDialogAsync();
             }
@@ -1278,18 +1375,23 @@ public sealed partial class MainWindow : Window
             serverStatus.Text = "正在发送验证码…";
             try
             {
-                var (message, debug) = await LinxAccountService.SendEmailCodeAsync(email, "register", default);
-                if (!string.IsNullOrEmpty(debug)) serverCodeBox.Text = debug;
-                serverStatus.Text = string.IsNullOrEmpty(debug)
-                    ? message
-                    : message + "（测试服验证码：" + debug + "）";
-                cooldown = 60;
-                codeTimer.Start();
+                var (message, _) = await LinxAccountService.SendEmailCodeAsync(email, "register", default);
+                if (message.Contains("已发送") || message.Contains("发送成功"))
+                {
+                    serverStatus.Text = $"验证码已发到 {email}，10 分钟内有效。";
+                    cooldown = 60;
+                    codeTimer.Start();
+                }
+                else
+                {
+                    serverStatus.Text = message;
+                    serverSendCodeBtn.IsEnabled = true;
+                }
             }
             catch (Exception ex)
             {
+                serverStatus.Text = "发送失败：" + ex.Message;
                 serverSendCodeBtn.IsEnabled = true;
-                serverStatus.Text = ex.Message;
             }
         };
 
@@ -1300,29 +1402,52 @@ public sealed partial class MainWindow : Window
 
             if (user.Length < 3 || pass.Length < 6)
             {
-                serverStatus.Text = "用户名至少 3 位、密码至少 6 位。";
+                serverStatus.Text = "用户名至少 3 位，密码至少 6 位。";
                 return;
             }
 
+            serverStatus.Text = "正在登录…";
             try
             {
-                serverStatus.Text = "正在登录…";
-                if (!await ServerLoginAsync(user, pass, serverStatus)) return;
+                var result = await LinxAccountService.LoginAsync(user, pass, null, default);
+                if (result.LoggedIn)
+                {
+                    serverStatus.Text = "登录成功：" + LinxAccountService.DisplayName;
+                    serverGuestPanel.Visibility = Visibility.Collapsed;
+                    serverMemberPanel.Visibility = Visibility.Visible;
+                    RefreshAccountUi();
+                    return;
+                }
 
-                serverStatus.Text = $"已登录：{user}";
-                serverGuestPanel.Visibility = Visibility.Collapsed;
-                serverMemberPanel.Visibility = Visibility.Visible;
-                serverPassBox.Password = "";
-                serverCodeBox.Text = "";
+                if (result.NeedCode)
+                {
+                    // 服务端开了邮箱二次验证：这轮补验证码再登一次
+                    var code = serverCodeBox.Text.Trim();
+                    if (code.Length < 4)
+                    {
+                        serverStatus.Text = result.Hint ?? "这个账号要先过邮箱验证，把验证码填上再点登录。";
+                        return;
+                    }
 
-                RefreshAccountUi();
-                Toast($"已登录 XML 账号「{user}」");
+                    var again = await LinxAccountService.LoginAsync(user, pass, code, default);
+                    if (again.LoggedIn)
+                    {
+                        serverStatus.Text = "登录成功：" + LinxAccountService.DisplayName;
+                        serverGuestPanel.Visibility = Visibility.Collapsed;
+                        serverMemberPanel.Visibility = Visibility.Visible;
+                        RefreshAccountUi();
+                        return;
+                    }
 
-                await SyncLocalAvatarAsync();
+                    serverStatus.Text = again.Hint ?? "验证码不对。";
+                    return;
+                }
+
+                serverStatus.Text = result.Hint ?? "登录失败。";
             }
             catch (Exception ex)
             {
-                serverStatus.Text = ex.Message;
+                serverStatus.Text = "登录失败：" + ex.Message;
             }
         };
 
@@ -1335,46 +1460,42 @@ public sealed partial class MainWindow : Window
 
             if (user.Length < 3 || pass.Length < 6)
             {
-                serverStatus.Text = "用户名至少 3 位、密码至少 6 位。";
+                serverStatus.Text = "用户名至少 3 位，密码至少 6 位。";
                 return;
             }
+
             if (!email.Contains('@'))
             {
-                serverStatus.Text = "注册要填邮箱（只支持国内邮箱）。";
+                serverStatus.Text = "注册需要邮箱（只支持国内邮箱）。";
                 return;
             }
+
             if (code.Length < 4)
             {
-                serverStatus.Text = "先点「发送验证码」，把邮件里的 6 位数字填进来。";
+                serverStatus.Text = "先点「发送验证码」，把收到的 6 位验证码填上。";
                 return;
             }
 
             serverRegisterBtn.IsEnabled = false;
+            serverStatus.Text = "正在注册…";
             try
             {
-                serverStatus.Text = "正在注册…";
                 var message = await LinxAccountService.RegisterAsync(user, pass, email, code, default);
-
-                serverStatus.Text = "注册成功，正在登录…";
-                var result = await LinxAccountService.LoginAsync(user, pass, null, default);
-                if (result.NeedCode)
+                if (string.IsNullOrWhiteSpace(message))
                 {
-                    serverStatus.Text = "账号已注册。这个账号开了邮箱二次验证，请点「登录」再输一次验证码。";
-                    return;
+                    serverStatus.Text = "注册成功，已自动登录：" + LinxAccountService.DisplayName;
+                    serverGuestPanel.Visibility = Visibility.Collapsed;
+                    serverMemberPanel.Visibility = Visibility.Visible;
+                    RefreshAccountUi();
                 }
-
-                serverStatus.Text = $"已登录：{user}";
-                serverGuestPanel.Visibility = Visibility.Collapsed;
-                serverMemberPanel.Visibility = Visibility.Visible;
-                serverPassBox.Password = "";
-                serverCodeBox.Text = "";
-
-                RefreshAccountUi();
-                Toast(message);
+                else
+                {
+                    serverStatus.Text = message;
+                }
             }
             catch (Exception ex)
             {
-                serverStatus.Text = ex.Message;
+                serverStatus.Text = "注册失败：" + ex.Message;
             }
             finally
             {
@@ -1396,11 +1517,10 @@ public sealed partial class MainWindow : Window
             var path = await PickImageAsync("server-avatar");
             if (path is null) return;
 
-            AppState.Settings.ServerAvatarPath = path;
+            s.ServerAvatarPath = path;
             SettingsService.Save();
             RefreshAccountUi();
 
-            // 顺手同步到服务器，网页端和别的设备就能看到同一个头像
             var uploaded = await LinxAccountService.UploadAvatarAsync(path, default);
             Toast(uploaded ? "XML 账号头像已更新（已同步到服务器）" : "XML 账号头像已更新（同步到服务器失败，稍后会重试）");
         };
@@ -1417,10 +1537,31 @@ public sealed partial class MainWindow : Window
             var name = nameBox.Text.Trim();
             if (string.IsNullOrEmpty(name)) name = "Steve";
 
-            AppState.Settings.PlayerName = name;
+            s.PlayerName = name;
+
+            if (mode == "ms")
+            {
+                if (hasMs)
+                {
+                    AccountService.SwitchToMicrosoft();
+                    Toast($"已切换到正版账号 {s.MsName}");
+                }
+                else
+                {
+                    AccountService.UseOffline();
+                    Toast("还没登录过微软账号，先用离线账号启动。");
+                }
+            }
+            else
+            {
+                AccountService.UseOffline();
+                Toast($"离线账号已改为「{name}」");
+            }
+
             SettingsService.Save();
             RefreshAccountUi();
-            Toast($"离线账号已改为「{name}」");
+            offlineSub.Text = name;
+            msSub.Text = AccountService.IsMicrosoft ? s.MsName : (hasMs ? s.MsName + "（未启用）" : "未登录");
         }
     }
 

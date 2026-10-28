@@ -180,6 +180,13 @@ public static class GameSession
 
         // 游戏起来了：启动器让位，只留托盘图标
         // 体验计划：记一条「开了哪个版本」，后台能看出哪些版本最常用
+        // 1.20 之前的版本没有 --quickPlayMultiplayer，得把地址直接告诉用户
+        if (!string.IsNullOrWhiteSpace(quickJoin) && !LaunchService.SupportsQuickPlay(versionId))
+        {
+            TrayService.Notify("进游戏后手动添加服务器",
+                $"这个版本不支持自动连接，多人游戏里添加服务器填 {quickJoin}");
+        }
+
         Telemetry.Report("game_start", $"启动 {versionId}");
 
         TrayService.Show($"XML Minecraft Launcher · {versionId}");

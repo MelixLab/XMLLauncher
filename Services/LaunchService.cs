@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -222,8 +222,9 @@ public sealed class LaunchService
 
         if (opt.Fullscreen) game.Add("--fullscreen");
 
-        // 1.20 起才有这个参数；低版本传了会被忽略，所以只在有地址时加
-        if (!string.IsNullOrWhiteSpace(opt.QuickJoinAddress))
+        // --quickPlayMultiplayer 是 1.20 才有的。低版本传了会直接被忽略，
+        // 用户以为「点了就自动进服」，结果停在主菜单，所以这里先判断版本。
+        if (!string.IsNullOrWhiteSpace(opt.QuickJoinAddress) && SupportsQuickPlay(versionId))
         {
             game.Add("--quickPlayMultiplayer");
             game.Add(opt.QuickJoinAddress!);
@@ -363,5 +364,18 @@ public sealed class LaunchService
             sb.Append(' ').Append(a.Contains(' ') ? $"\"{a}\"" : a);
         }
         return sb.ToString();
+    }
+
+    /// <summary>1.20 起客户端才认 --quickPlayMultiplayer。</summary>
+    public static bool SupportsQuickPlay(string versionId)
+    {
+        if (string.IsNullOrWhiteSpace(versionId)) return false;
+
+        var m = System.Text.RegularExpressions.Regex.Match(versionId, @"(\d+)\.(\d+)");
+        if (!m.Success) return false;
+
+        var major = int.Parse(m.Groups[1].Value);
+        var minor = int.Parse(m.Groups[2].Value);
+        return major > 1 || (major == 1 && minor >= 20);
     }
 }

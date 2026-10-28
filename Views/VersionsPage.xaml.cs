@@ -526,30 +526,43 @@ public sealed partial class VersionsPage : Page
 
     private async void Mods_Drop(object sender, DragEventArgs e)
     {
-        if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
-
-        var dir = CurrentModsDir();
+        // 拖放事件一返回，e.DataView 就作废了。
+        // 原来在 await 之后才读 GetStorageItemsAsync()，会抛
+        // 「Operation is not valid due to the current state of the object」，
+        // 表现是拖进去的 jar 一个都没复制、还弹安装失败。用 Deferral 撑住。
+        var deferral = e.GetDeferral();
         try
         {
+            if (!e.DataView.Contains(StandardDataFormats.StorageItems)) return;
+
+            var items = await e.DataView.GetStorageItemsAsync();
+            var dir = CurrentModsDir();
+
             Directory.CreateDirectory(dir);
             var target = await StorageFolder.GetFolderFromPathAsync(dir);
 
-            foreach (var entry in await e.DataView.GetStorageItemsAsync())
+            var copied = 0;
+            foreach (var item in items)
             {
-                if (entry is StorageFile file &&
+                if (item is StorageFile file &&
                     file.Name.EndsWith(".jar", StringComparison.OrdinalIgnoreCase))
                 {
                     await file.CopyAsync(target, file.Name, NameCollisionOption.ReplaceExisting);
+                    copied++;
                 }
             }
 
             RefreshMods();
-            MainWindow.Instance?.Toast("Mod 已放入 mods 文件夹");
+            MainWindow.Instance?.Toast(copied > 0 ? $"已放入 {copied} 个 Mod" : "没找到 .jar 文件");
         }
         catch (Exception ex)
         {
             Log.Error("ModDrop", ex);
             MainWindow.Instance?.Toast("安装 Mod 失败：" + ex.Message.Split('\n')[0], true);
+        }
+        finally
+        {
+            deferral.Complete();
         }
     }
 

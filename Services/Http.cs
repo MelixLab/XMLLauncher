@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -70,6 +71,39 @@ public static class Http
             ConnectTimeout = TimeSpan.FromSeconds(20),
             AllowAutoRedirect = true,
             MaxAutomaticRedirections = 8,
+        };
+
+        // ★ 本机 IPv6 通不了，而 DNS 会同时返回 A/AAAA。.NET 默认挨个试，
+        //   卡在 IPv6 上要等十几秒才失败 —— 客户端表现就是「登录超时 / A task was canceled」，
+        //   但同一台机器用浏览器（自动回退 IPv4）却秒开。这里强制先走 IPv4。
+        handler.ConnectCallback = async (context, ct) =>
+        {
+            var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, ct);
+            var ordered = addresses
+                .OrderBy(a => a.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)
+                .ToArray();
+
+            Exception? last = null;
+            foreach (var address in ordered)
+            {
+                var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
+                {
+                    NoDelay = true
+                };
+
+                try
+                {
+                    await socket.ConnectAsync(new IPEndPoint(address, context.DnsEndPoint.Port), ct);
+                    return new NetworkStream(socket, ownsSocket: true);
+                }
+                catch (Exception ex)
+                {
+                    last = ex;
+                    socket.Dispose();
+                }
+            }
+
+            throw last ?? new IOException("连不上 " + context.DnsEndPoint);
         };
 
         var client = new HttpClient(handler)
