@@ -130,6 +130,10 @@ public static class MultiplayerService
     /// </summary>
     public static int DetectLanPort()
     {
+        // 调试口子：XML_TEST_LANPORT=12345 时直接用它，方便没开游戏也能测联机链路
+        if (int.TryParse(Environment.GetEnvironmentVariable("XML_TEST_LANPORT"), out var forced) && forced > 0)
+            return forced;
+
         try
         {
             var javaPids = new HashSet<int>();
@@ -307,9 +311,23 @@ public static class MultiplayerService
                     await local.ConnectAsync(IPAddress.Loopback, lanPort, session.Token);
 
                     session.CountGuest();
-                    Log.Info($"联机（房主）：已连上服务器，转发到本地 {lanPort}");
-                    await BridgeAsync(upstream.GetStream(), local.GetStream(), session.Token);
-                    Log.Info("联机（房主）：这段隧道结束，重新挂回中继等下一个访客");
+
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    var (fromRelay, fromLocal) = await BridgeAsync(
+                        upstream.GetStream(), local.GetStream(), session.Token);
+                    sw.Stop();
+
+                    if (fromRelay == 0 && fromLocal == 0 && sw.ElapsedMilliseconds < 1500)
+                    {
+                        // 连上本地端口又秒断：几乎都是端口抓错了，或者游戏根本没开局域网
+                        Log.Warn($"联机（房主）：本地端口 {lanPort} 连上就断（{sw.ElapsedMilliseconds}ms），"
+                                 + "多半不是游戏局域网端口 —— 请先在游戏里点「对局域网开放」");
+                        retryDelay = TimeSpan.FromSeconds(3);
+                    }
+                    else
+                    {
+                        Log.Info($"联机（房主）：隧道结束（中继→本地 {fromRelay} 字节 / 本地→中继 {fromLocal} 字节），重新挂回中继");
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -450,12 +468,17 @@ public static class MultiplayerService
         return client;
     }
 
-    /// <summary>双向转发；任一方向断开就整体收摊。</summary>
-    private static async Task BridgeAsync(NetworkStream a, NetworkStream b, CancellationToken ct)
+    /// <summary>
+    /// 双向转发；任一方向断开就整体收摊。
+    /// 返回两个方向的字节数 —— 排查「连上就断」时这是最有用的线索：
+    /// 两边都是 0 说明对端压根不是游戏服务器（多半端口抓错了）。
+    /// </summary>
+    private static async Task<(long fromA, long fromB)> BridgeAsync(NetworkStream a, NetworkStream b, CancellationToken ct)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        long fromA = 0, fromB = 0;
 
-        async Task Pump(NetworkStream src, NetworkStream dst)
+        async Task Pump(NetworkStream src, NetworkStream dst, Action<long> count)
         {
             var buffer = new byte[64 * 1024];
             try
@@ -466,6 +489,7 @@ public static class MultiplayerService
                     if (read <= 0) break;
                     await dst.WriteAsync(buffer.AsMemory(0, read), linked.Token);
                     await dst.FlushAsync(linked.Token);
+                    count(read);
                 }
             }
             catch (Exception) { /* 对端断开 */ }
@@ -475,7 +499,11 @@ public static class MultiplayerService
             }
         }
 
-        await Task.WhenAll(Pump(a, b), Pump(b, a));
+        await Task.WhenAll(
+            Pump(a, b, n => Interlocked.Add(ref fromA, n)),
+            Pump(b, a, n => Interlocked.Add(ref fromB, n)));
+
+        return (fromA, fromB);
     }
 
     private static async Task<string> ReadLineAsync(NetworkStream stream, CancellationToken ct)

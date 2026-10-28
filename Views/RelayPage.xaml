@@ -10,7 +10,7 @@
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel
-            MaxWidth="760"
+            MaxWidth="1080"
             Padding="40,36,40,40"
             HorizontalAlignment="Left"
             Spacing="16">
@@ -19,128 +19,159 @@
                 <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="联机" />
                 <TextBlock
                     Style="{StaticResource PageSubtitleTextStyle}"
-                    Text="房主开好局域网世界后生成连接码，对方输入连接码即可进同一个世界（走官方服务器中继）。"
+                    Text="点对点直连：服务器只负责让你们互相找到，游戏数据不经过服务器，延迟就是你们两家之间的延迟。"
                     TextWrapping="Wrap" />
             </StackPanel>
 
-            <!-- 开房间 -->
+            <!-- 网络状态 -->
             <Border
-                Padding="20"
+                Padding="16,12"
                 Background="{ThemeResource CardBackgroundBrush}"
                 BorderBrush="{ThemeResource DividerBrush}"
                 BorderThickness="1"
                 CornerRadius="8">
-                <StackPanel Spacing="10">
-                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="我是房主" />
-                    <TextBlock
-                        Style="{StaticResource CaptionTextStyle}"
-                        Text="流程：进游戏 → 对局域网开放。联机码会自动出现，发给朋友即可。"
-                        TextWrapping="Wrap" />
-
-                    <TextBlock
-                        Style="{StaticResource CaptionTextStyle}"
-                        Text="联机码自动生成，只要不乱点就一直是这个，直接发给朋友。" />
-
-                    <TextBlock
-                        x:Name="HostCode"
-                        Margin="0,4,0,0"
-                        FontFamily="{StaticResource DisplayFontFamily}"
-                        FontSize="44"
-                        Foreground="{ThemeResource BrandBrush}"
-                        IsTextSelectionEnabled="True"
-                        Text="" />
-
-                    <TextBlock
-                        x:Name="HostReadyText"
-                        Style="{StaticResource CaptionTextStyle}"
-                        Text="" />
-
-                    <TextBlock
-                        x:Name="HostGuestText"
-                        Style="{StaticResource CaptionTextStyle}"
-                        Foreground="{ThemeResource BrandBrush}"
-                        Text="" />
-
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <ComboBox
-                            x:Name="VersionBox"
-                            Width="220"
-                            DisplayMemberPath="Id"
-                            PlaceholderText="选择要联机的版本" />
-                        <Button
-                            x:Name="StopHostButton"
-                            Click="Stop_Click"
-                            Content="结束联机"
-                            Visibility="Collapsed" />
+                <StackPanel Orientation="Horizontal" Spacing="24">
+                    <StackPanel Spacing="2">
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="网络环境" />
+                        <TextBlock x:Name="NatText" FontSize="13.5" Text="检测中…" />
                     </StackPanel>
-
-                    <TextBlock
-                        x:Name="HostStatus"
-                        FontSize="12.5"
-                        Foreground="{ThemeResource SecondaryTextBrush}"
-                        TextWrapping="Wrap" />
+                    <StackPanel Spacing="2">
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="公网地址" />
+                        <TextBlock x:Name="PublicAddrText" FontSize="13.5" Text="—" />
+                    </StackPanel>
+                    <StackPanel Spacing="2">
+                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="XML 账号" />
+                        <TextBlock x:Name="AccountText" FontSize="13.5" Text="—" />
+                    </StackPanel>
+                    <Button
+                        x:Name="RedetectButton"
+                        Content="重新检测"
+                        Margin="8,12,0,0"
+                        Click="Redetect_Click" />
                 </StackPanel>
             </Border>
 
-            <!-- 加入房间 -->
-            <Border
-                Padding="20"
-                Background="{ThemeResource CardBackgroundBrush}"
-                BorderBrush="{ThemeResource DividerBrush}"
-                BorderThickness="1"
-                CornerRadius="8">
-                <StackPanel Spacing="10">
-                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="我是访客" />
-                    <TextBlock
-                        Style="{StaticResource CaptionTextStyle}"
-                        Text="输入朋友给你的 6 位联机码，然后按上面给出的地址进游戏。"
-                        TextWrapping="Wrap" />
+            <!-- 三张卡片 -->
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="1.15*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
 
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBox
-                            x:Name="CodeBox"
-                            Width="160"
-                            MaxLength="6"
-                            PlaceholderText="6 位连接码" />
+                <!-- 1. 我开房间 -->
+                <Border
+                    Grid.Column="0"
+                    Padding="20"
+                    Background="{ThemeResource CardBackgroundBrush}"
+                    BorderBrush="{ThemeResource DividerBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                    <StackPanel Spacing="12">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="我开房间" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="先进游戏点「对局域网开放」，再回这里开房。房间会出现在下面的大厅里。"
+                            TextWrapping="Wrap" />
+
+                        <TextBox x:Name="WorldNameBox" Header="世界名称（可留空）" PlaceholderText="例如：和朋友开荒" MaxLength="32" />
+                        <PasswordBox x:Name="HostPasswordBox" Header="房间密码（可留空）" PlaceholderText="留空则谁都能进" MaxLength="16" />
+
+                        <Button
+                            x:Name="HostButton"
+                            Content="开房间"
+                            Style="{StaticResource AccentButtonStyle}"
+                            HorizontalAlignment="Stretch"
+                            Click="Host_Click" />
+
+                        <StackPanel x:Name="HostPanel" Spacing="8" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="房间号" />
+                            <TextBlock
+                                x:Name="HostCodeText"
+                                FontFamily="{StaticResource DisplayFontFamily}"
+                                FontSize="32"
+                                Foreground="{ThemeResource BrandBrush}"
+                                IsTextSelectionEnabled="True"
+                                Text="" />
+                            <TextBlock x:Name="HostInfoText" Style="{StaticResource CaptionTextStyle}" Text="" TextWrapping="Wrap" />
+                            <Button x:Name="StopHostButton" Content="关闭房间" HorizontalAlignment="Left" Click="StopHost_Click" />
+                        </StackPanel>
+
+                        <TextBlock x:Name="HostStatusText" Style="{StaticResource CaptionTextStyle}" Text="" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 2. 公开房间 -->
+                <Border
+                    Grid.Column="1"
+                    Padding="20"
+                    Background="{ThemeResource CardBackgroundBrush}"
+                    BorderBrush="{ThemeResource DividerBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                    <StackPanel Spacing="12">
+                        <Grid>
+                            <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="公开房间" VerticalAlignment="Center" />
+                            <Button
+                                x:Name="RefreshButton"
+                                Content="刷新"
+                                HorizontalAlignment="Right"
+                                FontSize="12"
+                                Padding="10,4"
+                                Click="Refresh_Click" />
+                        </Grid>
+                        <TextBlock x:Name="LobbyHintText" Style="{StaticResource CaptionTextStyle}" Text="正在读取大厅…" TextWrapping="Wrap" />
+
+                        <StackPanel x:Name="LobbyList" Spacing="8" />
+                    </StackPanel>
+                </Border>
+
+                <!-- 3. 加入房间 -->
+                <Border
+                    Grid.Column="2"
+                    Padding="20"
+                    Background="{ThemeResource CardBackgroundBrush}"
+                    BorderBrush="{ThemeResource DividerBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                    <StackPanel Spacing="12">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="加入房间" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="输房间号（或从中间点一个）。打洞成功后会自动开好本地地址。"
+                            TextWrapping="Wrap" />
+
+                        <TextBox x:Name="JoinCodeBox" Header="房间号" PlaceholderText="6 位" MaxLength="6" CharacterSpacing="120" />
+                        <PasswordBox x:Name="JoinPasswordBox" Header="密码（没有就留空）" MaxLength="16" />
+
                         <Button
                             x:Name="JoinButton"
-                            Click="Join_Click"
-                            Content="加入房间"
-                            Style="{StaticResource AccentButtonStyle}" />
-                        <Button
-                            x:Name="LeaveButton"
-                            Click="Stop_Click"
-                            Content="断开"
-                            Visibility="Collapsed" />
+                            Content="加入"
+                            Style="{StaticResource AccentButtonStyle}"
+                            HorizontalAlignment="Stretch"
+                            Click="Join_Click" />
+
+                        <StackPanel x:Name="GuestPanel" Spacing="6" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource CaptionTextStyle}" Text="游戏里连这个地址" />
+                            <TextBlock
+                                x:Name="GuestAddressText"
+                                FontFamily="{StaticResource DisplayFontFamily}"
+                                FontSize="20"
+                                Foreground="{ThemeResource BrandBrush}"
+                                IsTextSelectionEnabled="True"
+                                Text="" />
+                            <Button x:Name="LeaveButton" Content="退出房间" HorizontalAlignment="Left" Click="Leave_Click" />
+                        </StackPanel>
+
+                        <TextBlock x:Name="GuestStatusText" Style="{StaticResource CaptionTextStyle}" Text="" TextWrapping="Wrap" />
                     </StackPanel>
+                </Border>
+            </Grid>
 
-                    <TextBlock
-                        x:Name="GuestAddress"
-                        Margin="0,4,0,0"
-                        FontFamily="{StaticResource DisplayFontFamily}"
-                        FontSize="22"
-                        Foreground="{ThemeResource BrandBrush}"
-                        IsTextSelectionEnabled="True"
-                        Visibility="Collapsed" />
-
-                    <StackPanel
-                        x:Name="GuestSteps"
-                        Spacing="3"
-                        Visibility="Collapsed">
-                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="在游戏里这样连：" />
-                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="1. 启动和自己版本一致的客户端" />
-                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="2. 主菜单 → 多人游戏 → 添加服务器" />
-                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="3. 服务器地址填上面这串（含端口）" />
-                        <TextBlock Style="{StaticResource CaptionTextStyle}" Text="4. 双击进服；如果被踢，说明两边模组或版本不一致" />
-                    </StackPanel>
-
-                    <TextBlock
-                        x:Name="GuestStatus"
-                        FontSize="12.5"
-                        Foreground="{ThemeResource SecondaryTextBrush}"
-                        TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+            <TextBlock
+                Style="{StaticResource CaptionTextStyle}"
+                Text="说明：双方都是「对称型 NAT」（常见于部分 4G/5G、校园网）时打洞会失败，这种网络不支持 P2P 联机。全锥形 / 受限锥形 / 端口受限锥形都可以。"
+                TextWrapping="Wrap" />
         </StackPanel>
     </ScrollViewer>
 </Page>

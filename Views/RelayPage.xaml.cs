@@ -1,307 +1,343 @@
-﻿using System;
-using System.Linq;
+using System;
+using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
+using LinxLauncher.Services;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
-using LinxLauncher.Models;
-using LinxLauncher.Services;
 
 namespace LinxLauncher.Views;
 
 /// <summary>
-/// 联机页。
-///
-/// 设计取向：用户不用点任何"创建房间"——进页面就自动分配一个联机码，
-/// 每 5 分钟自动换一次；游戏没开局域网时码照常显示，只是状态写「游戏未启动」。
-/// 朋友拿着码加入时，如果房主还没开局域网，会直接提示"对方游戏未启动"。
+/// 联机页：三张卡片 —— 我开房间 / 公开房间 / 加入房间。
+/// 走 P2P：服务器只做大厅与地址交换，游戏数据点对点直连。
 /// </summary>
 public sealed partial class RelayPage : Page
 {
-    private const int RefreshSeconds = 5 * 60;   // 码的刷新周期
-    private const int PollSeconds = 5;           // 检测局域网端口的周期
-
-    private string _code = "";
-    private string _roomHost = "";
-    private int _roomPort;
-    private bool _ready;
+    private P2PSession? _host;
+    private P2PSession? _guest;
+    private NatInfo _nat = new(NatKind.Unknown, null, "");
+    private DispatcherQueueTimer? _tick;
     private bool _busy;
-
-    private MultiplayerSession? _hostSession;
-    private int _hostPort;
-    private MultiplayerSession? _guestSession;
-
-    private DispatcherQueueTimer? _refreshTimer;
-    private DispatcherQueueTimer? _pollTimer;
 
     public RelayPage()
     {
         InitializeComponent();
-
-        // 页面常驻：切到别的页面再回来不会重建实例，
-        // 否则 _code 会被清空 → 重新建房 → 服务端删旧房 → 之前发出去的码直接失效。
+        // 页面常驻：切页再回来时不该把房间/隧道丢掉
         NavigationCacheMode = NavigationCacheMode.Required;
     }
 
-    protected override async void OnNavigatedTo(NavigationEventArgs e)
+    protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
 
-        UiList.Fill(VersionBox, AppState.Installed);
-        VersionBox.SelectedItem = AppState.Current;
+        UpdateAccountText();
+        RefreshHostPanel();
 
-        if (!LinxAccountService.IsLoggedIn)
-        {
-            HostCode.Text = "";
-            HostReadyText.Text = "先在左下角账号面板登录 XML 账号，登录后这里会自动分配联机码。";
-            return;
-        }
+        if (_nat.Kind == NatKind.Unknown) _ = DetectNatAsync();
+        else ApplyNat(_nat);
 
-        await EnsureRoomAsync();
-        StartTimers();
+        _ = LoadLobbyAsync();
+
+        _tick ??= CreateTick();
+        _tick.Start();
     }
 
     protected override void OnNavigatedFrom(NavigationEventArgs e)
     {
         base.OnNavigatedFrom(e);
-        // 故意不停定时器：页面实例是常驻的，切到别的页面后仍要继续盯着端口，
-        // 否则"不在联机页就收不到可联机通知"。
+        _tick?.Stop();
     }
 
-    // ================= 房间与定时器 =================
-
-    private async Task EnsureRoomAsync()
-    {
-        // 已经有码就直接用（切页面、重进页面都不换码）
-        if (!string.IsNullOrEmpty(_code))
-        {
-            HostCode.Text = _code;
-            return;
-        }
-
-        try
-        {
-            var version = (VersionBox.SelectedItem as LocalVersion)?.Id ?? "";
-            var room = await MultiplayerService.CreateRoomAsync(version, default);
-            _code = room.Code;
-            _roomHost = room.Host;
-            _roomPort = room.Port;
-
-            HostCode.Text = room.Code;
-            HostReadyText.Text = "游戏未启动：进游戏后打开「对局域网开放」即可。";
-        }
-        catch (Exception ex)
-        {
-            HostCode.Text = "";
-            HostReadyText.Text = "获取联机码失败：" + ex.Message;
-        }
-    }
-
-    private void StartTimers()
-    {
-        _pollTimer ??= CreateTimer(PollSeconds, PollLanStateAsync);
-
-        _pollTimer.Start();
-        _ = PollLanStateAsync();
-    }
-
-    private DispatcherQueueTimer CreateTimer(int seconds, Func<Task> action)
+    private DispatcherQueueTimer CreateTick()
     {
         var timer = DispatcherQueue.CreateTimer();
-        timer.Interval = TimeSpan.FromSeconds(seconds);
+        timer.Interval = TimeSpan.FromSeconds(1);
         timer.IsRepeating = true;
-        timer.Tick += async (_, _) =>
-        {
-            if (_busy) return;
-            _busy = true;
-            try { await action(); }
-            catch (Exception ex) { Log.Warn("联机定时任务失败：" + ex.Message); }
-            finally { _busy = false; }
-        };
+        timer.Tick += (_, _) => RefreshHostPanel();
         return timer;
     }
 
-    /// <summary>定期看看本机有没有开着局域网世界，有就自动接上隧道并上报状态。</summary>
-    private async Task PollLanStateAsync()
+    // ==================== 网络检测 ====================
+
+    private async void Redetect_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(_code)) return;
-
-        var port = MultiplayerService.DetectLanPort();
-        var ready = port > 0;
-
-        if (ready != _ready)
-        {
-            _ready = ready;
-            await MultiplayerService.ReportStatusAsync(ready, default);
-
-            // 只在「变为就绪」的瞬间提示一次；轮询每 5 秒跑一次，
-            // 放在下面那段里会变成每 5 秒弹一遍。
-            if (ready)
-            {
-                TrayService.Notify("联机已就绪",
-                    $"抓到游戏端口 {port}，联机码 {_code}。现在可以发给朋友了。");
-            }
-        }
-
-        if (ready)
-        {
-            HostReadyText.Text = $"游戏已启动，正在转发本地端口 {port}。把上面的码发给朋友即可。";
-
-            if (_hostSession is null || _hostPort != port)
-            {
-                _hostSession?.Stop();
-                _hostPort = port;
-
-                try
-                {
-                    // 注意：这里绝不能重新 CreateRoomAsync —— 服务端会删掉旧房间并生成新码，
-                    // 结果就是"通知里一个码、页面上又一个码"，朋友不知道该用哪个。
-                    var room = new RelayRoom
-                    {
-                        Code = _code,
-                        Host = _roomHost,
-                        Port = _roomPort
-                    };
-
-                    _hostSession = MultiplayerService.StartHost(room, port);
-                    StopHostButton.Visibility = Visibility.Visible;
-                }
-                catch (Exception ex)
-                {
-                    HostReadyText.Text = "连中继失败：" + ex.Message;
-                }
-            }
-
-            // 有人进来就报一声，免得不知道朋友到底连上没
-            if (_hostSession is not null)
-            {
-                var joined = _hostSession.GuestCount;
-                HostGuestText.Text = joined > 0 ? $"已经接入 {joined} 位朋友" : "还没有人进来";
-            }
-        }
-        else
-        {
-            HostReadyText.Text = "游戏未启动：进游戏后打开「对局域网开放」即可，码会一直在这里。";
-            HostGuestText.Text = "";
-
-            if (_hostSession is not null)
-            {
-                _hostSession.Stop();
-                _hostSession = null;
-                _hostPort = 0;
-            }
-
-            StopHostButton.Visibility = Visibility.Collapsed;
-        }
+        _nat = new NatInfo(NatKind.Unknown, null, "");
+        await DetectNatAsync();
     }
 
-    // ================= 访客 =================
-
-    private async void Join_Click(object sender, RoutedEventArgs e)
+    private async Task DetectNatAsync()
     {
-        var code = CodeBox.Text.Trim().ToUpperInvariant();
-        if (code.Length != 6)
-        {
-            GuestStatus.Text = "联机码是 6 位。";
-            return;
-        }
-
-        JoinButton.IsEnabled = false;
-        GuestStatus.Text = "正在加入…";
+        NatText.Text = "检测中…";
+        PublicAddrText.Text = "—";
 
         try
         {
-            var room = await MultiplayerService.JoinRoomAsync(code, default);
+            var nat = await P2P.ProbeAsync(CancellationToken.None);
+            _nat = nat;
+            ApplyNat(nat);
+        }
+        catch (Exception ex)
+        {
+            NatText.Text = "检测失败：" + ex.Message;
+        }
+    }
 
-            // 房主那边的"已开局域网"状态是每 5 秒上报一次的，刚点完开放可能还没同步过来，
-            // 所以这里再等 1.5 秒复查一次，别让用户误以为对方没开。
-            if (!room.Ready)
+    private void ApplyNat(NatInfo nat)
+    {
+        NatText.Text = nat.Describe();
+        PublicAddrText.Text = nat.Public?.ToString() ?? "—";
+
+        if (nat.Kind == NatKind.Symmetric)
+            NatText.Text = "对称型网络 —— 打洞大概率失败";
+    }
+
+    private void UpdateAccountText()
+    {
+        AccountText.Text = LinxAccountService.IsLoggedIn
+            ? LinxAccountService.DisplayName
+            : "未登录（联机需要登录 XML 账号）";
+    }
+
+    // ==================== 房主 ====================
+
+    private async void Host_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+
+        if (!LinxAccountService.IsLoggedIn)
+        {
+            HostStatusText.Text = "先在左下角登录 XML 账号，联机要用它来认人。";
+            return;
+        }
+
+        var lanPort = MultiplayerService.DetectLanPort();
+        if (lanPort <= 0)
+        {
+            HostStatusText.Text = "没找到游戏局域网端口。先在游戏里点「对局域网开放」，再回这里开房。";
+            return;
+        }
+
+        _busy = true;
+        HostButton.IsEnabled = false;
+        HostStatusText.Text = "正在检测网络并开房…";
+
+        try
+        {
+            var worldName = WorldNameBox.Text.Trim();
+            _host = await P2P.HostAsync(worldName, lanPort, HostPasswordBox.Password, CancellationToken.None);
+
+            HostPanel.Visibility = Visibility.Visible;
+            HostCodeText.Text = _host.Code;
+            HostStatusText.Text = $"房间已开，游戏端口 {lanPort}。把房间号发给朋友，或者让他在大厅里点进来。";
+            HostInfoText.Text = "";
+            _ = LoadLobbyAsync();
+        }
+        catch (Exception ex)
+        {
+            HostStatusText.Text = ex.Message;
+            HostButton.IsEnabled = true;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async void StopHost_Click(object sender, RoutedEventArgs e)
+    {
+        if (_host is null) return;
+
+        var code = _host.Code;
+        _host.Stop();
+        _host = null;
+
+        HostPanel.Visibility = Visibility.Collapsed;
+        HostButton.IsEnabled = true;
+        HostStatusText.Text = "房间已关闭。";
+
+        try
+        {
+            await LinxAccountService.CallAsync("/api/lobby/unpublish",
+                new System.Text.Json.Nodes.JsonObject { ["code"] = code }, CancellationToken.None);
+        }
+        catch { }
+
+        _ = LoadLobbyAsync();
+    }
+
+    private void RefreshHostPanel()
+    {
+        if (_host is null) return;
+
+        var nat = _host.Nat.Kind == NatKind.Cone ? "锥形网络" : "对称型网络";
+        HostInfoText.Text = $"已接入 {_host.GuestCount} 人 · {nat} · {_host.Nat.Public}";
+    }
+
+    // ==================== 大厅 ====================
+
+    private async void Refresh_Click(object sender, RoutedEventArgs e) => await LoadLobbyAsync();
+
+    private async Task LoadLobbyAsync()
+    {
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var text = await Http.Client.GetStringAsync(RemoteService.BaseUrl + "/api/lobby/rooms", cts.Token);
+            using var doc = JsonDocument.Parse(text);
+
+            var items = doc.RootElement.GetProperty("items");
+            LobbyList.Children.Clear();
+
+            var count = 0;
+            foreach (var room in items.EnumerateArray())
             {
-                await Task.Delay(1500);
-                room = await MultiplayerService.JoinRoomAsync(code, default);
+                LobbyList.Children.Add(BuildRoomRow(room));
+                count++;
             }
 
-            if (!room.Ready)
-            {
-                GuestStatus.Text = "对方的游戏还没启动（没有开局域网），等对方进游戏再试。";
-                return;
-            }
+            LobbyHintText.Text = count == 0
+                ? "大厅里还没有房间。开一个，或者让朋友开。"
+                : $"共 {count} 个房间 · 点\"加入\"直接进去";
+        }
+        catch (Exception ex)
+        {
+            LobbyHintText.Text = "大厅读取失败：" + ex.Message.Split('\n')[0];
+        }
+    }
 
-            int? hostPort = null;
-            var local = (VersionBox.SelectedItem as LocalVersion)?.Id ?? "";
-            var localMods = MultiplayerService.ModsHash(local);
+    private UIElement BuildRoomRow(JsonElement room)
+    {
+        string Str(string name) => room.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString() ?? "" : "";
 
-            if (!string.IsNullOrEmpty(room.ModsHash) && room.ModsHash != localMods)
-                GuestStatus.Text = "注意：两端模组不完全一致，可能被踢出。\n";
+        var code = Str("code");
+        var world = Str("world");
+        var owner = Str("owner");
+        var players = room.TryGetProperty("players", out var p) && p.TryGetInt32(out var pv) ? pv : 0;
+        var maxPlayers = room.TryGetProperty("max_players", out var mp) && mp.TryGetInt32(out var mv) ? mv : 8;
+        var hasPassword = room.TryGetProperty("has_password", out var hp) && hp.ValueKind == JsonValueKind.True;
+        var natType = Str("nat_type");
 
-            _guestSession?.Stop();
-            _guestSession = MultiplayerService.StartGuest(room);
+        var title = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(world) ? "未命名世界" : world,
+            FontSize = 13.5,
+            FontWeight = FontWeights.SemiBold,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            TextWrapping = TextWrapping.NoWrap
+        };
 
-            var address = $"127.0.0.1:{_guestSession.LocalPort}";
+        var subtitle = new TextBlock
+        {
+            Text = $"{owner} · {players}/{maxPlayers} 人"
+                   + (hasPassword ? " · 有密码" : "")
+                   + (natType == "symmetric" ? " · 对称型" : ""),
+            FontSize = 12,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+        };
 
+        var join = new Button { Content = "加入", FontSize = 12, Padding = new Thickness(10, 4, 10, 4) };
+        join.Click += (_, _) =>
+        {
+            JoinCodeBox.Text = code;
+            JoinPasswordBox.Password = "";
+            JoinButton.Focus(FocusState.Programmatic);
+            GuestStatusText.Text = $"已填入房间号 {code}，点「加入」开始打洞。";
+        };
+
+        var grid = new Grid { ColumnSpacing = 8 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(new StackPanel { Spacing = 2, Children = { title, subtitle } });
+        Grid.SetColumn(join, 1);
+        grid.Children.Add(join);
+
+        return new Border
+        {
+            Padding = new Thickness(12, 8, 12, 8),
+            CornerRadius = new CornerRadius(6),
+            Background = (Brush)Application.Current.Resources["SubtleFillColorTransparentBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["DividerBrush"],
+            BorderThickness = new Thickness(1),
+            Child = grid
+        };
+    }
+
+    // ==================== 访客 ====================
+
+    private async void Join_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+
+        var code = JoinCodeBox.Text.Trim().ToUpperInvariant();
+        if (code.Length != 6)
+        {
+            GuestStatusText.Text = "房间号是 6 位。";
+            return;
+        }
+
+        if (!LinxAccountService.IsLoggedIn)
+        {
+            GuestStatusText.Text = "先在左下角登录 XML 账号。";
+            return;
+        }
+
+        _busy = true;
+        JoinButton.IsEnabled = false;
+        GuestStatusText.Text = "正在加入…";
+
+        try
+        {
+            _guest?.Stop();
+            _guest = await P2P.JoinAsync(code, JoinPasswordBox.Password, P2P.DefaultGuestPort,
+                msg => DispatcherQueue.TryEnqueue(() => GuestStatusText.Text = msg),
+                CancellationToken.None);
+
+            GuestPanel.Visibility = Visibility.Visible;
             LeaveButton.Visibility = Visibility.Visible;
-            GuestAddress.Text = address;
-            GuestAddress.Visibility = Visibility.Visible;
-            GuestSteps.Visibility = Visibility.Visible;
+            GuestAddressText.Text = $"127.0.0.1:{_guest.LocalPort}";
+            GuestStatusText.Text = "隧道已打通。在游戏里添加服务器并用上面的地址，或者在启动器里启动游戏直接进。";
 
-            GuestStatus.Text += $"隧道已开好（本地监听 {address}）。";
-
-            // 1.20 起支持 --quickPlayMultiplayer：直接帮他启动游戏并进服，
-            // 低版本没有这个参数，只能提示手动添加服务器。
-            var versionId = (VersionBox.SelectedItem as LocalVersion)?.Id ?? "";
-            var baseVersion = (VersionBox.SelectedItem as LocalVersion)?.BaseVersion ?? versionId;
-
-            if (!string.IsNullOrEmpty(versionId) && SupportsQuickPlay(baseVersion))
+            // 1.20+ 支持 --quickPlayMultiplayer，直接帮玩家进服
+            var versionId = AppState.Current?.Id ?? "";
+            if (!string.IsNullOrEmpty(versionId))
             {
-                GuestStatus.Text += $"正在启动 {versionId} 并直接进入房间…";
-
-                _ = GameSession.StartAsync(versionId, XamlRoot, address);
-            }
-            else
-            {
-                GuestStatus.Text += "这个版本低于 1.20，不支持自动进服，请按上面的步骤手动添加服务器。";
+                _ = GameSession.StartAsync(versionId, XamlRoot, $"127.0.0.1:{_guest.LocalPort}");
             }
         }
         catch (Exception ex)
         {
-            GuestStatus.Text = ex.Message;
+            GuestStatusText.Text = ex.Message;
+            JoinButton.IsEnabled = true;
         }
         finally
         {
-            JoinButton.IsEnabled = true;
+            _busy = false;
         }
     }
 
-    /// <summary>1.20 起才有 --quickPlayMultiplayer 这个启动参数。</summary>
-    private static bool SupportsQuickPlay(string? version)
+    private async void Leave_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(version)) return false;
+        var code = _guest?.Code ?? JoinCodeBox.Text.Trim().ToUpperInvariant();
 
-        var parts = version.Split('.');
-        if (parts.Length < 2) return false;
-        if (!int.TryParse(parts[0], out var major) || !int.TryParse(parts[1], out var minor)) return false;
+        _guest?.Stop();
+        _guest = null;
 
-        return major > 1 || (major == 1 && minor >= 20);
-    }
+        GuestPanel.Visibility = Visibility.Collapsed;
+        JoinButton.IsEnabled = true;
+        GuestStatusText.Text = "已退出房间。";
 
-    // ================= 通用 =================
-
-    private void Stop_Click(object sender, RoutedEventArgs e)
-    {
-        _hostSession?.Stop();
-        _hostSession = null;
-        _hostPort = 0;
-
-        _guestSession?.Stop();
-        _guestSession = null;
-
-        StopHostButton.Visibility = Visibility.Collapsed;
-        LeaveButton.Visibility = Visibility.Collapsed;
-        GuestAddress.Visibility = Visibility.Collapsed;
-        GuestAddress.Text = "";
-        GuestSteps.Visibility = Visibility.Collapsed;
-        GuestStatus.Text = "";
-        HostReadyText.Text = _ready ? "已结束联机。" : "游戏未启动：进游戏后打开「对局域网开放」即可。";
+        try
+        {
+            await LinxAccountService.CallAsync("/api/lobby/leave",
+                new System.Text.Json.Nodes.JsonObject { ["code"] = code }, CancellationToken.None);
+        }
+        catch { }
     }
 }
