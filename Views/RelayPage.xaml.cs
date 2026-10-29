@@ -70,7 +70,8 @@ public sealed partial class RelayPage : Page
             if (guest is null) return;
 
             var ping = guest.Ping;
-            var text = $"已连接 · {Describe(ping)}";
+
+            var text = $"已连接 · {Describe(ping)}\n多人游戏 → 局域网列表里点房主的房间";
 
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -267,18 +268,27 @@ public sealed partial class RelayPage : Page
             return;
         }
 
-        var lanPort = MultiplayerService.DetectLanPort();
-        if (lanPort <= 0)
-        {
-            Toast("没找到游戏局域网端口：先在游戏里点「对局域网开放」，再回来开房。");
-            return;
-        }
+        var detected = MultiplayerService.DetectLanPort();
 
         var world = new TextBox { Header = "世界名称（可留空）", MaxLength = 32, PlaceholderText = "例如：和朋友开荒" };
         var pass = new PasswordBox { Header = "房间密码（可留空）", MaxLength = 16, PlaceholderText = "留空则谁都能进" };
+
+        // 端口可以手改：不一定非要映射 MC，自己开的别的服务（面板、私服）也能挂上来
+        var portBox = new TextBox
+        {
+            Header = "要被映射的端口",
+            MaxLength = 5,
+            PlaceholderText = "例如 25565",
+            Text = detected > 0 ? detected.ToString() : "",
+            Width = 170,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+
         var tip = new TextBlock
         {
-            Text = $"{_nat.Describe()} · 游戏端口 {lanPort}",
+            Text = detected > 0
+                ? $"{_nat.Describe()} · 已自动检测到局域网端口 {detected}，不是这个可以直接改"
+                : $"{_nat.Describe()} · 没检测到游戏端口：先在游戏里「对局域网开放」，或者手动填一个",
             FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
@@ -288,7 +298,7 @@ public sealed partial class RelayPage : Page
         {
             XamlRoot = XamlRoot,
             Title = "开启新世界",
-            Content = new StackPanel { Spacing = 12, MinWidth = 380, Children = { tip, world, pass } },
+            Content = new StackPanel { Spacing = 12, MinWidth = 380, Children = { tip, world, portBox, pass } },
             PrimaryButtonText = "开房间",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary
@@ -296,6 +306,12 @@ public sealed partial class RelayPage : Page
         FontService.ApplyToDialog(dialog);
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        if (!int.TryParse(portBox.Text.Trim(), out var lanPort) || lanPort <= 0 || lanPort > 65535)
+        {
+            Toast("端口要填 1-65535 之间的数字。");
+            return;
+        }
 
         _busy = true;
         HostCard.Status = "正在开房…";
@@ -349,7 +365,7 @@ public sealed partial class RelayPage : Page
     {
         if (_host is null) return;
 
-        HostCard.Status = $"房间 {_host.Code} · {_host.GuestCount} 人在线 · 游戏端口 {_hostPort}";
+        HostCard.Status = $"房间 {_host.Code} · {_host.GuestCount} 人在线\n端口 {_hostPort} · 游戏里记得点「对局域网开放」";
         HostButton.Content = "关闭房间";
         HostButton.IsEnabled = true;   // 开房过程中禁用过，这里要恢复，否则按钮一直是灰的
     }
@@ -597,6 +613,13 @@ public sealed partial class RelayPage : Page
 
     private async void Join_Click(object sender, RoutedEventArgs e) => await JoinFlowAsync("");
 
+    /// <summary>
+    /// 加入房间。
+    ///
+    /// 以前连接状态全写在主页那张「加入房间」卡片上，从大厅点加入就完全看不见，
+    /// 表现就是「点了没反应」。现在连接过程放进一个进度窗，成功失败都在里面说清楚，
+    /// 大厅顶部那行提示也同步显示。
+    /// </summary>
     private async Task JoinFlowAsync(string presetCode)
     {
         if (_busy) return;
@@ -637,23 +660,59 @@ public sealed partial class RelayPage : Page
             return;
         }
 
+        // 组件与权限先就位：这里可能再弹一个「需要管理员」的确认框。
+        // ContentDialog 同一时间只能显示一个，所以必须放在进度窗之前。
+        if (!await EnsureLinkReadyAsync(_ => { })) return;
+
+        // ---- 进度窗 ----
+        var statusText = new TextBlock
+        {
+            Text = "正在连接…",
+            TextWrapping = TextWrapping.Wrap,
+            MaxWidth = 420,
+            FontFamily = FontService.BodyFont,
+        };
+
+        var ring = new ProgressRing
+        {
+            IsActive = true,
+            Width = 20,
+            Height = 20,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+
+        var progress = new ContentDialog
+        {
+            XamlRoot = XamlRoot,
+            Title = $"加入房间 {code}",
+            Content = new StackPanel { Spacing = 14, MinWidth = 400, Children = { ring, statusText } },
+            CloseButtonText = "后台运行",
+        };
+        FontService.ApplyToDialog(progress);
+
+        _ = progress.ShowAsync();
+
+        void PutStatus(string msg)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                statusText.Text = msg;
+                JoinCard.Status = msg;
+                if (LobbyView.Visibility == Visibility.Visible) LobbyHint.Text = msg;
+            });
+        }
+
         _busy = true;
-        JoinCard.Status = "正在连接…";
         JoinButton.IsEnabled = false;
+        PutStatus("正在连接…");
 
         try
         {
-            if (!await EnsureLinkReadyAsync(msg => JoinCard.Status = msg)) return;
-
-            JoinCard.Status = "正在连接…";
-
             _guest?.Stop();
-            _guest = await P2P.JoinAsync(code, passBox.Password, P2P.DefaultGuestPort,
-                msg => DispatcherQueue.TryEnqueue(() => JoinCard.Status = msg),
-                CancellationToken.None);
+            _guest = await P2P.JoinAsync(code, passBox.Password, P2P.DefaultGuestPort, PutStatus, CancellationToken.None);
 
-            var address = $"127.0.0.1:{_guest.LocalPort}";
-            JoinCard.Status = $"已连接 · {Describe(_guest.Ping)}";
+            PutStatus($"已连接 · {Describe(_guest.Ping)}\n多人游戏 → 局域网列表里点房主的房间");
+            Toast($"已连接房间 {code}");
             StartPingWatch();
             JoinButton.Content = "退出房间";
             JoinButton.IsEnabled = true;
@@ -662,17 +721,32 @@ public sealed partial class RelayPage : Page
 
             var versionId = AppState.Current?.Id ?? "";
             if (!string.IsNullOrEmpty(versionId))
-                _ = GameSession.StartAsync(versionId, XamlRoot, address);
+            {
+                // ContentDialog 同一时间只能有一个：连接窗还开着的话，
+                // GameSession 里的 LaunchProgressDialog 会 ShowAsync 失败，
+                // 表现就是「游戏在启动但看不到进度」。先让用户看一眼，再让位。
+                await Task.Delay(1500);
+                try { progress.Hide(); } catch { }
+                await Task.Delay(150);
+
+                // 不给 quickJoin：两台机器已经在同一虚拟局域网里，MC 会自己扫到房主的房间，
+                // 从「局域网列表」进去不做正版验证；直连 IP 会走验证，离线账号必失败。
+                _ = GameSession.StartAsync(versionId, XamlRoot, null);
+            }
         }
         catch (Exception ex)
         {
             // 文案别铺太满，卡片显示不开；路径用 %APPDATA%，短且能直接粘到资源管理器
-            JoinCard.Status = ex.Message + "\n日志：%APPDATA%\\LinxLauncher\\launcher.log";
+            var message = ex.Message + "\n日志：%APPDATA%\\LinxLauncher\\launcher.log";
+            PutStatus("连接失败：" + message);
+            Toast("加入失败：" + ex.Message);
             JoinButton.IsEnabled = true;
         }
         finally
         {
             _busy = false;
+            ring.IsActive = false;
+            progress.CloseButtonText = "关闭";
         }
     }
 

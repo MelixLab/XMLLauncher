@@ -54,6 +54,10 @@
   <PropertyGroup>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
+
+    <!-- WinUI 3 + Native AOT：不开这个，ObservableCollection 到 ItemsControl.ItemsSource
+         的封送会走反射，被裁掉之后 set_ItemsSource 直接抛 ArgumentException -->
+    <CsWinRTAotOptimizerEnabled>true</CsWinRTAotOptimizerEnabled>
   </PropertyGroup>
 
   <!--

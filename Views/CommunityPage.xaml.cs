@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -50,9 +50,15 @@ public sealed partial class CommunityPage : Page
     {
         InitializeComponent();
 
-        PostList.ItemsSource = _posts;
-        ThreadList.ItemsSource = _threads;
-        MessageList.ItemsSource = _messages;
+        // 三个列表分别兜一层：AOT 下如果封送失败，至少要能说清是哪个崩的
+        try { PostList.ItemsSource = _posts; }
+        catch (Exception ex) { Log.Error("社区页 · 帖子列表绑定失败", ex); }
+
+        try { ThreadList.ItemsSource = _threads; }
+        catch (Exception ex) { Log.Error("社区页 · 会话列表绑定失败", ex); }
+
+        try { MessageList.ItemsSource = _messages; }
+        catch (Exception ex) { Log.Error("社区页 · 消息列表绑定失败", ex); }
 
         Loaded += Page_Loaded;
         Unloaded += (_, _) =>

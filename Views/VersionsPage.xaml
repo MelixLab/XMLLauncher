@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LinxLauncher.Views.VersionsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -9,7 +9,12 @@
     Background="Transparent"
     mc:Ignorable="d">
 
-    <Grid Padding="40,40,40,32">
+    <!-- 整页都能接 .jar：之前 AllowDrop 只挂在 Mod 面板上，
+         而那个面板默认是 Collapsed，往页面别处拖一律没反应 -->
+    <Grid Padding="40,40,40,32"
+          AllowDrop="True"
+          DragOver="Mods_DragOver"
+          Drop="Mods_Drop">
 
         <!-- ================================================================
              视图一：版本列表（照「保护历史记录」：行内无底色，悬停才铺灰）

@@ -334,6 +334,28 @@ public static class P2P
         };
 
         Log.Info($"P2P 访客：连上 {hostName}，127.0.0.1:{preferredPort} → 房主 {gamePort}，延迟 {ping}ms");
+
+        // 在线人数和「房间里都有谁」是服务端按「90 秒内还有报到」算的。
+        // 以前只在加入那一刻报一次，90 秒后人还在屋里，大厅上却已经没了。
+        // 所以连上之后每 30 秒重新报一次到，Stop() 时跟着 _cts 一起停。
+        session.Beat = Task.Run(async () =>
+        {
+            while (!session.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(30), session.Token);
+                    await CallApiAsync("/api/lobby/join", new JsonObject
+                    {
+                        ["code"] = code,
+                        ["password"] = password,
+                    }, session.Token);
+                }
+                catch (OperationCanceledException) { break; }
+                catch { }
+            }
+        });
+
         return session;
     }
 

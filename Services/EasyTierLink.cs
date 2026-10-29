@@ -190,9 +190,49 @@ public sealed class EasyTierLink : IDisposable
 
         if (_core is null || _core.HasExited)
         {
-            var tail = ReadTail(log, 6);
-            throw new IOException("联机组件启动失败。\n" + tail);
+            // 退出时没清干净的话，上一个实例还占着 10.114.114.x 这块虚拟地址，
+            // 新实例会直接退出 —— 表现就是「上次还好好的，这次启动联机失败」。
+            // 这里清一次再试，别把残留问题丢给用户。
+            Log.Warn("EasyTier 首次启动失败，清理残留实例后重试");
+            CleanupStale(0);
+            await Task.Delay(800, ct);
+
+            _core = Launch(Path.Combine(Root, "easytier-core.exe"), args, log);
+            await Task.Delay(1200, ct);
+
+            if (_core is null || _core.HasExited)
+            {
+                var tail = ReadTail(log, 6);
+                throw new IOException("联机组件启动失败。\n" + tail);
+            }
+
+            Log.Info("清理残留后 EasyTier 启动成功");
         }
+    }
+
+    /// <summary>
+    /// 杀掉残留的 easytier-core（保留 keepPid 指定的那个）。
+    /// 虚拟网卡是全局资源，旧实例不死新的就起不来。
+    /// </summary>
+    static void CleanupStale(int keepPid)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -Command \"Get-Process easytier-core -ErrorAction SilentlyContinue | "
+                            + $"Where-Object {{ $_.Id -ne {keepPid} }} | Stop-Process -Force\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
+
+            using var p = Process.Start(psi);
+            p?.WaitForExit(4000);
+        }
+        catch { }
     }
 
     static Process? Launch(string exe, string args, string logFile)
