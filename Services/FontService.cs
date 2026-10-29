@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -14,6 +14,7 @@ public static class FontService
 {
     private static object? _originalControlFont;
     private static object? _originalTextFont;
+    private static object? _originalDisplayFont;
 
     /// <summary>当前正文该用的字体（Noto 开关打开就是 Noto Sans SC）。</summary>
     public static FontFamily BodyFont
@@ -29,6 +30,24 @@ public static class FontService
             catch
             {
                 return new FontFamily("Segoe UI Variable Text");
+            }
+        }
+    }
+
+    /// <summary>标题该用的字体（和正文是两个族：标题可以更紧一点）。</summary>
+    public static FontFamily DisplayFont
+    {
+        get
+        {
+            try
+            {
+                return AppState.Settings.UseNotoSans
+                    ? new FontFamily("Noto Sans SC")
+                    : (FontFamily)(_originalDisplayFont ?? new FontFamily("Segoe UI Variable Display"));
+            }
+            catch
+            {
+                return new FontFamily("Segoe UI Variable Display");
             }
         }
     }
@@ -58,6 +77,16 @@ public static class FontService
             res["TextFontFamily"] = noto
                 ? new FontFamily("Noto Sans SC")
                 : _originalTextFont ?? new FontFamily("Segoe UI Variable Text");
+
+            // 标题也跟随开关：打开时全站就是 Noto，关掉才回到显示字体。
+            // 之前标题永远不换，中文标题会 fallback 到微软雅黑，和正文的 Noto
+            // 混在一起，看起来像「设置页没生效」。
+            if (_originalDisplayFont is null && res.TryGetValue("DisplayFontFamily", out var displayFont))
+                _originalDisplayFont = displayFont;
+
+            res["DisplayFontFamily"] = noto
+                ? new FontFamily("Noto Sans SC")
+                : _originalDisplayFont ?? new FontFamily("Segoe UI Variable Display");
         }
         catch (Exception ex)
         {
@@ -85,8 +114,9 @@ public static class FontService
 
         bool noto = AppState.Settings.UseNotoSans;
         var body = (FontFamily)Application.Current.Resources[noto ? "NotoFontFamily" : "TextFontFamily"];
+        var display = (FontFamily)Application.Current.Resources[noto ? "NotoFontFamily" : "DisplayFontFamily"];
 
-        Walk(root, body);
+        Walk(root, body, display);
     }
 
     /// <summary>
@@ -106,7 +136,7 @@ public static class FontService
         return true;
     }
 
-    private static void Walk(DependencyObject node, FontFamily body)
+    private static void Walk(DependencyObject node, FontFamily body, FontFamily display)
     {
         // ★ FontIcon / SymbolIcon 内部就是一个画字形的 TextBlock：
         //   换成 Noto 之后字形在字体里不存在，界面上会变成一个个方框，
@@ -116,16 +146,17 @@ public static class FontService
             return;
         }
 
-        // 只碰正文；标题（≥ 20）保持 DisplayFontFamily
-        if (node is TextBlock tb && tb.FontSize < 20 && tb.FontFamily != body && !IsGlyph(tb))
+        // 正文用 body，标题（≥ 20）用 display —— 两者都跟着 Noto 开关走
+        if (node is TextBlock tb && !IsGlyph(tb))
         {
-            tb.FontFamily = body;
+            var target = tb.FontSize >= 20 ? display : body;
+            if (tb.FontFamily != target) tb.FontFamily = target;
         }
 
         int count = VisualTreeHelper.GetChildrenCount(node);
         for (int i = 0; i < count; i++)
         {
-            Walk(VisualTreeHelper.GetChild(node, i), body);
+            Walk(VisualTreeHelper.GetChild(node, i), body, display);
         }
     }
 }

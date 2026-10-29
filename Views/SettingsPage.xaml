@@ -9,15 +9,115 @@
     mc:Ignorable="d">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <StackPanel Padding="40,40,40,48" HorizontalAlignment="Left" Spacing="8">
+        <StackPanel Padding="40,36,40,48" HorizontalAlignment="Left" Spacing="8">
 
-            <StackPanel Margin="0,0,0,16">
-                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="设置" />
+            <StackPanel Margin="0,0,0,26">
                 <TextBlock
-                    Margin="0,11,0,0"
+                    FontSize="26"
+                    LineHeight="34"
+                    Style="{StaticResource PageTitleTextStyle}"
+                    Text="设置" />
+                <TextBlock
+                    Margin="0,12,0,0"
                     Style="{StaticResource PageSubtitleTextStyle}"
                     Text="游戏目录、启动参数与下载行为。改动保存在本机配置里。" />
             </StackPanel>
+
+            <!-- ================= 主题 ================= -->
+            <TextBlock
+                Margin="0,8,0,4"
+                Style="{StaticResource SectionTitleTextStyle}"
+                Text="主题" />
+            <TextBlock
+                Margin="0,0,0,14"
+                Style="{StaticResource CaptionTextStyle}"
+                Text="窗口材质、深浅模式与主题色。改完立刻生效，下次启动照旧。"
+                TextWrapping="Wrap" />
+
+            <!-- 深浅模式 -->
+            <StackPanel Spacing="8">
+                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="深浅模式" />
+                <RadioButtons
+                    x:Name="ThemeModeBox"
+                    MaxColumns="3"
+                    SelectionChanged="ThemeMode_Changed">
+                    <x:String>跟随系统</x:String>
+                    <x:String>浅色</x:String>
+                    <x:String>深色</x:String>
+                </RadioButtons>
+            </StackPanel>
+
+            <!-- 窗口材质：一排可点的预览卡 -->
+            <StackPanel Margin="0,10,0,0" Spacing="8">
+                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="窗口材质" />
+                <StackPanel
+                    x:Name="MaterialHost"
+                    Orientation="Horizontal"
+                    Spacing="10" />
+                <TextBlock
+                    x:Name="MaterialNote"
+                    Width="680"
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource CaptionTextStyle}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- 内容层不透明度 -->
+            <StackPanel Margin="0,12,0,0" Spacing="4">
+                <Grid
+                    Width="560"
+                    HorizontalAlignment="Left">
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="内容层不透明度" />
+                    <TextBlock
+                        x:Name="OpacityValue"
+                        HorizontalAlignment="Right"
+                        Style="{StaticResource MetricValueTextStyle}" />
+                </Grid>
+                <Slider
+                    x:Name="SurfaceSlider"
+                    Width="560"
+                    HorizontalAlignment="Left"
+                    Maximum="1"
+                    Minimum="0.15"
+                    StepFrequency="0.05"
+                    ValueChanged="Surface_Changed" />
+                <TextBlock
+                    Width="560"
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource CaptionTextStyle}"
+                    Text="越低越透，越能看见桌面壁纸；纯色材质下无效。"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- 主题色 -->
+            <StackPanel Margin="0,12,0,0" Spacing="8">
+                <TextBlock Style="{StaticResource CaptionTextStyle}" Text="主题色" />
+                <StackPanel x:Name="AccentHost" Orientation="Horizontal" Spacing="10" />
+                <TextBlock
+                    x:Name="AccentNote"
+                    Width="680"
+                    HorizontalAlignment="Left"
+                    Style="{StaticResource CaptionTextStyle}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- 字体 -->
+            <Grid
+                Width="680"
+                Margin="0,16,0,4"
+                HorizontalAlignment="Left">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource BodyTextStyle}" Text="正文使用 Noto Sans 字体" />
+                    <TextBlock
+                        Style="{StaticResource CaptionTextStyle}"
+                        Text="正文换成 Noto Sans，页面标题保持不变。"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <ToggleSwitch
+                    x:Name="FontSwitch"
+                    HorizontalAlignment="Right"
+                    Toggled="Font_Toggled" />
+            </Grid>
 
             <!-- 新手向导：随时可以重看 -->
             <TextBlock
@@ -186,24 +286,6 @@
                     Width="520"
                     HorizontalAlignment="Left" />
             </StackPanel>
-
-            <!-- 外观 -->
-            <TextBlock
-                Margin="0,24,0,4"
-                Style="{StaticResource SectionTitleTextStyle}"
-                Text="外观" />
-            <Grid Margin="0,4,0,12">
-                <StackPanel>
-                    <TextBlock Style="{StaticResource BodyTextStyle}" Text="正文使用 Noto Sans 字体" />
-                    <TextBlock
-                        Style="{StaticResource CaptionTextStyle}"
-                        Text="正文换成 Noto Sans，页面标题保持不变。" />
-                </StackPanel>
-                <ToggleSwitch
-                    x:Name="FontSwitch"
-                    HorizontalAlignment="Right"
-                    Toggled="Font_Toggled" />
-            </Grid>
 
             <!-- 窗口 -->
             <TextBlock

@@ -22,6 +22,20 @@ public sealed class AppSettings
     /// <summary>标题是否使用 Noto Sans（参考 XIGUASecurity 的字体选项）。默认开启。</summary>
     public bool UseNotoSans { get; set; } = true;
 
+    // ---------------- 主题（设置页「主题」区块） ----------------
+
+    /// <summary>深浅模式："System" / "Light" / "Dark"。</summary>
+    public string ThemeMode { get; set; } = "System";
+
+    /// <summary>窗口材质：0 纯色 / 1 云母 / 2 云母 Alt / 3 亚克力 / 4 高透（见 ThemeMaterial）。</summary>
+    public int ThemeMaterial { get; set; } = 1;
+
+    /// <summary>内容层不透明度，0.15~1。越低越透，越能看见桌面的云母 / 亚克力。</summary>
+    public double SurfaceOpacity { get; set; } = 0.5;
+
+    /// <summary>主题色（#RRGGBB）。留空表示用品牌默认色（浅色青、深色亮青）。</summary>
+    public string? AccentColor { get; set; } = "";
+
     /// <summary>
     /// 是否已经走完首次登录向导（跳过也算走完）。
     /// 老用户升级上来时这个字段是 false，会弹一次向导；因为本地已经有账号/版本，

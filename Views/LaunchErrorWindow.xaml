@@ -13,7 +13,7 @@
         排版沿用主界面那一套：白底、青绿主色、灰色直角卡片。
         不放红色警告图标：红留给真正的红色提示行，标题一句话说清就够。
     -->
-    <Grid Background="{ThemeResource PaneBackgroundBrush}">
+    <Grid Background="{ThemeResource WindowBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />

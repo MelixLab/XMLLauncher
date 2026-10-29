@@ -13,8 +13,12 @@
         <ResourceDictionary x:Key="Default">
             <!-- 版面 -->
             <SolidColorBrush x:Key="PaneBackgroundBrush" Color="#FFFFFF" />
+            <!-- 子窗口（例如启动失败提示）用的不透明底色：主窗口开了云母/亚克力时，
+                 这些窗口没有材质可透，必须自己有一块实底，否则会透出黑。 -->
+            <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="BrandBrush" Color="#00A88E" />
             <SolidColorBrush x:Key="BrandSoftBrush" Color="#E7F6F2" />
+            <SolidColorBrush x:Key="OnBrandTextBrush" Color="#FFFFFF" />
                 <LinearGradientBrush x:Key="TopFadeBrush" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Offset="0" Color="#FFFDFDFD" />
         <GradientStop Offset="1" Color="#00FDFDFD" />
@@ -101,8 +105,10 @@
 
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="PaneBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="BrandBrush" Color="#00A88E" />
             <SolidColorBrush x:Key="BrandSoftBrush" Color="#E7F6F2" />
+            <SolidColorBrush x:Key="OnBrandTextBrush" Color="#FFFFFF" />
                 <LinearGradientBrush x:Key="TopFadeBrush" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Offset="0" Color="#FFFDFDFD" />
         <GradientStop Offset="1" Color="#00FDFDFD" />
@@ -202,8 +208,10 @@
                 「深灰底上叠稍浅的灰」层次更清楚，也和 Win11 深色应用的观感一致。
             -->
             <SolidColorBrush x:Key="PaneBackgroundBrush" Color="#000000" />
+            <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#000000" />
             <SolidColorBrush x:Key="BrandBrush" Color="#35D4BA" />
             <SolidColorBrush x:Key="BrandSoftBrush" Color="#12332D" />
+            <SolidColorBrush x:Key="OnBrandTextBrush" Color="#04231F" />
                 <LinearGradientBrush x:Key="TopFadeBrush" StartPoint="0,0" EndPoint="0,1">
         <GradientStop Offset="0" Color="#FF000000" />
         <GradientStop Offset="1" Color="#00000000" />
@@ -279,8 +287,10 @@
 
         <ResourceDictionary x:Key="HighContrast">
             <SolidColorBrush x:Key="PaneBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="BrandBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="BrandSoftBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+            <SolidColorBrush x:Key="OnBrandTextBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="PageLayerBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="PageLayerBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="SplashBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />

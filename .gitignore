@@ -72,3 +72,6 @@ Services/LocalSecrets.cs
 # 资源备份文件
 *.old.*
 *.orig.*
+# AOT / 中间产物目录（不是源码）
+objc/
+*.predesign

@@ -30,7 +30,7 @@
       不是内嵌在 exe 里的。只列 Blocks 的话发布出来只剩方块图标，
       外面那个 exe 有图标、任务栏却是白纸一张 —— 就是这么来的。
     -->
-    <Content Include="Assets\**" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
