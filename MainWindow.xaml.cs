@@ -78,10 +78,49 @@ public sealed partial class MainWindow : Window
             area.X + (area.Width - w) / 2,
             area.Y + (area.Height - h) / 2));
 
+        SyncTitleBarHeight();
+
         GetClientRect(hwnd, out var rc);
         Log.Info($"ResizeClient({w}x{h}) → 实际客户区 {rc.Right - rc.Left}x{rc.Bottom - rc.Top}");
     }
 
+
+    /// <summary>
+    /// 把内容延伸到标题栏：材料（云母 / 亚克力）才能一路铺到窗口最顶上，
+    /// 不再有「系统标题栏一块实色 + 下面一块材质」的接缝。
+    /// TitleBarStrip 就是拖拽区，按钮由系统按 AppWindowTitleBar 的配色画在它右边。
+    /// 很老的系统不支持定制标题栏时直接放弃，退回系统标题栏。
+    /// </summary>
+    private void SetupTitleBar()
+    {
+        try
+        {
+            if (!AppWindowTitleBar.IsCustomizationSupported()) return;
+
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(TitleBarStrip);
+            AppWindow.TitleBar.IconShowOptions = IconShowOptions.HideIconAndSystemMenu;
+            SyncTitleBarHeight();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("内容延伸标题栏失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>拖拽条高度 = 系统标题栏实际高度换算成 DIP（125% 缩放下是 40 而不是 32）。</summary>
+    private void SyncTitleBarHeight()
+    {
+        try
+        {
+            double scale = Content?.XamlRoot?.RasterizationScale ?? 1.0;
+            if (scale <= 0.1) scale = 1.0;
+
+            double height = AppWindow.TitleBar.Height / scale;
+            if (height >= 16 && height <= 96) TitleBarStrip.Height = height;
+        }
+        catch { }
+    }
 
     public MainWindow()
     {
@@ -92,15 +131,13 @@ public sealed partial class MainWindow : Window
         // 任务栏那个窗口按钮会一直是系统默认的白纸图标。
         WindowIcon.Apply(this);
 
-        // 标题栏保持系统默认（不染色、不隐藏），只去掉左上角的小图标和系统菜单，
-        // 让标题栏这条和下面的侧边栏/内容区看起来是同一块 —— 参考项目的做法：
-        // 不去改标题栏迁就内容，而是让内容底色去对齐标题栏的纯白。
-        try
-        {
-            if (AppWindowTitleBar.IsCustomizationSupported())
-                AppWindow.TitleBar.IconShowOptions = IconShowOptions.HideIconAndSystemMenu;
-        }
-        catch { }
+        // 主题引擎：窗口材质（云母 / 亚克力 / 高透）、主题色、深浅模式。
+        // 设置页每次改动都会调 ThemeService.Apply()，这里只负责首次应用。
+        ThemeService.Initialize(this, RootGrid, NavView);
+
+        // 标题栏：内容延伸到标题栏，材质才铺得到最顶上。
+        // 以前用系统标题栏，它由系统单独画一条实色，云母 / 亚克力下会和窗口之间出现一道缝。
+        SetupTitleBar();
         // 尺寸必须等窗口真正激活后再设，否则会被 WinUI 的默认 1024×768 覆盖掉。
         Activated += (_, _) =>
         {
@@ -113,7 +150,12 @@ public sealed partial class MainWindow : Window
             fix.Interval = TimeSpan.FromMilliseconds(220);
             fix.IsRepeating = false;
             fix.Tick += (_, _) => { fix.Stop(); ApplyWindowSize(); };
+
             fix.Start();
+
+            // 主题要在窗口真正激活后再刷一次：RequestedTheme 在 Activate 之前设的
+            // 深浅色会被 XamlRoot 初始化时覆盖掉，表现就是「明明存的是深色，开出来还是浅色」。
+            ThemeService.Apply();
 
             // 联网检查（公告 + 强制更新）放后台，连不上服务器不影响正常使用
             if (AppState.Settings.OnboardingDone) _ = RunStartupChecksAsync();
@@ -121,6 +163,7 @@ public sealed partial class MainWindow : Window
 
         AppState.InstalledChanged += () => DispatcherQueue.TryEnqueue(RefreshAccountUi);
         AppState.Downloads.ActiveChanged += () => DispatcherQueue.TryEnqueue(RefreshAccountUi);
+        AccountStore.Instance.Changed += () => DispatcherQueue.TryEnqueue(RefreshAccountUi);
 
         RefreshAccountUi();
         UpdateAccountLayout();
@@ -172,6 +215,9 @@ public sealed partial class MainWindow : Window
             "downloads" => typeof(DownloadsPage),
             "mods" => typeof(ModsPage),
             "relay" => typeof(RelayPage),
+            "community" => typeof(CommunityPage),
+            "accounts" => typeof(AccountsPage),
+            "skins" => typeof(SkinsPage),
             "settings" => typeof(SettingsPage),
             _ => null
         };
@@ -215,6 +261,10 @@ public sealed partial class MainWindow : Window
                 return;
             }
         }
+
+        // 账户 / 皮肤没有侧栏入口（从左下角头像进去）：清掉高亮，
+        // 否则点了头像之后侧栏还停在「概览」上，看起来像没切走。
+        NavView.SelectedItem = null;
     }
 
     // ================= 新手向导 =================
@@ -777,7 +827,6 @@ public sealed partial class MainWindow : Window
 
         AvatarText.Text = name.Length > 0 ? name[..1].ToUpperInvariant() : "S";
         ApplyAvatar();
-        _ = LoadMicrosoftAvatarAsync();
     }
 
     /// <summary>正版角色头像：缓存里有就直接用，没有就后台拉一次（mc-heads）。</summary>
@@ -796,29 +845,52 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void ApplyAvatar()
+    private async void ApplyAvatar()
     {
-        var settings = AppState.Settings;
-
-        var candidates = new List<string?>
+        try
         {
-            LinxAccountService.IsLoggedIn ? settings.ServerAvatarPath : null,
-            AccountService.IsMicrosoft ? AccountService.AvatarCacheFile : null,
-            settings.AvatarPath
-        };
+            var settings = AppState.Settings;
 
-        foreach (var path in candidates)
-        {
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            // 1. 服务器（XML）账号有自己的头像：它是独立身份，优先显示
+            if (LinxAccountService.IsLoggedIn)
             {
-                ApplyAvatarFile(path!);
+                var serverPath = settings.ServerAvatarPath;
+                if (!string.IsNullOrWhiteSpace(serverPath) && File.Exists(serverPath))
+                {
+                    ApplyAvatarFile(serverPath!);
+                    return;
+                }
+            }
+            else
+            {
+                // 2. 当前游戏账户的皮肤：本地渲染出头像（正版 / 离线都走这条路）
+                //    这样换皮肤、换账户，角上的头像会立刻跟着变，也不再依赖 mc-heads。
+                var skin = await AccountService.GetAvatarAsync(60);
+                if (skin is not null)
+                {
+                    AvatarBrush.ImageSource = skin;
+                    AvatarImage.Visibility = Visibility.Visible;
+                    AvatarText.Visibility = Visibility.Collapsed;
+                    return;
+                }
+            }
+
+            // 3. 用户自己挑的图片
+            if (!string.IsNullOrWhiteSpace(settings.AvatarPath) && File.Exists(settings.AvatarPath))
+            {
+                ApplyAvatarFile(settings.AvatarPath!);
                 return;
             }
-        }
 
-        AvatarBrush.ImageSource = null;
-        AvatarImage.Visibility = Visibility.Collapsed;
-        AvatarText.Visibility = Visibility.Visible;
+            // 4. 什么都没有：回到首字母
+            AvatarBrush.ImageSource = null;
+            AvatarImage.Visibility = Visibility.Collapsed;
+            AvatarText.Visibility = Visibility.Visible;
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Avatar", ex);
+        }
     }
 
     private void ApplyAvatarFile(string path)
@@ -1023,9 +1095,13 @@ public sealed partial class MainWindow : Window
     // ================= 账号对话框 =================
 
     /// <summary>外部（联机页等）也可以直接调起账号面板。</summary>
-    public Task ShowAccountDialogAsync() => BuildAccountDialogAsync();
+    public Task ShowAccountDialogAsync()
+    {
+        NavigateTo("accounts");
+        return Task.CompletedTask;
+    }
 
-    public async void AccountButton_Click(object sender, RoutedEventArgs e) => await BuildAccountDialogAsync();
+    public void AccountButton_Click(object sender, RoutedEventArgs e) => NavigateTo("accounts");
 
     /// <summary>
     /// 账号面板：三块内容

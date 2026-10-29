@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="LinxLauncher.Views.SkinsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Background="{ThemeResource PageLayerBackgroundBrush}"
+    mc:Ignorable="d">
+
+    <ScrollViewer
+        HorizontalScrollBarVisibility="Disabled"
+        HorizontalScrollMode="Disabled"
+        HorizontalContentAlignment="Stretch"
+        VerticalScrollBarVisibility="Auto"
+        VerticalScrollMode="Auto">
+        <Grid Padding="40,40,40,48">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!--  标题  -->
+            <StackPanel
+                Grid.Row="0"
+                MaxWidth="620"
+                HorizontalAlignment="Left">
+                <HyperlinkButton
+                    Margin="0,0,0,10"
+                    Click="Back_Click"
+                    Content="← 账户"
+                    Style="{StaticResource LinkHyperlinkStyle}" />
+                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="皮肤" />
+                <TextBlock
+                    Margin="0,11,0,0"
+                    Style="{StaticResource PageSubtitleTextStyle}"
+                    Text="头像和下面这两个小人都是拿皮肤现算的，不是网上那层缓存。导入一张 64×64 的 PNG，左侧栏的头像会立刻跟着变。" />
+            </StackPanel>
+
+            <!--  账户选择：单独一行，不跟标题抢位置  -->
+            <Grid
+                Grid.Row="1"
+                Margin="0,28,0,0"
+                HorizontalAlignment="Left">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="13"
+                    Foreground="{ThemeResource SecondaryTextBrush}"
+                    Text="正在查看" />
+
+                <ComboBox
+                    x:Name="AccountPicker"
+                    Grid.Column="1"
+                    MinWidth="280"
+                    Margin="12,0,0,0"
+                    SelectionChanged="AccountPicker_SelectionChanged" />
+
+                <TextBlock
+                    x:Name="DefaultHint"
+                    Grid.Column="2"
+                    Margin="16,0,0,0"
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{ThemeResource SecondaryTextBrush}"
+                    Text="" />
+            </Grid>
+
+            <!--  内容  -->
+            <Grid
+                Grid.Row="2"
+                Margin="0,24,0,0"
+                ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!--  预览卡  -->
+                <Border
+                    Grid.Column="0"
+                    Width="380"
+                    Padding="24"
+                    VerticalAlignment="Top"
+                    Background="{ThemeResource CardBackgroundBrush}"
+                    BorderBrush="{ThemeResource DividerBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                    <StackPanel Spacing="20">
+                        <StackPanel Orientation="Horizontal" Spacing="20">
+                            <Border
+                                x:Name="AvatarFrame"
+                                Width="128"
+                                Height="128"
+                                VerticalAlignment="Top"
+                                Background="{ThemeResource CardHoverBackgroundBrush}"
+                                CornerRadius="6">
+                                <Grid>
+                                    <TextBlock
+                                        x:Name="AvatarInitial"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontSize="46"
+                                        FontWeight="SemiBold"
+                                        Foreground="{ThemeResource SecondaryTextBrush}"
+                                        Text="S"
+                                        Visibility="Collapsed" />
+                                    <Image
+                                        x:Name="AvatarImage"
+                                        Stretch="Fill" />
+                                </Grid>
+                            </Border>
+
+                            <StackPanel
+                                VerticalAlignment="Center"
+                                Spacing="6">
+                                <TextBlock
+                                    x:Name="PreviewName"
+                                    FontSize="18"
+                                    FontWeight="SemiBold"
+                                    Foreground="{ThemeResource PrimaryTextBrush}"
+                                    Text="Steve"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    x:Name="PreviewMeta"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Text="离线账户" />
+                                <TextBlock
+                                    x:Name="PreviewSource"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Text="默认皮肤" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <Rectangle Height="1" Fill="{ThemeResource DividerBrush}" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="24">
+                            <StackPanel Spacing="8">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Text="正面" />
+                                <Border
+                                    Width="104"
+                                    Height="208"
+                                    Background="{ThemeResource CardHoverBackgroundBrush}"
+                                    CornerRadius="6">
+                                    <Image x:Name="BodyFront" Stretch="Uniform" />
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Spacing="8">
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Text="背面" />
+                                <Border
+                                    Width="104"
+                                    Height="208"
+                                    Background="{ThemeResource CardHoverBackgroundBrush}"
+                                    CornerRadius="6">
+                                    <Image x:Name="BodyBack" Stretch="Uniform" />
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <TextBlock
+                            x:Name="EmptyHint"
+                            FontSize="13"
+                            Foreground="{ThemeResource SecondaryTextBrush}"
+                            Text=""
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!--  设置卡  -->
+                <Border
+                    Grid.Column="1"
+                    Padding="24"
+                    VerticalAlignment="Top"
+                    Background="{ThemeResource CardBackgroundBrush}"
+                    BorderBrush="{ThemeResource DividerBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                    <StackPanel Spacing="20">
+                        <StackPanel Spacing="6">
+                            <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="换皮肤" />
+                            <TextBlock
+                                FontSize="13"
+                                Foreground="{ThemeResource SecondaryTextBrush}"
+                                Text="支持 64×64（现代）和 64×32（旧版）的 PNG。其他尺寸会被判定为不是皮肤。"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="10">
+                            <Button
+                                x:Name="ImportButton"
+                                HorizontalAlignment="Left"
+                                Click="Import_Click"
+                                Content="导入皮肤…"
+                                Style="{StaticResource AccentButtonStyle}" />
+
+                            <Button
+                                x:Name="SyncButton"
+                                HorizontalAlignment="Left"
+                                Click="Sync_Click"
+                                Content="从正版角色档案同步"
+                                Style="{StaticResource CardActionButtonStyle}"
+                                MinWidth="180" />
+
+                            <Button
+                                x:Name="UploadButton"
+                                HorizontalAlignment="Left"
+                                Click="Upload_Click"
+                                Content="上传成我的正版皮肤"
+                                Style="{StaticResource CardActionButtonStyle}"
+                                MinWidth="180" />
+
+                            <Button
+                                x:Name="ClearButton"
+                                HorizontalAlignment="Left"
+                                Click="Clear_Click"
+                                Content="恢复默认皮肤"
+                                Style="{StaticResource CardActionButtonStyle}"
+                                MinWidth="180" />
+                        </StackPanel>
+
+                        <Rectangle Height="1" Fill="{ThemeResource DividerBrush}" />
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="模型" />
+                            <TextBlock
+                                FontSize="13"
+                                Foreground="{ThemeResource SecondaryTextBrush}"
+                                Text="经典是 4 像素宽的手臂（Steve），Slim 是 3 像素（Alex）。没设置皮肤时，这里决定用哪张默认皮肤。"
+                                TextWrapping="Wrap" />
+                            <RadioButtons
+                                x:Name="ModelChoice"
+                                MaxColumns="2"
+                                SelectionChanged="ModelChoice_SelectionChanged">
+                                <x:String>Classic · 经典</x:String>
+                                <x:String>Slim · 细手臂</x:String>
+                            </RadioButtons>
+                        </StackPanel>
+
+                        <Rectangle Height="1" Fill="{ThemeResource DividerBrush}" />
+
+                        <TextBlock
+                            x:Name="StatusText"
+                            FontSize="13"
+                            Foreground="{ThemeResource SecondaryTextBrush}"
+                            Text=""
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </ScrollViewer>
+</Page>

@@ -36,6 +36,15 @@ public static class Paths
     public static string CacheDir => Path.Combine(AppData, "cache");
     public static string SettingsFile => Path.Combine(AppData, "settings.json");
 
+    /// <summary>多账户列表（含正版令牌、离线名字、各自皮肤）。</summary>
+    public static string AccountsFile => Path.Combine(AppData, "accounts.json");
+
+    /// <summary>皮肤库：每个账户一张 64×64 PNG（文件名记在账户里）。</summary>
+    public static string SkinsDir => Path.Combine(AppData, "skins");
+
+    /// <summary>由皮肤渲染出来的头像缓存。</summary>
+    public static string AvatarsDir => Path.Combine(AppData, "avatars");
+
     public static string VersionDir(string id) => Path.Combine(VersionsDir, id);
     public static string VersionJson(string id) => Path.Combine(VersionsDir, id, id + ".json");
     public static string VersionJar(string id) => Path.Combine(VersionsDir, id, id + ".jar");
@@ -43,7 +52,7 @@ public static class Paths
 
     public static void EnsureCore()
     {
-        foreach (var d in new[] { GameDir, VersionsDir, LibrariesDir, AssetsDir, AssetsIndexes, AssetsObjects, AppData, CacheDir })
+        foreach (var d in new[] { GameDir, VersionsDir, LibrariesDir, AssetsDir, AssetsIndexes, AssetsObjects, AppData, CacheDir, SkinsDir, AvatarsDir })
             Directory.CreateDirectory(d);
     }
 

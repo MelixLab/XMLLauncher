@@ -9,9 +9,28 @@
     mc:Ignorable="d">
 
     <Grid x:Name="RootGrid" Background="{ThemeResource PaneBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            x:Name="TitleBarStrip"
+            Height="32"
+            Grid.Row="0"
+            Background="Transparent">
+            <TextBlock
+                x:Name="TitleBarTitle"
+                Margin="16,0,0,0"
+                VerticalAlignment="Center"
+                FontSize="12"
+                Foreground="{ThemeResource SecondaryTextBrush}"
+                Text="XML Minecraft Launcher" />
+        </Grid>
 
         <NavigationView
             x:Name="NavView"
+            Grid.Row="1"
             AlwaysShowHeader="False"
             Background="Transparent"
             CompactModeThresholdWidth="0"
@@ -21,6 +40,7 @@
             IsPaneOpen="False"
             IsPaneToggleButtonVisible="True"
             IsSettingsVisible="False"
+            IsTitleBarAutoPaddingEnabled="False"
             OpenPaneLength="212"
             PaneDisplayMode="LeftCompact"
             SelectionChanged="NavView_SelectionChanged">
@@ -97,6 +117,11 @@
                         <FontIcon Glyph="&#xE704;" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <NavigationViewItem Content="社区" Tag="community">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8BD;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
 
             <NavigationView.FooterMenuItems>
@@ -118,7 +143,7 @@
                         BorderThickness="0"
                         Click="AccountButton_Click"
                         CornerRadius="4"
-                        ToolTipService.ToolTip="修改离线账号">
+                        ToolTipService.ToolTip="账户与皮肤">
                         <Grid x:Name="AccountGrid">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -177,14 +202,6 @@
                 CornerRadius="8,0,0,0">
                 <Grid>
                     <Frame x:Name="ContentFrame" Background="Transparent" />
-
-                    <!-- 内容滚到标题栏下面时，用一层渐隐收口，避免"硬切"出一道边 -->
-                    <Border
-                        Height="26"
-                        VerticalAlignment="Top"
-                        Background="{ThemeResource TopFadeBrush}"
-                        CornerRadius="8,0,0,0"
-                        IsHitTestVisible="False" />
                 </Grid>
             </Border>
         </NavigationView>

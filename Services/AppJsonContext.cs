@@ -33,6 +33,8 @@ namespace LinxLauncher.Services;
 [JsonSerializable(typeof(Announcement))]
 [JsonSerializable(typeof(UpdateInfo))]
 [JsonSerializable(typeof(MsAccount))]
+[JsonSerializable(typeof(AccountBook))]
+[JsonSerializable(typeof(GameAccount))]
 internal sealed partial class AppJsonContext : JsonSerializerContext
 {
 }

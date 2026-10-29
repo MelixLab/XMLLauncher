@@ -29,6 +29,12 @@ public sealed class MsAccount
     public string RefreshToken { get; set; } = "";
     public DateTime ExpiresAt { get; set; }
 
+    /// <summary>角色档案里 skins[0].url（Mojang 的皮肤纹理地址），没设置皮肤时为空。</summary>
+    public string? SkinUrl { get; set; }
+
+    /// <summary>"classic" 或 "slim"。</summary>
+    public string? SkinVariant { get; set; }
+
     public bool IsUsable => !string.IsNullOrEmpty(AccessToken) && ExpiresAt > DateTime.Now.AddMinutes(2);
 }
 
@@ -207,15 +213,117 @@ public static class MsAuthService
             if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(uuid))
                 throw new IOException("这个账号还没有创建游戏角色，去 minecraft.net 建一个再来。");
 
+            // 角色档案里带着当前皮肤：state=ACTIVE 的那条就是要用的纹理
+            var skins = ParseSkins(prof);
+
             return new MsAccount
             {
                 Name = name,
                 Uuid = uuid,
                 AccessToken = mcToken,
                 RefreshToken = refreshToken,
-                ExpiresAt = DateTime.Now.AddSeconds(Math.Max(300, expiresIn - 60))
+                ExpiresAt = DateTime.Now.AddSeconds(Math.Max(300, expiresIn - 60)),
+                SkinUrl = skins.url,
+                SkinVariant = skins.variant
             };
         }
+    }
+
+    /// <summary>从角色档案 JSON 里取当前皮肤地址和模型（没有皮肤就返回空）。</summary>
+    public static (string? url, string? variant) ParseSkins(JsonElement profile)
+    {
+        try
+        {
+            if (!profile.TryGetProperty("skins", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                return (null, null);
+
+            string? url = null, variant = null;
+            foreach (var skin in arr.EnumerateArray())
+            {
+                var state = skin.TryGetProperty("state", out var st) ? st.GetString() : null;
+                var u = skin.TryGetProperty("url", out var ue) ? ue.GetString() : null;
+                var v = skin.TryGetProperty("variant", out var ve) ? ve.GetString() : null;
+
+                if (string.IsNullOrEmpty(u)) continue;
+
+                if (string.Equals(state, "ACTIVE", StringComparison.OrdinalIgnoreCase) || url is null)
+                {
+                    url = u;
+                    variant = v;
+                    if (string.Equals(state, "ACTIVE", StringComparison.OrdinalIgnoreCase)) break;
+                }
+            }
+
+            return (url, variant);
+        }
+        catch
+        {
+            return (null, null);
+        }
+    }
+
+    /// <summary>用 Minecraft 令牌读一次角色档案（换皮肤后刷新头像、同步皮肤用）。</summary>
+    public static async Task<MsAccount?> GetProfileAsync(string accessToken, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(accessToken)) return null;
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.minecraftservices.com/minecraft/profile");
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        using var resp = await Client.SendAsync(req, ct);
+        var text = await resp.Content.ReadAsStringAsync(ct);
+        if (!resp.IsSuccessStatusCode) return null;
+
+        using var doc = JsonDocument.Parse(text);
+        var prof = doc.RootElement;
+
+        var name = prof.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+        var uuid = prof.TryGetProperty("id", out var idEl) ? idEl.GetString() ?? "" : "";
+        if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(uuid)) return null;
+
+        var (skinUrl, variant) = ParseSkins(prof);
+
+        return new MsAccount
+        {
+            Name = name,
+            Uuid = uuid,
+            AccessToken = accessToken,
+            SkinUrl = skinUrl,
+            SkinVariant = variant
+        };
+    }
+
+    /// <summary>
+    /// 把一张 64×64（或 64×32）PNG 传成这个正版账号的皮肤。
+    /// variant 只接受 "classic" / "slim"。成功返回 true。
+    /// </summary>
+    public static async Task<bool> UploadSkinAsync(string accessToken, byte[] png, string variant, CancellationToken ct)
+    {
+        if (string.IsNullOrEmpty(accessToken) || png.Length == 0) return false;
+
+        var model = variant == "slim" ? "slim" : "classic";
+
+        using var form = new MultipartFormDataContent();
+        var filePart = new ByteArrayContent(png);
+        filePart.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+        form.Add(filePart, "file", "skin.png");
+        form.Add(new StringContent(model), "variant");
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.minecraftservices.com/minecraft/profile/skins")
+        {
+            Content = form
+        };
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var resp = await Client.SendAsync(req, ct);
+        var text = await resp.Content.ReadAsStringAsync(ct);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            Log.Warn("上传皮肤失败：" + Explain(text));
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>用刷新令牌续期（启动器每次启动/启动游戏前都可能用到）。</summary>
