@@ -9,7 +9,9 @@
     Background="{ThemeResource PageLayerBackgroundBrush}"
     mc:Ignorable="d">
 
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid>
+        <!-- ==================== 主视图：三张卡片 ==================== -->
+        <ScrollViewer x:Name="MainView" VerticalScrollBarVisibility="Auto">
         <StackPanel Padding="40,36,40,40" HorizontalAlignment="Left" Spacing="0">
 
             <!-- 标题 -->
@@ -95,13 +97,51 @@
                 <HyperlinkButton Padding="0" Click="Redetect_Click" Content="重新检测" FontSize="12" />
             </StackPanel>
 
-            <TextBlock
-                Margin="2,8,0,0"
-                MaxWidth="920"
-                HorizontalAlignment="Left"
-                Style="{StaticResource CardStatusTextStyle}"
-                Text="双方都是「对称型 NAT」（部分 4G/5G、校园网）时打洞会失败，这种网络不支持 P2P 联机；全锥形 / 受限锥形 / 端口受限锥形都可以。"
-                TextWrapping="Wrap" />
         </StackPanel>
-    </ScrollViewer>
+        </ScrollViewer>
+
+        <!-- ==================== 大厅视图：点「公开房间」后整页切过来 ==================== -->
+        <ScrollViewer x:Name="LobbyView" Visibility="Collapsed" VerticalScrollBarVisibility="Auto">
+            <StackPanel Padding="40,28,40,40" HorizontalAlignment="Left" MaxWidth="1000" Spacing="0">
+
+                <!-- 返回：小字链接，不和页面标题抢视觉重量 -->
+                <HyperlinkButton
+                    x:Name="BackButton"
+                    Padding="0"
+                    Click="Back_Click"
+                    Content="← 返回联机"
+                    FontSize="12" />
+
+                <!-- 标题行 -->
+                <StackPanel Margin="0,10,0,0" Orientation="Horizontal" Spacing="14" VerticalAlignment="Bottom">
+                    <TextBlock
+                        x:Name="LobbyTitle"
+                        Style="{StaticResource PageTitleTextStyle}"
+                        Text="联机大厅"
+                        VerticalAlignment="Bottom" />
+                    <HyperlinkButton
+                        Margin="0,0,0,4"
+                        Padding="0"
+                        Click="RefreshLobby_Click"
+                        Content="刷新"
+                        FontSize="12"
+                        VerticalAlignment="Bottom" />
+                </StackPanel>
+
+                <TextBlock
+                    x:Name="LobbyHint"
+                    Margin="0,8,0,0"
+                    Style="{StaticResource PageSubtitleTextStyle}"
+                    Text="正在读取大厅…" />
+
+                <!-- 房间卡片在 C# 里 new（XamlCompiler 对 DataTemplate 有坑） -->
+                <StackPanel
+                    x:Name="LobbyList"
+                    Margin="0,22,0,0"
+                    Spacing="0"
+                    PointerMoved="LobbyCards_PointerMoved"
+                    PointerExited="LobbyCards_PointerExited" />
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
 </Page>

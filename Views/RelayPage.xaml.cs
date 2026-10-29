@@ -34,9 +34,120 @@ public sealed partial class RelayPage : Page
 
     private FeatureCard[] _cards = Array.Empty<FeatureCard>();
 
+    /// <summary>大厅里动态建出来的卡片，鼠标描边和字体都要单独管。</summary>
+    private readonly System.Collections.Generic.List<FeatureCard> _lobbyCards = new();
+
+    // ---------- 延迟指示 ----------
+
+    private System.Threading.Timer? _pingTimer;
+
+    /// <summary>
+    /// 延迟文案与颜色。
+    ///
+    /// 之前用 ▁▂▃▄ 这些方块字符画信号条，但 Noto Sans SC 里没有这些字形，
+    /// 界面上直接渲染成横杠 —— 所以改成「数字 + 颜色」表达。
+    /// </summary>
+    private static (string Text, string Color) DescribeLatency(int ping) =>
+        ping < 0 ? ("延迟未知", "#6B7280")
+        : ping < 60 ? ($"{ping} ms · 流畅", "#00A88E")
+        : ping < 120 ? ($"{ping} ms · 一般", "#E8A33D")
+        : ($"{ping} ms · 偏卡", "#D9534F");
+
+    private static string Describe(int ping) =>
+        ping < 0 ? "测延迟中…"
+        : ping < 60 ? $"{ping}ms 流畅"
+        : ping < 120 ? $"{ping}ms 一般"
+        : $"{ping}ms 偏卡";
+
+    /// <summary>连上之后每 3 秒刷一次延迟；退出房间要停掉。</summary>
+    private void StartPingWatch()
+    {
+        StopPingWatch();
+
+        _pingTimer = new System.Threading.Timer(_ =>
+        {
+            var guest = _guest;
+            if (guest is null) return;
+
+            var ping = guest.Ping;
+            var text = $"已连接 · {Describe(ping)}";
+
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (_guest is not null) JoinCard.Status = text;
+            });
+        }, null, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3));
+    }
+
+    private void StopPingWatch()
+    {
+        _pingTimer?.Dispose();
+        _pingTimer = null;
+    }
+
+    /// <summary>
+    /// 联机前的前置检查：
+    /// 1. EasyTier 要建虚拟网卡，没有管理员权限起不来 —— 提示一键提权重启；
+    /// 2. 第一次联机要下载 32 MB 组件，之后就一直复用。
+    /// </summary>
+    private async Task<bool> EnsureLinkReadyAsync(Action<string> status)
+    {
+        if (!EasyTierLink.IsElevated)
+        {
+            var dialog = new ContentDialog
+            {
+                Title = "联机需要管理员权限",
+                Content = "联机要创建一块虚拟网卡，Windows 只允许管理员做这件事。\n" +
+                          "点「以管理员身份重启」后就能正常联机，平时不联机不受影响。",
+                PrimaryButtonText = "以管理员身份重启",
+                CloseButtonText = "算了",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = XamlRoot,
+            };
+            FontService.ApplyToDialog(dialog);
+
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                if (EasyTierLink.RelaunchAsAdmin())
+                {
+                    Application.Current.Exit();
+                }
+                else
+                {
+                    Toast("提权失败，可以右键启动器选「以管理员身份运行」。");
+                }
+            }
+
+            return false;
+        }
+
+        if (!EasyTierLink.IsInstalled)
+        {
+            status("正在下载联机组件（约 32 MB，只有第一次需要）…");
+
+            try
+            {
+                await EasyTierLink.EnsureInstalledAsync(
+                    new Progress<string>(msg => DispatcherQueue.TryEnqueue(() => status(msg))),
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                status("下载联机组件失败：" + ex.Message.Split('\n')[0]);
+                Toast("联机组件下载失败，检查一下网络再试。");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+
+        // 字体要等布局生成完再扫，直接在 OnNavigatedTo 里扫会漏掉整棵子树
+        DispatcherQueue.TryEnqueue(() => FontService.Apply(this));
 
         // 首页那套「鼠标跟随描边」是页面统一驱动的：这里也要把三张卡片收集起来
         _cards = new[] { HostCard, LobbyCard, JoinCard };
@@ -77,6 +188,21 @@ public sealed partial class RelayPage : Page
         foreach (var card in _cards) card.ResetReveal();
     }
 
+    /// <summary>大厅卡片的描边跟随：首页那套是页面统一驱动的，这里同样处理。</summary>
+    private void LobbyCards_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        foreach (var card in _lobbyCards)
+        {
+            var p = e.GetCurrentPoint(card);
+            card.UpdateReveal(p.Position.X, p.Position.Y);
+        }
+    }
+
+    private void LobbyCards_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        foreach (var card in _lobbyCards) card.ResetReveal();
+    }
+
     private DispatcherQueueTimer CreateTick()
     {
         var timer = DispatcherQueue.CreateTimer();
@@ -113,9 +239,13 @@ public sealed partial class RelayPage : Page
 
     private void ApplyNat(NatInfo nat)
     {
-        NatText.Text = nat.Kind == NatKind.Symmetric
-            ? "对称型网络 —— 打洞大概率失败"
-            : nat.Describe();
+        // EasyTier 兜底会走中转，所以这里不再说「打不通」，只说快慢
+        NatText.Text = nat.Kind switch
+        {
+            NatKind.Symmetric => "对称型网络 · 会走中转，能连但慢一些",
+            NatKind.Cone => "锥形网络 · 可以直连",
+            _ => nat.Public is null ? "网络检测失败（不影响联机）" : "网络就绪"
+        };
         PublicAddrText.Text = nat.Public is null ? "" : "公网 " + nat.Public;
     }
 
@@ -173,6 +303,10 @@ public sealed partial class RelayPage : Page
 
         try
         {
+            if (!await EnsureLinkReadyAsync(msg => HostCard.Status = msg)) return;
+
+            HostCard.Status = "正在开房…";
+
             _host = await P2P.HostAsync(world.Text.Trim(), lanPort, pass.Password, CancellationToken.None);
             _hostPort = lanPort;
             RefreshHostCard();
@@ -224,40 +358,77 @@ public sealed partial class RelayPage : Page
 
     private async void Browse_Click(object sender, RoutedEventArgs e)
     {
-        var list = new StackPanel { Spacing = 6, MinWidth = 420 };
-        var hint = new TextBlock
-        {
-            Text = "正在读取大厅…",
-            FontSize = 12.5,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
-        };
+        ShowLobby();
+        await LoadLobbyAsync();
+    }
 
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = "公开房间",
-            Content = new StackPanel
-            {
-                Spacing = 12,
-                Children = { hint, new ScrollViewer { Height = 320, Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto } }
-            },
-            CloseButtonText = "关闭"
-        };
-        FontService.ApplyToDialog(dialog);
+    /// <summary>切到大厅视图（整页切换，不是弹窗）。</summary>
+    private void ShowLobby()
+    {
+        MainView.Visibility = Visibility.Collapsed;
+        LobbyView.Visibility = Visibility.Visible;
 
-        var rooms = await FetchRoomsAsync(hint);
+        // 直接点名设字体：Style 里是 StaticResource，遍历扫不到 Collapsed 时就会漏
+        LobbyHint.FontFamily = FontService.BodyFont;
+        BackButton.FontFamily = FontService.BodyFont;
+        LobbyTitle.FontFamily = FontService.DisplayFont;
 
-        foreach (var room in rooms)
+        DispatcherQueue.TryEnqueue(() => FontService.Apply(LobbyView));
+    }
+
+    private void ShowMain()
+    {
+        LobbyView.Visibility = Visibility.Collapsed;
+        MainView.Visibility = Visibility.Visible;
+    }
+
+    private void Back_Click(object sender, RoutedEventArgs e) => ShowMain();
+
+    private async void RefreshLobby_Click(object sender, RoutedEventArgs e) => await LoadLobbyAsync();
+
+    /// <summary>读一遍大厅，把房间排成卡片墙（和主页三张卡片一个样式）。</summary>
+    private async Task LoadLobbyAsync()
+    {
+        LobbyList.Children.Clear();
+        _lobbyCards.Clear();
+        LobbyHint.Text = "正在读取大厅…";
+
+        var rooms = await FetchRoomsAsync(LobbyHint);
+
+        if (rooms.Count == 0)
         {
-            list.Children.Add(BuildRoomRow(room, dialog));
+            LobbyHint.Text = "现在还没人开房。回上一页开一个，朋友就能在这里看到。";
+            return;
         }
 
-        await dialog.ShowAsync();
+        LobbyHint.Text = $"{rooms.Count} 个房间 · 点「加入」直接进";
 
-        // 关闭后把人数/状态刷一下
-        LobbyCard.Status = rooms.Count == 0
-            ? "大厅里现在没人开房。"
-            : $"大厅里有 {rooms.Count} 个房间。";
+        // 一行三张，卡片宽度和主页的 232 略宽一点，能放下房间号
+        const int columns = 3;
+        const double cardWidth = 300;
+
+        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
+        for (var i = 0; i < columns; i++)
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(cardWidth) });
+
+        var row = -1;
+        for (var i = 0; i < rooms.Count; i++)
+        {
+            if (i % columns == 0)
+            {
+                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                row++;
+            }
+
+            var card = BuildRoomCard(rooms[i]);
+            Grid.SetRow(card, row);
+            Grid.SetColumn(card, i % columns);
+            grid.Children.Add(card);
+            _lobbyCards.Add(card);
+        }
+
+        LobbyList.Children.Add(grid);
+        LobbyCard.Status = $"大厅里有 {rooms.Count} 个房间。";
     }
 
     private async Task<System.Collections.Generic.List<JsonElement>> FetchRoomsAsync(TextBlock hint)
@@ -284,59 +455,142 @@ public sealed partial class RelayPage : Page
         return result;
     }
 
-    private UIElement BuildRoomRow(JsonElement room, ContentDialog dialog)
+    /// <summary>
+    /// 大厅里的一行：世界名 / 房间号 / 谁在里面 / 信号条 / 加入。
+    ///
+    /// 原来这里挂着一句「对称型 NAT（可能连不上）」，用户看不懂也帮不上忙，
+    /// 现在直接把「能不能连、快不快」画成四格信号条。
+    /// </summary>
+    /// <summary>
+    /// 一个房间就是一张 FeatureCard —— 和主页那三张完全同一套观感：
+    /// 白底直角、悬停浅灰 + 鼠标跟随描边、底部按钮贴齐。
+    /// </summary>
+    private Controls.FeatureCard BuildRoomCard(JsonElement room)
     {
         string Str(string name) => room.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
-            ? v.GetString() ?? "" : "";
+            ? v.GetString() ?? ""
+            : "";
+
+        int Num(string name, int fallback) =>
+            room.TryGetProperty(name, out var v) && v.TryGetInt32(out var n) ? n : fallback;
 
         var code = Str("code");
-        var world = Str("world");
+        var world = string.IsNullOrWhiteSpace(Str("world")) ? "未命名世界" : Str("world");
         var owner = Str("owner");
-        var players = room.TryGetProperty("players", out var p) && p.TryGetInt32(out var pv) ? pv : 0;
-        var maxPlayers = room.TryGetProperty("max_players", out var mp) && mp.TryGetInt32(out var mv) ? mv : 8;
+        var players = Num("players", 1);
+        var maxPlayers = Num("max_players", 8);
         var hasPassword = room.TryGetProperty("has_password", out var hp) && hp.ValueKind == JsonValueKind.True;
-        var natType = Str("nat_type");
 
-        var title = new TextBlock
+        var guests = new List<string>();
+        if (room.TryGetProperty("guests", out var gs) && gs.ValueKind == JsonValueKind.Array)
         {
-            Text = string.IsNullOrWhiteSpace(world) ? "未命名世界" : world,
-            FontSize = 13.5,
-            FontWeight = FontWeights.SemiBold,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            foreach (var g in gs.EnumerateArray())
+            {
+                var name = g.GetString();
+                if (!string.IsNullOrWhiteSpace(name) && !guests.Contains(name)) guests.Add(name);
+            }
+        }
+
+        // 状态只写人和事，延迟单独用彩色文字放在按钮旁边
+        var status = $"{owner} · {players}/{maxPlayers} 人"
+                     + (hasPassword ? " · 有密码" : "");
+
+        if (guests.Count > 0)
+            status += "\n在线：" + string.Join("、", guests.Take(3)) + (guests.Count > 3 ? " 等" : "");
+
+        var card = new Controls.FeatureCard
+        {
+            Header = world,
+            Status = status,
+            IconTemplate = (DataTemplate)Application.Current.Resources["IconCardLibrary"],
         };
 
-        var subtitle = new TextBlock
+        var join = new Button
         {
-            Text = $"{owner} · {players}/{maxPlayers} 人"
-                   + (hasPassword ? " · 有密码" : "")
-                   + (natType == "symmetric" ? " · 对称型（可能连不上）" : ""),
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
+            Content = "加入",
+            Style = (Style)Application.Current.Resources["CardActionButtonStyle"],
+            FontFamily = FontService.BodyFont,
+        };
+        join.Click += async (_, _) => await JoinFlowAsync(code);
+
+        // 大厅里不显示延迟：还没连上，量到的只是「到中转节点」的距离，
+        // 跟「我到房主那台机器」不是一回事，写出来反而误导。
+        // 真实 P2P 延迟等加入之后在联机页显示。
+        card.Actions = join;
+
+        // FeatureCard 里面的标题/状态是 XAML 写死的 TextBlock，
+        // 动态 new 出来的这份不会被页面级 Apply 扫到，得自己补一次
+        card.Loaded += (_, _) => FontService.Apply(card);
+
+        return card;
+    }
+
+    /// <summary>
+    /// 四格信号条。延迟越低格子越满：
+    ///   < 60ms  四格全亮（#00A88E）
+    ///   60~120  三格（#E8A33D）
+    ///   > 120   两格（#D9534F）
+    ///   未知    全灰
+    /// </summary>
+    private static FrameworkElement BuildSignalBar(int ping)
+    {
+        int lit = ping < 0 ? 0 : ping < 60 ? 4 : ping < 120 ? 3 : 2;
+        var color = ping < 0 ? "#6B7280"
+            : ping < 60 ? "#00A88E"
+            : ping < 120 ? "#E8A33D"
+            : "#D9534F";
+
+        var brush = ToBrush(color);
+        var dim = ToBrush("#000000", 0.18);
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 2,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        for (var i = 0; i < 4; i++)
+        {
+            row.Children.Add(new Border
+            {
+                Width = 3,
+                Height = 4 + i * 3,
+                CornerRadius = new CornerRadius(1),
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Background = i < lit ? brush : dim
+            });
+        }
+
+        var label = new TextBlock
+        {
+            Text = ping < 0 ? "未知" : $"{ping}ms",
+            FontSize = 11,
+            FontFamily = FontService.BodyFont,
+            Margin = new Thickness(4, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
             Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
         };
 
-        var join = new Button { Content = "加入", FontSize = 12, Padding = new Thickness(12, 4, 12, 4) };
-        join.Click += async (_, _) =>
+        var wrap = new StackPanel
         {
-            dialog.Hide();
-            await JoinFlowAsync(code);
+            Orientation = Orientation.Horizontal,
+            Spacing = 0,
+            VerticalAlignment = VerticalAlignment.Center
         };
+        wrap.Children.Add(row);
+        wrap.Children.Add(label);
+        return wrap;
+    }
 
-        var grid = new Grid { ColumnSpacing = 8 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.Children.Add(new StackPanel { Spacing = 2, Children = { title, subtitle } });
-        Grid.SetColumn(join, 1);
-        grid.Children.Add(join);
-
-        return new Border
-        {
-            Padding = new Thickness(12, 8, 12, 8),
-            CornerRadius = new CornerRadius(6),
-            BorderBrush = (Brush)Application.Current.Resources["DividerBrush"],
-            BorderThickness = new Thickness(1),
-            Child = grid
-        };
+    /// <summary>#RRGGBB → 画笔，alpha 可调。</summary>
+    private static SolidColorBrush ToBrush(string hex, double alpha = 1)
+    {
+        var s = hex.TrimStart('#');
+        var r = Convert.ToByte(s.Substring(0, 2), 16);
+        var g = Convert.ToByte(s.Substring(2, 2), 16);
+        var b = Convert.ToByte(s.Substring(4, 2), 16);
+        return new SolidColorBrush(Windows.UI.Color.FromArgb((byte)(alpha * 255), r, g, b));
     }
 
     // ==================== 卡片 3：加入房间 ====================
@@ -384,18 +638,23 @@ public sealed partial class RelayPage : Page
         }
 
         _busy = true;
-        JoinCard.Status = "正在打洞…";
+        JoinCard.Status = "正在连接…";
         JoinButton.IsEnabled = false;
 
         try
         {
+            if (!await EnsureLinkReadyAsync(msg => JoinCard.Status = msg)) return;
+
+            JoinCard.Status = "正在连接…";
+
             _guest?.Stop();
             _guest = await P2P.JoinAsync(code, passBox.Password, P2P.DefaultGuestPort,
                 msg => DispatcherQueue.TryEnqueue(() => JoinCard.Status = msg),
                 CancellationToken.None);
 
             var address = $"127.0.0.1:{_guest.LocalPort}";
-            JoinCard.Status = $"已连接。游戏里添加服务器：{address}";
+            JoinCard.Status = $"已连接 · {Describe(_guest.Ping)}";
+            StartPingWatch();
             JoinButton.Content = "退出房间";
             JoinButton.IsEnabled = true;
             JoinButton.Click -= Join_Click;
@@ -423,8 +682,9 @@ public sealed partial class RelayPage : Page
 
         _guest?.Stop();
         _guest = null;
+        StopPingWatch();
 
-        JoinCard.Status = "有房间号就直接输，走 P2P 直连。";
+        JoinCard.Status = "有房间号就直接输，输完就能进。";
         JoinButton.Content = "输入房间号";
         JoinButton.Click -= Leave_Click;
         JoinButton.Click += Join_Click;

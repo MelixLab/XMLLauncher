@@ -23,7 +23,20 @@ public sealed class P2PSession : IDisposable
     public bool IsHost { get; init; }
     public int LocalPort { get; set; }
     public NatInfo Nat { get; set; } = new(NatKind.Unknown, null, "");
+    /// <summary>在线人数。由后台任务按 EasyTier 实际连接数刷新，人走了会减。</summary>
     public int GuestCount;
+
+    /// <summary>房主侧：到中转节点的延迟（毫秒），大厅列表用。</summary>
+    public int Latency = -1;
+
+    /// <summary>访客侧：到房主的延迟（毫秒），-1 表示还没测出来。</summary>
+    public int Ping = -1;
+
+    /// <summary>EasyTier 通道。为 null 说明走的是旧的自研打洞（已不再使用）。</summary>
+    internal EasyTierLink? Link;
+
+    internal Task? Beat;
+
     public IPEndPoint? Peer { get; private set; }
 
     private readonly CancellationTokenSource _cts = new();
@@ -45,6 +58,7 @@ public sealed class P2PSession : IDisposable
     {
         try { _cts.Cancel(); } catch { }
         try { _socket?.Close(); } catch { }
+        try { Link?.Stop(); } catch { }
     }
 
     public void Dispose() => Stop();
@@ -92,22 +106,23 @@ public static class P2P
     // ==================== 房主 ====================
 
     /// <summary>开房：发布到大厅，然后一直等访客来打洞。</summary>
-    public static async Task<P2PSession> HostAsync(string worldName, int localPort, string password, CancellationToken ct)
+    /// <summary>
+    /// 开房：先在服务端登记拿房间号，再用 EasyTier 把通道立起来。
+    ///
+    /// 房间号就是 EasyTier 的 network-name，房间密码就是 network-secret ——
+    /// 两边对不上就握不上手，等于天然的房间密码校验。
+    /// </summary>
+    public static async Task<P2PSession> HostAsync(string worldName, int localPort, string password,
+        CancellationToken ct)
     {
-        var session = new P2PSession { IsHost = true, LocalPort = localPort };
-        var socket = NewSocket();
-        socket.Bind(new IPEndPoint(IPAddress.Any, 0));
-
-        int udpPort = ((IPEndPoint)socket.LocalEndPoint!).Port;
-        var localAddr = LocalAddress(udpPort);
-
-        var nat = await StunClient.DetectAsync(socket, ct);
-        session.Nat = nat;
-
-        if (nat.Public is null)
+        NatInfo nat;
+        try
         {
-            socket.Close();
-            throw new IOException("拿不到公网地址：UDP 可能被防火墙或校园网拦了。" + nat.Detail);
+            nat = await ProbeAsync(ct);
+        }
+        catch
+        {
+            nat = new NatInfo(NatKind.Unknown, null, "检测失败");
         }
 
         var publish = await CallApiAsync("/api/lobby/publish", new JsonObject
@@ -115,23 +130,55 @@ public static class P2P
             ["world_name"] = worldName,
             ["game_version"] = AppState.Current?.Id ?? "",
             ["nat_type"] = nat.Kind == NatKind.Cone ? "cone" : "symmetric",
-            ["public_addr"] = nat.Public.ToString(),
-            ["local_addr"] = localAddr,
+            ["game_port"] = localPort,
             ["max_players"] = 8,
             ["password"] = password
         }, ct);
 
         if (publish.data is null)
-        {
-            socket.Close();
             throw new IOException("发布房间失败：" + publish.error);
-        }
 
-        session.Code = publish.data.Value.GetProperty("room").GetProperty("code").GetString() ?? "";
-        Log.Info($"P2P 房主：房间 {session.Code}，UDP {udpPort}，公网 {nat.Public}");
+        var code = publish.data.Value.GetProperty("room").GetProperty("code").GetString() ?? "";
 
-        var worker = Task.Run(() => HostLoopAsync(session, socket, nat.Public!, localAddr, ct), ct);
-        session.Attach(socket, worker);
+        Log.Info($"P2P 房主：房间 {code}，游戏端口 {localPort}，正在启动 EasyTier…");
+
+        var link = await EasyTierLink.StartHostAsync(code, Secret(password), localPort, ct);
+
+        var session = new P2PSession
+        {
+            Code = code,
+            IsHost = true,
+            LocalPort = localPort,
+            Nat = nat,
+            Link = link,
+        };
+
+        // 后台：续期房间（否则 45 秒后会被清掉）+ 按实际连接刷新人数。
+        // 以前 join 时 +1、leave 时 -1，对方直接关启动器就永远减不下来。
+        session.Beat = Task.Run(async () =>
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(4), ct);
+
+                    var (peers, _) = await link.ReadPeersAsync(ct);
+                    session.GuestCount = peers;
+                    session.Latency = link.NodePing;
+
+                    await CallApiAsync("/api/lobby/heartbeat", new JsonObject
+                    {
+                        ["code"] = code,
+                        ["latency"] = link.NodePing
+                    }, ct);
+                }
+                catch (OperationCanceledException) { break; }
+                catch { }
+            }
+        }, ct);
+
+        Log.Info($"P2P 房主：EasyTier 已起来，虚拟地址 {EasyTierLink.HostIp}:{localPort}");
         return session;
     }
 
@@ -235,71 +282,64 @@ public static class P2P
     // ==================== 访客 ====================
 
     /// <summary>加入房间：打洞成功后在本机开 TCP 监听，游戏连它就等于连到房主。</summary>
+    /// <summary>
+    /// 加入房间：从服务端拿到房主的游戏端口，把本地端口转发过去。
+    /// 连上之后游戏里填 127.0.0.1:preferredPort 即可。
+    /// </summary>
     public static async Task<P2PSession> JoinAsync(string code, string password, int preferredPort,
         Action<string> status, CancellationToken ct)
     {
-        var session = new P2PSession { IsHost = false, Code = code };
-        var socket = NewSocket();
-        socket.Bind(new IPEndPoint(IPAddress.Any, 0));
+        status("正在查找房间…");
 
-        int udpPort = ((IPEndPoint)socket.LocalEndPoint!).Port;
-        var localAddr = LocalAddress(udpPort);
-
-        status("正在检测网络…");
-        var nat = await StunClient.DetectAsync(socket, ct);
-        session.Nat = nat;
-
-        if (nat.Public is null)
-        {
-            socket.Close();
-            throw new IOException("拿不到公网地址：UDP 可能被防火墙或校园网拦了。" + nat.Detail);
-        }
-
-        status("正在联系房主…");
         var join = await CallApiAsync("/api/lobby/join", new JsonObject
         {
             ["code"] = code,
             ["password"] = password,
-            ["public_addr"] = nat.Public.ToString(),
-            ["local_addr"] = localAddr
         }, ct);
 
         if (join.data is null)
+            throw new IOException(join.error);
+
+        var hostName = join.data.Value.TryGetProperty("host_name", out var hn)
+            ? hn.GetString() ?? "房主"
+            : "房主";
+
+        var gamePort = join.data.Value.TryGetProperty("room", out var room)
+                       && room.TryGetProperty("game_port", out var gp)
+            ? gp.GetInt32()
+            : 0;
+
+        if (gamePort <= 0)
+            throw new IOException("房主没有上报游戏端口。可能对方还是旧版本，让他更新之后再开房。");
+
+        status($"正在连接 {hostName} 的世界…");
+
+        var link = await EasyTierLink.StartGuestAsync(code, Secret(password), gamePort, preferredPort, ct);
+
+        var (connected, ping) = await link.WaitPeerAsync(TimeSpan.FromSeconds(30), ct);
+        if (!connected)
         {
-            socket.Close();
-            throw new IOException("加入失败：" + join.error);
+            link.Stop();
+            throw new IOException("没连上房主。房间号或密码可能不对，也可能房主刚把房间关了。");
         }
 
-        var hostPublic = join.data.Value.GetProperty("host_public").GetString();
-        var hostLocal = join.data.Value.GetProperty("host_local").GetString();
-        var hostName = join.data.Value.GetProperty("host_name").GetString() ?? "房主";
-
-        status($"正在和 {hostName} 打洞…");
-        var peer = await PunchAsync(socket, hostPublic, hostLocal, ct);
-        if (peer is null)
+        var session = new P2PSession
         {
-            socket.Close();
-            throw new IOException(
-                "打洞超时：20 秒没收到回包。" +
-                "可以让对面换手机热点再试，或看日志排查：");
-        }
+            Code = code,
+            IsHost = false,
+            LocalPort = preferredPort,
+            Link = link,
+            GuestCount = 1,
+            Ping = ping,
+        };
 
-        session.SetPeer(peer);
-        Log.Info($"P2P 访客：和 {hostName} 打通了（{peer}）");
-
-        // 本机开一个 TCP 监听，游戏连它
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        session.LocalPort = ((IPEndPoint)listener.LocalEndpoint).Port;
-
-        var worker = Task.Run(() => GuestLoopAsync(session, socket, peer, listener, ct), ct);
-        session.Attach(socket, worker);
-
-        Log.Info($"P2P 访客：隧道已打通（对端 {peer}），本地端口 {session.LocalPort}");
-        // 打通就直接把能用的地址给出来，别让用户还要等下一步才看到端口
-        status($"隧道已通 · 游戏里添加服务器 127.0.0.1:{session.LocalPort}");
+        Log.Info($"P2P 访客：连上 {hostName}，127.0.0.1:{preferredPort} → 房主 {gamePort}，延迟 {ping}ms");
         return session;
     }
+
+    /// <summary>EasyTier 的 network-secret 至少 8 位；空密码给个固定值，两边算出来要一样。</summary>
+    private static string Secret(string password) =>
+        string.IsNullOrWhiteSpace(password) ? "linx-lobby" : password.PadRight(8, 'x');
 
     private static async Task GuestLoopAsync(P2PSession session, Socket socket, IPEndPoint peer,
         TcpListener listener, CancellationToken ct)
