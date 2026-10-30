@@ -249,8 +249,9 @@
                             <RowDefinition Height="132" />
                         </Grid.RowDefinitions>
 
-                        <Button
+                        <ToggleButton
                             x:Name="CardVanilla"
+                            AutomationProperties.Name="原版"
                             Grid.Row="0"
                             Grid.Column="0"
                             Tag="vanilla"
@@ -261,10 +262,11 @@
                                 <TextBlock Margin="0,12,0,0" Style="{StaticResource CardTitleTextStyle}" Text="原版" />
                                 <TextBlock Margin="0,2,0,0" Style="{StaticResource CardStatusTextStyle}" Text="纯净游戏本体" />
                             </StackPanel>
-                        </Button>
+                        </ToggleButton>
 
-                        <Button
+                        <ToggleButton
                             x:Name="CardFabric"
+                            AutomationProperties.Name="Fabric"
                             Grid.Row="0"
                             Grid.Column="1"
                             Tag="fabric"
@@ -275,10 +277,11 @@
                                 <TextBlock Margin="0,12,0,0" Style="{StaticResource CardTitleTextStyle}" Text="Fabric" />
                                 <TextBlock Margin="0,2,0,0" Style="{StaticResource CardStatusTextStyle}" Text="轻量、跟进快" />
                             </StackPanel>
-                        </Button>
+                        </ToggleButton>
 
-                        <Button
+                        <ToggleButton
                             x:Name="CardForge"
+                            AutomationProperties.Name="Forge"
                             Grid.Row="0"
                             Grid.Column="2"
                             Tag="forge"
@@ -289,10 +292,11 @@
                                 <TextBlock Margin="0,12,0,0" Style="{StaticResource CardTitleTextStyle}" Text="Forge" />
                                 <TextBlock Margin="0,2,0,0" Style="{StaticResource CardStatusTextStyle}" Text="老牌、模组最多" />
                             </StackPanel>
-                        </Button>
+                        </ToggleButton>
 
-                        <Button
+                        <ToggleButton
                             x:Name="CardNeoForge"
+                            AutomationProperties.Name="NeoForge"
                             Grid.Row="1"
                             Grid.Column="0"
                             Tag="neoforge"
@@ -303,10 +307,11 @@
                                 <TextBlock Margin="0,12,0,0" Style="{StaticResource CardTitleTextStyle}" Text="NeoForge" />
                                 <TextBlock Margin="0,2,0,0" Style="{StaticResource CardStatusTextStyle}" Text="社区接手的新分支" />
                             </StackPanel>
-                        </Button>
+                        </ToggleButton>
 
-                        <Button
+                        <ToggleButton
                             x:Name="CardQuilt"
+                            AutomationProperties.Name="Quilt"
                             Grid.Row="1"
                             Grid.Column="1"
                             Tag="quilt"
@@ -317,7 +322,7 @@
                                 <TextBlock Margin="0,12,0,0" Style="{StaticResource CardTitleTextStyle}" Text="Quilt" />
                                 <TextBlock Margin="0,2,0,0" Style="{StaticResource CardStatusTextStyle}" Text="Fabric 的进阶分支" />
                             </StackPanel>
-                        </Button>
+                        </ToggleButton>
                     </Grid>
 
                     <!-- 加载器版本 -->
@@ -666,9 +671,6 @@
                                 Orientation="Horizontal"
                                 Spacing="10">
                                 <Button
-                                    Background="#FBFBFB"
-                                    BorderBrush="#8A8A8A"
-                                    BorderThickness="1"
                                     Click="Back_Click"
                                     Content="返回"
                                     CornerRadius="4"

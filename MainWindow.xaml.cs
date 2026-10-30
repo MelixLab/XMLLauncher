@@ -134,6 +134,7 @@ public sealed partial class MainWindow : Window
         // 主题引擎：窗口材质（云母 / 亚克力 / 高透）、主题色、深浅模式。
         // 设置页每次改动都会调 ThemeService.Apply()，这里只负责首次应用。
         ThemeService.Initialize(this, RootGrid, NavView);
+        NavigationPaneBackground.Attach(NavView);
 
         // 标题栏：内容延伸到标题栏，材质才铺得到最顶上。
         // 以前用系统标题栏，它由系统单独画一条实色，云母 / 亚克力下会和窗口之间出现一道缝。
@@ -346,7 +347,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task RunStartupChecksAsync()
     {
-        if (_startupChecked) return;
+        // 本地开发也跳过旧的强制更新缓存，保留缓存文件供正常模式继续使用。
+        if (_startupChecked || RemoteService.IsLocalDevelopment) return;
         _startupChecked = true;
 
         try
@@ -441,7 +443,7 @@ public sealed partial class MainWindow : Window
                 FontSize = 13,
                 LineHeight = 21,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+                Foreground = ThemeService.Brush("SecondaryTextBrush")
             });
         }
 
@@ -450,7 +452,7 @@ public sealed partial class MainWindow : Window
             Text = "这次不是强制更新，不更新也能继续用。",
             FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+            Foreground = ThemeService.Brush("SecondaryTextBrush")
         });
 
         var dialog = new ContentDialog
@@ -505,7 +507,7 @@ public sealed partial class MainWindow : Window
                 Text = "这是一条重要公告，请留意。",
                 FontSize = 12.5,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = (Brush)Application.Current.Resources["NoticeTextBrush"]
+                Foreground = ThemeService.Brush("NoticeTextBrush")
             });
         }
 
@@ -548,7 +550,7 @@ public sealed partial class MainWindow : Window
                     Text = info.Changelog,
                     FontSize = 13,
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+                    Foreground = ThemeService.Brush("SecondaryTextBrush")
                 });
             }
 
@@ -559,7 +561,7 @@ public sealed partial class MainWindow : Window
                     : "这一版必须更新后才能继续使用启动器。",
                 FontSize = 13,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = (Brush)Application.Current.Resources["NoticeTextBrush"]
+                Foreground = ThemeService.Brush("NoticeTextBrush")
             });
 
             var dialog = new ContentDialog
@@ -633,7 +635,7 @@ public sealed partial class MainWindow : Window
             Text = "正在连接服务器…",
             FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+            Foreground = ThemeService.Brush("SecondaryTextBrush")
         };
 
         var dialog = new ContentDialog
@@ -746,7 +748,7 @@ public sealed partial class MainWindow : Window
                 Text = result.Hint,
                 FontSize = 12.5,
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+                Foreground = ThemeService.Brush("SecondaryTextBrush")
             };
 
             var dlg = new ContentDialog
@@ -975,7 +977,7 @@ public sealed partial class MainWindow : Window
         {
             FontSize = 13,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"],
+            Foreground = ThemeService.Brush("SecondaryTextBrush"),
             Text = "正在向微软申请登录代码…"
         };
 
@@ -1134,7 +1136,7 @@ public sealed partial class MainWindow : Window
             Text = "没设置图片时用名字首字母。正版账号会优先显示角色头像。",
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+            Foreground = ThemeService.Brush("SecondaryTextBrush")
         };
 
         // ---------- XML 账号 ----------
@@ -1152,7 +1154,7 @@ public sealed partial class MainWindow : Window
         {
             FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"],
+            Foreground = ThemeService.Brush("SecondaryTextBrush"),
             Text = serverLogged ? $"已登录：{LinxAccountService.DisplayName}" : "未登录。联机大厅和云端存档要用它。"
         };
 
@@ -1174,7 +1176,7 @@ public sealed partial class MainWindow : Window
             Text = "注册要邮箱验证（只支持国内邮箱）；老账号填完用户名密码直接登录。",
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+            Foreground = ThemeService.Brush("SecondaryTextBrush")
         });
 
         var serverManageBtn = new HyperlinkButton { Content = "管理账号" };
@@ -1202,16 +1204,16 @@ public sealed partial class MainWindow : Window
         {
             FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"],
+            Foreground = ThemeService.Brush("SecondaryTextBrush"),
             Text = AccountService.IsMicrosoft
                 ? $"已登录：{s.MsName}"
                 : (hasMs ? $"上次登录过 {s.MsName}，点保存就切回正版。" : "还没登录过微软账号。")
         };
 
         // ---------- 两个选择卡 ----------
-        var brand = (Brush)Application.Current.Resources["BrandBrush"];
-        var divider = (Brush)Application.Current.Resources["DividerBrush"];
-        var secondary = (SolidColorBrush)Application.Current.Resources["SecondaryTextBrush"];
+        var brand = ThemeService.Brush("BrandBrush");
+        var divider = ThemeService.Brush("DividerBrush");
+        var secondary = (SolidColorBrush)ThemeService.Brush("SecondaryTextBrush");
         var brandWash = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(18, 0, 168, 142));
 
         // 先声明后赋值：MakeChoice 里的 lambda 会引用它们，
@@ -1367,7 +1369,7 @@ public sealed partial class MainWindow : Window
 
         // 主按钮跟品牌色走：ContentDialog 的按钮吃的是这几支 Accent 资源，
         // 直接改 PrimaryButtonStyle 会被模板里的 ThemeResource 盖掉。
-        var brandBrush = (Brush)Application.Current.Resources["BrandBrush"];
+        var brandBrush = ThemeService.Brush("BrandBrush");
         var brandHover = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0, 150, 128));
         var brandPress = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 0, 132, 112));
         var whiteBrush = new SolidColorBrush(Microsoft.UI.Colors.White);
@@ -1646,7 +1648,7 @@ public sealed partial class MainWindow : Window
     {
         Height = 1,
         Margin = new Thickness(0, 6, 0, 2),
-        Background = (Brush)Application.Current.Resources["DividerBrush"]
+        Background = ThemeService.Brush("DividerBrush")
     };
 
     /// <summary>选一张图片复制到配置目录，返回新路径；取消返回 null。</summary>
@@ -1692,11 +1694,10 @@ public sealed partial class MainWindow : Window
         AvatarHost.HorizontalAlignment = HorizontalAlignment.Left;
         AccountButton.HorizontalAlignment = HorizontalAlignment.Stretch;
 
-        // 48 DIP 图标栏里放 30 的头像：左右各留 9 才是正中（不靠对齐猜，直接算出来）。
-        // 展开时回到常规内边距，头像靠左和菜单图标对齐。
-        AccountHost.Margin = compact ? new Thickness(0, 6, 0, 12) : new Thickness(4, 4, 4, 10);
-        AccountButton.Padding = compact ? new Thickness(9, 7, 9, 7) : new Thickness(8, 6, 8, 6);
-        AccountButton.HorizontalContentAlignment = compact ? HorizontalAlignment.Stretch : HorizontalAlignment.Left;
+        // 展开、收起时头像始终位于同一坐标，只切换右侧文字。
+        AccountHost.Margin = new Thickness(0, 6, 0, 12);
+        AccountButton.Padding = new Thickness(9, 7, 9, 7);
+        AccountButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         AccountButton.MinHeight = 44;
     }
 

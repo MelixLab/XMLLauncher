@@ -41,7 +41,7 @@ public static class Telemetry
         }
     }
 
-    public static bool Enabled => AppState.Settings.TelemetryEnabled;
+    public static bool Enabled => !RemoteService.IsLocalDevelopment && AppState.Settings.TelemetryEnabled;
 
     /// <summary>启动时调用：发一条 start，然后开始定时心跳。</summary>
     public static void Start()

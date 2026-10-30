@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using LinxLauncher.Services;
 
@@ -27,6 +28,7 @@ public sealed partial class SettingsPage : Page
     {
         InitializeComponent();
         Loaded += (_, _) => LoadSettings();
+        ActualThemeChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateMaterialPreviews);
     }
 
     /// <summary>设置页里的「重新开始向导」：不关窗口，直接盖一层向导上去。</summary>
@@ -127,7 +129,7 @@ public sealed partial class SettingsPage : Page
                 FontSize = 13,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+                Foreground = ThemeService.Brush("SecondaryTextBrush")
             };
 
             var button = new Button { Content = "导入" };
@@ -306,7 +308,7 @@ public sealed partial class SettingsPage : Page
         ("#5B6470", "石墨"),
     };
 
-    private readonly Dictionary<int, Button> _materialButtons = new();
+    private readonly Dictionary<int, ToggleButton> _materialButtons = new();
     private readonly List<Border> _accentRings = new();
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveTimer;
 
@@ -342,10 +344,6 @@ public sealed partial class SettingsPage : Page
         };
 
         ApplyTheme();
-
-        // 预览卡里的「模拟壁纸」跟着深浅色走，换模式后整排重建一次
-        BuildMaterialCards();
-        UpdateMaterialSelection();
     }
 
     private void Surface_Changed(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -361,7 +359,8 @@ public sealed partial class SettingsPage : Page
 
     private void Material_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button button || button.Tag is not int id) return;
+        if (sender is not ToggleButton button || button.Tag is not int id) return;
+        button.IsChecked = true;
         if (AppState.Settings.ThemeMaterial == id) return;
 
         AppState.Settings.ThemeMaterial = id;
@@ -408,10 +407,6 @@ public sealed partial class SettingsPage : Page
     {
         sender.Stop();
         SettingsService.Save();
-
-        // 拖完不透明度滑杆后再重画预览卡（拖动过程中每帧重建会卡）
-        BuildMaterialCards();
-        UpdateMaterialSelection();
     }
 
     private void BuildMaterialCards()
@@ -447,22 +442,29 @@ public sealed partial class SettingsPage : Page
             });
             content.Children.Add(texts);
 
-            var button = new Button
+            var button = new ToggleButton
             {
+                Style = ThemeService.Style("SelectionCardStyle"),
                 Content = content,
                 Tag = id,
                 Padding = new Thickness(5),
-                // 卡片自己有一层底色：纯透明的话，深色主题下整块和页面糊在一起，看不出这是可点的卡
-                Background = ThemeService.Brush("CardHoverBackgroundBrush"),
-                BorderBrush = ThemeService.Brush("DividerBrush"),
                 BorderThickness = new Thickness(2),
                 CornerRadius = new CornerRadius(7),
-                UseSystemFocusVisuals = false,
             };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, name);
             button.Click += Material_Click;
 
             MaterialHost.Children.Add(button);
             _materialButtons[id] = button;
+        }
+    }
+
+    private void UpdateMaterialPreviews()
+    {
+        foreach (var (id, button) in _materialButtons)
+        {
+            if (button.Content is StackPanel content)
+                content.Children[0] = BuildMaterialPreview(id);
         }
     }
 
@@ -601,13 +603,9 @@ public sealed partial class SettingsPage : Page
 
     private void UpdateMaterialSelection()
     {
-        var accent = ThemeService.Brush("BrandBrush");
-        var idle = ThemeService.Brush("DividerBrush");
-
         foreach (var pair in _materialButtons)
         {
-            bool selected = pair.Key == AppState.Settings.ThemeMaterial;
-            pair.Value.BorderBrush = selected ? accent : idle;
+            pair.Value.IsChecked = pair.Key == AppState.Settings.ThemeMaterial;
         }
     }
 

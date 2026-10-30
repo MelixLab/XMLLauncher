@@ -44,6 +44,8 @@ public partial class App : Application
             // 全局控件字体：Toast / 对话框 / 浮窗这些「事后创建」的控件也一起跟上
             FontService.ApplyGlobal(AppState.Settings.UseNotoSans);
             Log.Info("XML Launcher 启动（WinUI 3）");
+            if (RemoteService.IsLocalDevelopment)
+                Log.Info("本地开发模式：跳过私有服务器、更新检查（含缓存）和遥测；本地功能与公共下载源照常使用。");
         }
         catch (Exception ex)
         {

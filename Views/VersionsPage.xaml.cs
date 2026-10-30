@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
@@ -348,47 +349,12 @@ public sealed partial class VersionsPage : Page
     private void Back_Click(object sender, RoutedEventArgs e) => ShowList();
 
     /// <summary>把某张加载器卡片点亮，其余恢复常态。</summary>
-    private void SelectLoaderCard(Button card)
+    private void SelectLoaderCard(ToggleButton card)
     {
-        var normalBg = (Brush)Application.Current.Resources["CardBackgroundBrush"];
-        var normalBorder = (Brush)Application.Current.Resources["DividerBrush"];
-
         foreach (var b in new[] { CardVanilla, CardFabric, CardForge, CardNeoForge, CardQuilt })
         {
-            b.Background = normalBg;
-            b.BorderBrush = normalBorder;
+            b.IsChecked = b == card;
         }
-
-        card.Background = (Brush)Application.Current.Resources["BrandSoftBrush"];
-        card.BorderBrush = (Brush)Application.Current.Resources["BrandBrush"];
-
-        Bounce(card);
-    }
-
-    /// <summary>点卡片的回弹：0.96 → 1.02 → 1，只动 transform。</summary>
-    private static void Bounce(FrameworkElement card)
-    {
-        var scale = new ScaleTransform
-        {
-            CenterX = card.ActualWidth / 2,
-            CenterY = card.ActualHeight / 2
-        };
-        card.RenderTransform = scale;
-
-        var sb = new Storyboard();
-        foreach (var prop in new[] { "ScaleX", "ScaleY" })
-        {
-            var anim = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(280) };
-            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 0.955 });
-            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(140)), Value = 1.018 });
-            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(280)), Value = 1.0 });
-
-            Storyboard.SetTarget(anim, scale);
-            Storyboard.SetTargetProperty(anim, prop);
-            sb.Children.Add(anim);
-        }
-
-        sb.Begin();
     }
 
     // ================= 实例设置 =================
@@ -659,7 +625,7 @@ public sealed partial class VersionsPage : Page
                     Text = $"· {(string.IsNullOrEmpty(u.Title) ? u.LocalName : u.Title)}  →  {u.NewVersion}",
                     FontSize = 12.5,
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+                    Foreground = ThemeService.Brush("SecondaryTextBrush")
                 });
             }
 
@@ -838,7 +804,7 @@ public sealed partial class VersionsPage : Page
     // ================= 加载器 =================
     private async void LoaderCard_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not Button card || card.Tag is not string tag) return;
+        if (sender is not ToggleButton card || card.Tag is not string tag) return;
 
         SelectLoaderCard(card);
 

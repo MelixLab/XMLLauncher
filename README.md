@@ -64,7 +64,33 @@ dotnet publish -c Release -r win-x64 -p:PublishAot=true -p:SelfContained=true -o
 2. 改掉里面的 `ServerUrl`
 3. 这个文件已在 `.gitignore` 中，不会被提交
 
-不配置也能编译运行，只是公告、更新、账号、联机这些联网功能会连不上。
+必须先复制模板，项目才能找到 `LocalSecrets` 类型。只调试本地界面时可以保留模板地址。
+
+### 本地界面调试（不需要私有服务器）
+
+Debug 构建在服务器地址仍是 `your-server.example.com` 时，默认启用本地开发模式：
+
+- 跳过公告、更新检查和已有的强制更新缓存，不删除缓存文件
+- 停用遥测上报和心跳，不修改已保存的遥测设置
+- 私有服务器请求在 DNS 解析之前直接返回 503 和本地模式说明；XML 账号、社区、联机需要服务器，不能在此模式使用
+- 离线账号、本地版本、设置、皮肤等本地功能照常使用；公共下载源、Modrinth 和微软登录仍按原逻辑联网
+
+在 Visual Studio 中选择 **x64 / Debug** 和 **LinxLauncher.WinUI (Local Debug)** 启动配置，
+或在 PowerShell 中运行：
+
+```powershell
+$env:XML_LOCAL_DEV = "1"
+dotnet build LinxLauncher.WinUI.csproj -c Debug -p:Platform=x64
+dotnet run --project LinxLauncher.WinUI.csproj -c Debug -p:Platform=x64 --launch-profile "LinxLauncher.WinUI (Local Debug)"
+```
+
+`XML_LOCAL_DEV=1` 可在真实服务器不可用时显式启用本地模式。
+需要调试服务器接口时设置 `XML_LOCAL_DEV=0`，并使用现有的 `XML_SERVER_OVERRIDE`
+指向自己的服务器；也可以使用 **Unpackaged** 配置，在有效服务器地址下按默认联网行为运行。
+PowerShell 中用 `Remove-Item Env:XML_LOCAL_DEV` 恢复自动判断。
+
+以上本地模式仅对 Debug 构建生效。Release 忽略 `XML_LOCAL_DEV`，保留原有请求、
+遥测和强制更新策略。真正的网络异常仍由原来的调用方处理，不在 DNS 层吞掉异常。
 
 ### 关于 Native AOT 的几个坑
 

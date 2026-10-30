@@ -291,7 +291,7 @@ public sealed partial class RelayPage : Page
                 : $"{_nat.Describe()} · 没检测到游戏端口：先在游戏里「对局域网开放」，或者手动填一个",
             FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+            Foreground = ThemeService.Brush("SecondaryTextBrush")
         };
 
         var dialog = new ContentDialog
@@ -585,7 +585,7 @@ public sealed partial class RelayPage : Page
             FontFamily = FontService.BodyFont,
             Margin = new Thickness(4, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+            Foreground = ThemeService.Brush("SecondaryTextBrush")
         };
 
         var wrap = new StackPanel

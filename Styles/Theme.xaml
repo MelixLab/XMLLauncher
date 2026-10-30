@@ -13,6 +13,7 @@
         <ResourceDictionary x:Key="Default">
             <!-- 版面 -->
             <SolidColorBrush x:Key="PaneBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="NavigationPaneBackgroundBrush" Color="#F2F2F2" />
             <!-- 子窗口（例如启动失败提示）用的不透明底色：主窗口开了云母/亚克力时，
                  这些窗口没有材质可透，必须自己有一块实底，否则会透出黑。 -->
             <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#FFFFFF" />
@@ -105,6 +106,7 @@
 
         <ResourceDictionary x:Key="Light">
             <SolidColorBrush x:Key="PaneBackgroundBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="NavigationPaneBackgroundBrush" Color="#F2F2F2" />
             <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="BrandBrush" Color="#00A88E" />
             <SolidColorBrush x:Key="BrandSoftBrush" Color="#E7F6F2" />
@@ -191,6 +193,7 @@
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="NavigationPaneBackgroundBrush" Color="#2B2B2B" />
             <!--
                 ★ 底色 = #000000，这是**故意的**，别改回 #202020。
 

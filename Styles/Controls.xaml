@@ -358,18 +358,90 @@
         <Setter Property="IsTitleBarAutoPaddingEnabled" Value="False" />
         <Setter Property="UseSystemFocusVisuals" Value="True" />
     </Style>
-    <!-- 版本库详情里的加载器卡：白底 + 1 DIP 描边 + 直角，选中时由代码换成品牌浅底 -->
-    <Style x:Key="LoaderCardStyle" TargetType="Button">
+    <!-- 选择卡统一由 ToggleButton 的状态控制配色，避免局部画笔覆盖主题或悬停态。 -->
+    <Style x:Key="SelectionCardStyle" TargetType="ToggleButton">
+        <Setter Property="Foreground" Value="{ThemeResource PrimaryTextBrush}" />
         <Setter Property="Background" Value="{ThemeResource CardBackgroundBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource DividerBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="0" />
-        <Setter Property="Padding" Value="18,16" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="VerticalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="VerticalContentAlignment" Value="Top" />
-        <Setter Property="UseSystemFocusVisuals" Value="False" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <ContentPresenter
+                        x:Name="Root"
+                        Padding="{TemplateBinding Padding}"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        Content="{TemplateBinding Content}"
+                        ContentTemplate="{TemplateBinding ContentTemplate}"
+                        ContentTransitions="{TemplateBinding ContentTransitions}"
+                        FontFamily="{TemplateBinding FontFamily}"
+                        FontSize="{TemplateBinding FontSize}"
+                        Foreground="{TemplateBinding Foreground}"
+                        HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                        VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{ThemeResource CardHoverBackgroundBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{ThemeResource CardPressedBackgroundBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Opacity" Value="0.45" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Checked">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{ThemeResource BrandSoftBrush}" />
+                                        <Setter Target="Root.BorderBrush" Value="{ThemeResource BrandBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="CheckedPointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{ThemeResource BrandSoftBrush}" />
+                                        <Setter Target="Root.BorderBrush" Value="{ThemeResource BrandBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="CheckedPressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{ThemeResource BrandSoftBrush}" />
+                                        <Setter Target="Root.BorderBrush" Value="{ThemeResource BrandBrush}" />
+                                        <Setter Target="Root.Opacity" Value="0.85" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="CheckedDisabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="Root.Background" Value="{ThemeResource BrandSoftBrush}" />
+                                        <Setter Target="Root.BorderBrush" Value="{ThemeResource BrandBrush}" />
+                                        <Setter Target="Root.Opacity" Value="0.45" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                    </ContentPresenter>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="LoaderCardStyle" TargetType="ToggleButton" BasedOn="{StaticResource SelectionCardStyle}">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="18,16" />
     </Style>
 
 </ResourceDictionary>
