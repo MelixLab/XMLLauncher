@@ -73,8 +73,20 @@ public static class ThemeService
     /// <summary>实际生效的材质（不支持云母的机器会回落成纯色）。</summary>
     public static ThemeMaterial EffectiveMaterial { get; private set; } = ThemeMaterial.Solid;
 
-    /// <summary>当前挂着的材质。用来避免重复重建控制器（见 ApplyBackdrop 里的说明）。</summary>
+    /// <summary>当前挂着的材质；背景宿主只创建一次，材质控制器按需复用。</summary>
     private static ThemeMaterial? _currentBackdrop;
+    private static WindowBackdrop? _backdrop;
+
+    // 等最后一次选择停稳，也留出底色提交到渲染线程的时间，避免连点时逐次切换中间材质。
+    private static readonly TimeSpan BackdropRequestDelay = TimeSpan.FromMilliseconds(120);
+    // 系统材质没有“首帧已就绪”事件，先留出稳定期，再渐隐承接底色；时长可按实机观感调整。
+    private static readonly TimeSpan BackdropSettleDuration = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan BackdropRevealDuration = TimeSpan.FromMilliseconds(120);
+    private static bool _backdropTransitionActive;
+    private static double _backdropTransitionOpacity;
+    private static ThemeMaterial? _pendingBackdrop;
+    private static TimeSpan? _backdropCoverFrame;
+    private static TimeSpan? _backdropChangedAt;
 
     /// <summary>界面此刻实际是深色还是浅色（用户选的模式 + 系统主题算出来的结果）。</summary>
     public static bool IsDark { get; private set; }
@@ -90,6 +102,16 @@ public static class ThemeService
 
         // 系统切换深浅色时，跟随模式的用户要立刻跟上（ActualTheme 只在 RequestedTheme=Default 时才会变）
         root.ActualThemeChanged += (_, _) => Apply();
+        window.Closed += (_, _) =>
+        {
+            StopBackdropTransition();
+            _initialized = false;
+            _backdrop = null;
+            _currentBackdrop = null;
+            _window = null;
+            _root = null;
+            _navShell = null;
+        };
 
         _initialized = true;
         Apply();
@@ -115,10 +137,6 @@ public static class ThemeService
             };
             if (_root.RequestedTheme != want) _root.RequestedTheme = want;
 
-            var material = ResolveMaterial(s.ThemeMaterial);
-            EffectiveMaterial = material;
-            ApplyBackdrop(material);
-
             bool dark = choice switch
             {
                 ThemeMode.Dark => true,
@@ -127,7 +145,11 @@ public static class ThemeService
             };
             IsDark = dark;
 
-            ApplyPalette(s, material);
+            var material = ResolveMaterial(s.ThemeMaterial);
+            EffectiveMaterial = material;
+            ApplyBackdrop(material);
+
+            ApplyPalette(s, EffectiveMaterial);
             RefreshLiveBrushes();
             ApplyTitleBar(dark);
         }
@@ -177,38 +199,137 @@ public static class ThemeService
 
     private static void ApplyBackdrop(ThemeMaterial material)
     {
-        // ★ 只在实际材质变化时才重建控制器。
-        //   切深浅色时 RootGrid 的 ActualThemeChanged 会再调一次 Apply()，
-        //   如果每次都往 Window.SystemBackdrop 塞一个新的控制器，WinAppSDK 的
-        //   MicaController / DesktopAcrylicController 会在几秒后于渲染线程上访问违例（0xC0000005），
-        //   表现就是「选深色 + 云母，用着用着突然闪退」。
-        if (_currentBackdrop == material) return;
-        _currentBackdrop = material;
+        if (_backdropTransitionActive && (_pendingBackdrop ?? _currentBackdrop) == material) return;
 
+        if (!_backdropTransitionActive)
+        {
+            if (_currentBackdrop == material) return;
+
+            // 两种云母只改同一控制器的 Kind。已有过渡未结束时不能走此捷径，
+            // 否则快速点回云母会提前移除遮挡，露出上一轮尚未稳定的背景。
+            bool switchMicaKind = _currentBackdrop is ThemeMaterial.Mica or ThemeMaterial.MicaAlt
+                                  && material is ThemeMaterial.Mica or ThemeMaterial.MicaAlt;
+            if (_currentBackdrop is null || !_root!.IsLoaded || switchMicaKind)
+            {
+                ReplaceBackdrop(material);
+                return;
+            }
+        }
+
+        // 过渡中点回原材质也保留遮挡，只更新最后一次选择，不中止正在稳定的背景。
+        _pendingBackdrop = material;
+        _backdropCoverFrame = null;
+        // 保留上一次实际切换的时间：新请求即使已防抖，也要等旧背景结束稳定期。
+        _backdropTransitionOpacity = 1;
+        if (!_backdropTransitionActive)
+        {
+            _backdropTransitionActive = true;
+            CompositionTarget.Rendering += BackdropTransition_Rendering;
+        }
+    }
+
+    private static void ReplaceBackdrop(ThemeMaterial material)
+    {
         try
         {
-            switch (material)
+            if (_backdrop is null)
             {
-                case ThemeMaterial.Mica:
-                    _window!.SystemBackdrop = new MicaBackdrop { Kind = MicaKind.Base };
-                    break;
-                case ThemeMaterial.MicaAlt:
-                    _window!.SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
-                    break;
-                case ThemeMaterial.Acrylic:
-                    _window!.SystemBackdrop = new DesktopAcrylicBackdrop();
-                    break;
-                default:
-                    _window!.SystemBackdrop = null;
-                    break;
+                // 一直使用纯色的窗口无须创建材质宿主；第一次启用材质后保留到窗口关闭。
+                if (material != ThemeMaterial.Solid)
+                {
+                    _backdrop = new WindowBackdrop(material);
+                    _window!.SystemBackdrop = _backdrop;
+                }
             }
+            else
+            {
+                _backdrop.SetMaterial(material);
+            }
+            _currentBackdrop = material;
         }
         catch (Exception ex)
         {
             Log.Warn("切换窗口材质失败：" + ex.Message);
             _currentBackdrop = ThemeMaterial.Solid;
-            try { _window!.SystemBackdrop = null; } catch { }
+            EffectiveMaterial = ThemeMaterial.Solid;
+            try { _backdrop?.SetMaterial(ThemeMaterial.Solid); } catch { }
         }
+    }
+
+    private static void BackdropTransition_Rendering(object? sender, object args)
+    {
+        if (!_backdropTransitionActive || args is not RenderingEventArgs frame) return;
+
+        try
+        {
+            if (_pendingBackdrop is { } material)
+            {
+                // Rendering 在绘制之前触发，不能把下一次回调当成画面已显示。
+                // 保持底色一段时间，并合并这段时间内的新选择，再实际切换控制器。
+                if (_backdropCoverFrame is null)
+                {
+                    _backdropCoverFrame = frame.RenderingTime;
+                    return;
+                }
+                if (frame.RenderingTime - _backdropCoverFrame.Value < BackdropRequestDelay) return;
+                if (_backdropChangedAt is { } previousChange
+                    && frame.RenderingTime - previousChange < BackdropSettleDuration) return;
+
+                _pendingBackdrop = null;
+                ReplaceBackdrop(material);
+                _backdropChangedAt = frame.RenderingTime;
+                if (EffectiveMaterial != ThemeMaterial.Solid) return;
+
+                // 切到纯色或重建失败时保持不透明，不再等待材质显现。
+                StopBackdropTransition();
+                ApplyPalette(AppState.Settings, EffectiveMaterial);
+                RefreshLiveBrushes();
+                return;
+            }
+
+            if (_backdropChangedAt is not { } changedAt) return;
+            var elapsed = frame.RenderingTime - changedAt;
+            if (elapsed < BackdropSettleDuration) return;
+
+            double progress = Math.Clamp(
+                (elapsed - BackdropSettleDuration).TotalMilliseconds / BackdropRevealDuration.TotalMilliseconds, 0, 1);
+            _backdropTransitionOpacity = 1 - progress;
+            if (progress >= 1) StopBackdropTransition();
+            RefreshPaneBackground();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("窗口材质过渡失败：" + ex.Message);
+            StopBackdropTransition();
+            RefreshPaneBackground();
+        }
+    }
+
+    private static void StopBackdropTransition()
+    {
+        if (_backdropTransitionActive)
+            CompositionTarget.Rendering -= BackdropTransition_Rendering;
+
+        _backdropTransitionActive = false;
+        _backdropTransitionOpacity = 0;
+        _pendingBackdrop = null;
+        _backdropCoverFrame = null;
+        _backdropChangedAt = null;
+    }
+
+    private static void RefreshPaneBackground()
+    {
+        double opacity = EffectiveMaterial == ThemeMaterial.Solid ? 1 : _backdropTransitionOpacity;
+        foreach (var slot in Slots)
+        {
+            // 只改窗口底层；保留 ThemeResource 引用，让过渡期间切深浅模式也能立即同步。
+            if (TryGet(slot.Dict, "WindowBackgroundBrush", out var value) && value is SolidColorBrush background)
+                SetBrush(slot.Dict, "PaneBackgroundBrush", WithAlpha(background.Color, opacity));
+        }
+
+        if (LiveBrushes.TryGetValue("PaneBackgroundBrush", out var live)
+            && ResolveBrush("PaneBackgroundBrush") is SolidColorBrush source)
+            live.Color = source.Color;
     }
 
     // ================= 配色 =================
@@ -219,7 +340,7 @@ public static class ThemeService
         /// <summary>永远不透明（分隔线、边框）。</summary>
         Solid,
 
-        /// <summary>窗口底：材质模式下全透明，让云母透出来。</summary>
+        /// <summary>窗口底：材质稳定后全透明，重建期间用当前主题底色承接。</summary>
         Pane,
 
         /// <summary>页面层：跟「表面不透明度」走。</summary>
@@ -303,7 +424,7 @@ public static class ThemeService
                 // 不透明区域（高对比、分隔线）永远满 alpha
                 double alpha = spec.Alpha switch
                 {
-                    Alpha.Pane => on ? 0 : 1,
+                    Alpha.Pane => on ? _backdropTransitionOpacity : 1,
                     Alpha.Surface => surface,
                     Alpha.Card => card,
                     Alpha.Chrome => chrome,
