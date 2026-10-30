@@ -465,7 +465,7 @@ public sealed class OnboardingFlow
 
     private static Style AccentStyle => (Style)Application.Current.Resources["AccentButtonStyle"];
 
-    private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
+    private static Brush Res(string key) => ThemeService.Brush(key);
 
     private static TextBlock Text(string text, double size, double lineHeight) => new()
     {

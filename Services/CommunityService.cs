@@ -370,11 +370,11 @@ public sealed class CommunityPost : ModelBase
     public string StatusLabel => Status == 1 ? "审核中" : Status == 2 ? "未通过" : "";
     public Visibility StatusVisibility => Status == 0 ? Visibility.Collapsed : Visibility.Visible;
     public Brush StatusBackground => Status == 1
-        ? (Brush)Application.Current.Resources["UpdateBannerBackgroundBrush"]
-        : (Brush)Application.Current.Resources["BrandSoftBrush"];
+        ? ThemeService.Brush("UpdateBannerBackgroundBrush")
+        : ThemeService.Brush("BrandSoftBrush");
     public Brush StatusForeground => Status == 1
-        ? (Brush)Application.Current.Resources["UpdateBannerTextBrush"]
-        : (Brush)Application.Current.Resources["NoticeTextBrush"];
+        ? ThemeService.Brush("UpdateBannerTextBrush")
+        : ThemeService.Brush("NoticeTextBrush");
 
     private int _likes;
     public int Likes { get => _likes; set { if (_likes != value) { _likes = value; Raise(nameof(Likes)); Raise(nameof(LikeText)); } } }
@@ -417,7 +417,7 @@ public sealed class CommunityPost : ModelBase
     public bool HasViews => Views > 0;
 
     public Brush LikeBackground => Liked
-        ? (Brush)Application.Current.Resources["BrandSoftBrush"]
+        ? ThemeService.Brush("BrandSoftBrush")
         : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
 }
 
@@ -488,11 +488,11 @@ public sealed class DmMessage
     public string TimeText => CommunityService.TimeTextOf(CreatedAt);
     public HorizontalAlignment Align => Mine ? HorizontalAlignment.Right : HorizontalAlignment.Left;
     public Brush BubbleBackground => Mine
-        ? (Brush)Application.Current.Resources["BrandBrush"]
-        : (Brush)Application.Current.Resources["CardHoverBackgroundBrush"];
+        ? ThemeService.Brush("BrandBrush")
+        : ThemeService.Brush("CardHoverBackgroundBrush");
     public Brush BubbleForeground => Mine
-        ? (Brush)Application.Current.Resources["OnBrandTextBrush"]
-        : (Brush)Application.Current.Resources["PrimaryTextBrush"];
+        ? ThemeService.Brush("OnBrandTextBrush")
+        : ThemeService.Brush("PrimaryTextBrush");
     public Thickness BubbleMargin => Mine ? new Thickness(56, 3, 0, 3) : new Thickness(0, 3, 56, 3);
 }
 

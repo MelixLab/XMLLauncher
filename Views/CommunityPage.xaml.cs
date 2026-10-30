@@ -210,8 +210,8 @@ public sealed partial class CommunityPage : Page
 
     private void UpdateSortVisuals()
     {
-        var selected = (Brush)Application.Current.Resources["BrandBrush"];
-        var normal = (Brush)Application.Current.Resources["SecondaryTextBrush"];
+        var selected = ThemeService.Brush("BrandBrush");
+        var normal = ThemeService.Brush("SecondaryTextBrush");
 
         foreach (var (button, key) in new[]
                  {
@@ -595,16 +595,16 @@ public sealed partial class CommunityPage : Page
                 Glyph = "\uE8E1",
                 FontSize = 13,
                 Foreground = post.Liked
-                    ? (Brush)Application.Current.Resources["BrandBrush"]
-                    : (Brush)Application.Current.Resources["SecondaryTextBrush"],
+                    ? ThemeService.Brush("BrandBrush")
+                    : ThemeService.Brush("SecondaryTextBrush"),
             },
             new TextBlock
             {
                 Text = post.LikeText,
                 FontSize = 12,
                 Foreground = post.Liked
-                    ? (Brush)Application.Current.Resources["BrandBrush"]
-                    : (Brush)Application.Current.Resources["SecondaryTextBrush"],
+                    ? ThemeService.Brush("BrandBrush")
+                    : ThemeService.Brush("SecondaryTextBrush"),
             },
         },
     };
@@ -950,7 +950,7 @@ public sealed partial class CommunityPage : Page
         return false;
     }
 
-    private static Brush Res(string key) => (Brush)Application.Current.Resources[key];
+    private static Brush Res(string key) => ThemeService.Brush(key);
 
     private static void Toast(string message, bool error = false) => MainWindow.Instance?.Toast(message, error);
 }

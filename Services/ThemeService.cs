@@ -61,6 +61,7 @@ public static class ThemeService
 
     private static readonly List<Slot> Slots = new();
     private static readonly List<ResourceDictionary> Seen = new();
+    private static readonly Dictionary<string, SolidColorBrush> LiveBrushes = new();
 
     private static Window? _window;
     private static FrameworkElement? _root;
@@ -122,11 +123,12 @@ public static class ThemeService
             {
                 ThemeMode.Dark => true,
                 ThemeMode.Light => false,
-                _ => Application.Current.RequestedTheme == ApplicationTheme.Dark,
+                _ => _root.ActualTheme == ElementTheme.Dark,
             };
             IsDark = dark;
 
             ApplyPalette(s, material);
+            RefreshLiveBrushes();
             ApplyTitleBar(dark);
         }
         catch (Exception ex)
@@ -249,6 +251,7 @@ public static class ThemeService
     private static readonly SurfaceKey[] Surfaces =
     {
         new("PaneBackgroundBrush", Alpha.Pane, "#FFFFFF", "#000000"),
+        new("NavigationPaneBackgroundBrush", Alpha.Solid, "#F2F2F2", "#2B2B2B"),
         new("WindowBackgroundBrush", Alpha.Solid, "#FFFFFF", "#000000"),
         new("PageLayerBackgroundBrush", Alpha.Surface, "#FDFDFD", "#000000"),
         new("CardBackgroundBrush", Alpha.Card, "#FFFFFF", "#1C1C1C"),
@@ -340,11 +343,11 @@ public static class ThemeService
             }
         }
 
-        ApplyNavPalette(settings, material, card, chrome, userAccent);
+        ApplyNavPalette(surface, card, chrome, userAccent);
     }
 
     /// <summary>侧边栏 NavigationView 的配色写在 MainWindow.xaml 自己的资源里，这里单独刷。</summary>
-    private static void ApplyNavPalette(AppSettings settings, ThemeMaterial material, double card, double chrome, Color? userAccent)
+    private static void ApplyNavPalette(double surface, double card, double chrome, Color? userAccent)
     {
         if (_navShell is null) return;
 
@@ -361,10 +364,7 @@ public static class ThemeService
                 var softBase = dark ? Mix(brand, Colors.Black, 0.78) : Mix(brand, Colors.White, 0.86);
                 var neutralHover = dark ? Color.FromArgb(255, 0x2A, 0x2A, 0x2A) : Color.FromArgb(255, 0xED, 0xED, 0xED);
                 var neutralPressed = dark ? Color.FromArgb(255, 0x32, 0x32, 0x32) : Color.FromArgb(255, 0xE6, 0xE6, 0xE6);
-                var paneBase = dark ? Color.FromArgb(255, 0x2B, 0x2B, 0x2B) : Color.FromArgb(255, 0xF2, 0xF2, 0xF2);
-
-                SetBrush(dict, "NavigationViewDefaultPaneBackground", WithAlpha(paneBase, card));
-                SetBrush(dict, "NavigationViewExpandedPaneBackground", Colors.Transparent);
+                SetBrush(dict, "NavigationViewContentBackground", WithAlpha(dark ? Colors.Black : Color.FromArgb(255, 0xFD, 0xFD, 0xFD), surface));
                 SetBrush(dict, "NavigationViewItemBackgroundSelected", WithAlpha(softBase, card));
                 SetBrush(dict, "NavigationViewItemBackgroundSelectedPointerOver", WithAlpha(Mix(softBase, brand, 0.12), card));
                 SetBrush(dict, "NavigationViewItemBackgroundSelectedPressed", WithAlpha(Mix(softBase, brand, 0.22), card));
@@ -496,9 +496,31 @@ public static class ThemeService
     /// 代码里 new 出来的控件写不了 {ThemeResource}，而 Application.Current.Resources[key]
     /// 取的是「系统主题」那一套：用户选深色、我们只在 RootGrid 上覆盖主题时，
     /// 从这里拿到的还是浅色的笔刷（深色界面上冒出一圈白边框、深字看不见，就是这么来的）。
-    /// 这里按 IsDark 去挑对应的字典，拿到的也是界面正在用的同一支画笔。
+    /// 按 IsDark 解析颜色，并返回稳定的画笔实例；切换主题时更新这些实例，
+    /// 让已经创建的控件和绑定模型也能同步变色。
     /// </summary>
     public static Brush Brush(string key)
+    {
+        if (LiveBrushes.TryGetValue(key, out var live)) return live;
+
+        var source = ResolveBrush(key);
+        if (source is not SolidColorBrush solid) return source;
+
+        live = new SolidColorBrush(solid.Color);
+        LiveBrushes.Add(key, live);
+        return live;
+    }
+
+    private static void RefreshLiveBrushes()
+    {
+        foreach (var (key, brush) in LiveBrushes)
+        {
+            if (ResolveBrush(key) is SolidColorBrush source)
+                brush.Color = source.Color;
+        }
+    }
+
+    private static Brush ResolveBrush(string key)
     {
         EnsureSlots();
 

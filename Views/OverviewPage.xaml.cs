@@ -147,7 +147,7 @@ public sealed partial class OverviewPage : Page
             Text = "选择要启动的版本",
             FontSize = 12,
             Margin = new Thickness(10, 6, 10, 6),
-            Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+            Foreground = ThemeService.Brush("SecondaryTextBrush")
         });
 
         foreach (var v in installed)
@@ -171,13 +171,13 @@ public sealed partial class OverviewPage : Page
                     {
                         Text = isCurrent ? v.Id + "  ·  当前" : v.Id,
                         FontSize = 13,
-                        Foreground = (Brush)Application.Current.Resources[isCurrent ? "PrimaryTextBrush" : "TertiaryTextBrush"]
+                        Foreground = ThemeService.Brush(isCurrent ? "PrimaryTextBrush" : "TertiaryTextBrush")
                     },
                     new TextBlock
                     {
                         Text = v.Subtitle,
                         FontSize = 11.5,
-                        Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"]
+                        Foreground = ThemeService.Brush("SecondaryTextBrush")
                     }
                 }
             };
@@ -195,7 +195,7 @@ public sealed partial class OverviewPage : Page
         {
             Height = 1,
             Margin = new Thickness(6, 6, 6, 6),
-            Background = (Brush)Application.Current.Resources["DividerBrush"]
+            Background = ThemeService.Brush("DividerBrush")
         });
 
         var manage = new HyperlinkButton { Content = "管理版本…", FontSize = 12.5 };

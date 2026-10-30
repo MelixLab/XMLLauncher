@@ -49,18 +49,13 @@
                 <ResourceDictionary>
                     <ResourceDictionary.ThemeDictionaries>
                         <ResourceDictionary x:Key="Light">
-                            <!--
-                                LeftCompact 下这两个资源的分工是反的（参考项目实测过）：
-                                  · 收起态 48 DIP 图标栏 ← NavigationViewExpandedPaneBackground
-                                  · 展开后的浮层        ← NavigationViewDefaultPaneBackground
-                                所以收起要给透明（直接露出窗口底色，和标题栏连成一块），
-                                展开时才是一块浅灰浮层。
-                            -->
-                            <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="#F2F2F2" />
-                            <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Transparent" />
-                            <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent" />
+                            <!-- 原生容器保持透明；NavigationPaneBackground 在容器内渐显展开背景。 -->
+                            <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Transparent" />
+                            <StaticResource x:Key="NavigationViewExpandedPaneBackground" ResourceKey="NavigationViewDefaultPaneBackground" />
+                            <SolidColorBrush x:Key="NavigationViewContentBackground" Color="#FDFDFD" />
                             <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
                             <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+                            <CornerRadius x:Key="NavigationViewContentGridCornerRadius">8,0,0,0</CornerRadius>
                             <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="#00A88E" />
                             <SolidColorBrush x:Key="NavigationViewItemBackgroundSelected" Color="#F6F6F6" />
                             <SolidColorBrush x:Key="NavigationViewItemBackgroundSelectedPointerOver" Color="#EDEDED" />
@@ -72,11 +67,12 @@
                             <SolidColorBrush x:Key="NavigationViewItemForegroundPointerOver" Color="#1B1B1B" />
                         </ResourceDictionary>
                         <ResourceDictionary x:Key="Dark">
-                            <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="#2B2B2B" />
-                            <SolidColorBrush x:Key="NavigationViewExpandedPaneBackground" Color="Transparent" />
-                            <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent" />
+                            <SolidColorBrush x:Key="NavigationViewDefaultPaneBackground" Color="Transparent" />
+                            <StaticResource x:Key="NavigationViewExpandedPaneBackground" ResourceKey="NavigationViewDefaultPaneBackground" />
+                            <SolidColorBrush x:Key="NavigationViewContentBackground" Color="#000000" />
                             <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent" />
                             <Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+                            <CornerRadius x:Key="NavigationViewContentGridCornerRadius">8,0,0,0</CornerRadius>
                             <SolidColorBrush x:Key="NavigationViewSelectionIndicatorForeground" Color="#35D4BA" />
                             <SolidColorBrush x:Key="NavigationViewItemBackgroundSelected" Color="#12332D" />
                             <SolidColorBrush x:Key="NavigationViewItemBackgroundSelectedPointerOver" Color="#17403A" />
@@ -194,16 +190,8 @@
                 </Grid>
             </NavigationView.PaneFooter>
 
-            <!-- 内容面板：比标题栏略暗一档（#FDFDFD）+ 左上 8 DIP 圆角 + 上/左细描边 -->
-            <Border
-                Background="{ThemeResource PageLayerBackgroundBrush}"
-                BorderBrush="{ThemeResource PageLayerBorderBrush}"
-                BorderThickness="1,1,0,0"
-                CornerRadius="8,0,0,0">
-                <Grid>
-                    <Frame x:Name="ContentFrame" Background="Transparent" />
-                </Grid>
-            </Border>
+            <!-- 内容层的背景和圆角由 NavigationView 自身绘制。 -->
+            <Frame x:Name="ContentFrame" Background="Transparent" />
         </NavigationView>
     </Grid>
 </Window>

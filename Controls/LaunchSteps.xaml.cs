@@ -71,8 +71,8 @@ public sealed partial class LaunchSteps : UserControl
     private void BuildRows()
     {
         var iconFont = (FontFamily)Application.Current.Resources["IconFontFamily"];
-        var idle = (Brush)Application.Current.Resources["TertiaryTextBrush"];
-        var text = (Brush)Application.Current.Resources["SecondaryTextBrush"];
+        var idle = ThemeService.Brush("TertiaryTextBrush");
+        var text = ThemeService.Brush("SecondaryTextBrush");
 
         foreach (var caption in LaunchJob.Captions)
         {
@@ -125,12 +125,12 @@ public sealed partial class LaunchSteps : UserControl
         int current = Math.Clamp(Math.Max(_furthestStep, job.Step), 0, _rows.Count - 1);
         if (!job.IsFailed) _furthestStep = current;
 
-        var doneBrush = (Brush)Application.Current.Resources["SecurityGreenBrush"];
-        var activeBrush = (Brush)Application.Current.Resources["BrandBrush"];
-        var failBrush = (Brush)Application.Current.Resources["SecurityRedBrush"];
-        var idleBrush = (Brush)Application.Current.Resources["TertiaryTextBrush"];
-        var primary = (Brush)Application.Current.Resources["PrimaryTextBrush"];
-        var secondary = (Brush)Application.Current.Resources["SecondaryTextBrush"];
+        var doneBrush = ThemeService.Brush("SecurityGreenBrush");
+        var activeBrush = ThemeService.Brush("BrandBrush");
+        var failBrush = ThemeService.Brush("SecurityRedBrush");
+        var idleBrush = ThemeService.Brush("TertiaryTextBrush");
+        var primary = ThemeService.Brush("PrimaryTextBrush");
+        var secondary = ThemeService.Brush("SecondaryTextBrush");
 
         for (int i = 0; i < _rows.Count; i++)
         {

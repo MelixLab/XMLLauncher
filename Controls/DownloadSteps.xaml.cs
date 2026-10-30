@@ -80,8 +80,8 @@ public sealed partial class DownloadSteps : UserControl
     private void BuildRows()
     {
         var iconFont = (FontFamily)Application.Current.Resources["IconFontFamily"];
-        var idle = (Brush)Application.Current.Resources["TertiaryTextBrush"];
-        var text = (Brush)Application.Current.Resources["SecondaryTextBrush"];
+        var idle = ThemeService.Brush("TertiaryTextBrush");
+        var text = ThemeService.Brush("SecondaryTextBrush");
 
         foreach (var caption in Captions)
         {
@@ -131,11 +131,11 @@ public sealed partial class DownloadSteps : UserControl
         int current = job.IsFinished ? 4 : Math.Max(_furthestStep, StageIndex(job.Stage));
         if (!job.IsFailed) _furthestStep = current;
 
-        var doneBrush = (Brush)Application.Current.Resources["SecurityGreenBrush"];
-        var activeBrush = (Brush)Application.Current.Resources["BrandBrush"];
-        var idleBrush = (Brush)Application.Current.Resources["TertiaryTextBrush"];
-        var primary = (Brush)Application.Current.Resources["PrimaryTextBrush"];
-        var secondary = (Brush)Application.Current.Resources["SecondaryTextBrush"];
+        var doneBrush = ThemeService.Brush("SecurityGreenBrush");
+        var activeBrush = ThemeService.Brush("BrandBrush");
+        var idleBrush = ThemeService.Brush("TertiaryTextBrush");
+        var primary = ThemeService.Brush("PrimaryTextBrush");
+        var secondary = ThemeService.Brush("SecondaryTextBrush");
 
         for (int i = 0; i < _rows.Count; i++)
         {
@@ -150,7 +150,7 @@ public sealed partial class DownloadSteps : UserControl
             else if (i == current)
             {
                 row.Icon.Glyph = job.IsFailed && i == 4 ? "\uE711" : "\uE72A";
-                row.Icon.Foreground = job.IsFailed && i == 4 ? (Brush)Application.Current.Resources["SecurityRedBrush"] : activeBrush;
+                row.Icon.Foreground = job.IsFailed && i == 4 ? ThemeService.Brush("SecurityRedBrush") : activeBrush;
                 row.Label.Foreground = primary;
             }
             else
