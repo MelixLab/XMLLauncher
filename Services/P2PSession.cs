@@ -26,6 +26,9 @@ public sealed class P2PSession : IDisposable
     /// <summary>在线人数。由后台任务按 EasyTier 实际连接数刷新，人走了会减。</summary>
     public int GuestCount;
 
+    /// <summary>房主用的游戏版本，加入前要核验本地装没装。</summary>
+    public string RequiredVersion = "";
+
     /// <summary>房主侧：到中转节点的延迟（毫秒），大厅列表用。</summary>
     public int Latency = -1;
 
@@ -309,6 +312,11 @@ public static class P2P
             ? gp.GetInt32()
             : 0;
 
+        var requiredVersion = room.ValueKind == System.Text.Json.JsonValueKind.Object
+                              && room.TryGetProperty("game_version", out var gv)
+            ? gv.GetString() ?? ""
+            : "";
+
         if (gamePort <= 0)
             throw new IOException("房主没有上报游戏端口。可能对方还是旧版本，让他更新之后再开房。");
 
@@ -331,6 +339,7 @@ public static class P2P
             Link = link,
             GuestCount = 1,
             Ping = ping,
+            RequiredVersion = requiredVersion,
         };
 
         Log.Info($"P2P 访客：连上 {hostName}，127.0.0.1:{preferredPort} → 房主 {gamePort}，延迟 {ping}ms");

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
@@ -216,6 +216,7 @@ public sealed partial class MainWindow : Window
             "mods" => typeof(ModsPage),
             "relay" => typeof(RelayPage),
             "community" => typeof(CommunityPage),
+            "tools" => typeof(ToolsPage),
             "accounts" => typeof(AccountsPage),
             "skins" => typeof(SkinsPage),
             "settings" => typeof(SettingsPage),
@@ -733,7 +734,7 @@ public sealed partial class MainWindow : Window
         if (!allowPrompt)
         {
             if (status is not null)
-                status.Text = "这个账号开了邮箱二次验证，请先跳过向导，在「设置 → XML 账号」里登录。";
+                status.Text = "这个账号开了邮箱二次验证，请先跳过向导，到「设置 → XML 账号」里登录。";
             return false;
         }
 
@@ -782,7 +783,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>打开官方服务器的网页端（账号管理、公告、版本发布都在那）。</summary>
-    private void OpenServerWeb()
+    public void OpenServerWeb()
     {
         try
         {
@@ -1649,7 +1650,7 @@ public sealed partial class MainWindow : Window
     };
 
     /// <summary>选一张图片复制到配置目录，返回新路径；取消返回 null。</summary>
-    private async Task<string?> PickImageAsync(string fileNamePrefix)
+    public async Task<string?> PickImageAsync(string fileNamePrefix)
     {
         try
         {

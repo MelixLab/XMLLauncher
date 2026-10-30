@@ -97,7 +97,15 @@ public static class FontService
     /// <summary>对话框内容是在 Opened 之后才有可视树，所以挂到 Opened 上再刷一次。</summary>
     public static void ApplyToDialog(ContentDialog dialog)
     {
-        dialog.Opened += (_, _) => Apply(dialog.Content as DependencyObject);
+        // 标题栏那个 TextBlock 不在 dialog.Content 里 —— 以前只扫 Content，
+        // 「正在更新」这类弹窗的大标题就一直还是系统字体。扫整棵对话框。
+        // Opened 时布局还没生成完，挪到下一帧再扫。
+        dialog.Opened += (_, _) =>
+        {
+            var dq = dialog.DispatcherQueue;
+            if (dq is null) { Apply(dialog); return; }
+            dq.TryEnqueue(() => Apply(dialog));
+        };
     }
 
     public static void RefreshAll()

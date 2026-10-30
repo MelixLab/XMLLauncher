@@ -31,6 +31,9 @@
       外面那个 exe 有图标、任务栏却是白纸一张 —— 就是这么来的。
     -->
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+
+    <!-- 种子地图用的地形算法库，嵌进 exe，首次运行时释放到 AppData -->
+    <EmbeddedResource Include="Assets\native\cubiomes_v3.dll" />
   </ItemGroup>
 
   <ItemGroup>

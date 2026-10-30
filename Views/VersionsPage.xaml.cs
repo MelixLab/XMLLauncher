@@ -411,6 +411,15 @@ public sealed partial class VersionsPage : Page
         ModSectionTitle.Visibility = installed ? Visibility.Visible : Visibility.Collapsed;
         ModPanel.Visibility = installed ? Visibility.Visible : Visibility.Collapsed;
 
+        // 面板默认是 Collapsed，页面级 Apply 扫不到里面的控件；
+        // 显示出来之后单独补一次
+        if (installed)
+        {
+            var dq = DispatcherQueue;
+            if (dq is not null) dq.TryEnqueue(() => FontService.Apply(ModPanel));
+            else FontService.Apply(ModPanel);
+        }
+
         if (!installed) return;
 
         var s = AppState.Settings;
@@ -485,6 +494,12 @@ public sealed partial class VersionsPage : Page
         UiList.Fill(ModList, list);
         ModEmptyHint.Visibility = list.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ModCountValue.Text = list.Count(m => m.Enabled) + " 个";
+
+        // 列表项是动态生成的，容器要到这一帧之后才存在，
+        // 页面级的 Apply 扫不到它们，这里补一次
+        var dq = DispatcherQueue;
+        if (dq is not null) dq.TryEnqueue(() => FontService.Apply(ModPanel));
+        else FontService.Apply(ModPanel);
     }
 
     private void ModToggle_Click(object sender, RoutedEventArgs e)
@@ -539,21 +554,26 @@ public sealed partial class VersionsPage : Page
             var dir = CurrentModsDir();
 
             Directory.CreateDirectory(dir);
-            var target = await StorageFolder.GetFolderFromPathAsync(dir);
 
             var copied = 0;
+            var skippedDir = 0;
             foreach (var item in items)
             {
                 if (item is StorageFile file &&
                     file.Name.EndsWith(".jar", StringComparison.OrdinalIgnoreCase))
                 {
-                    await file.CopyAsync(target, file.Name, NameCollisionOption.ReplaceExisting);
+                    File.Copy(file.Path, Path.Combine(dir, file.Name), true);
                     copied++;
                 }
             }
 
             RefreshMods();
-            MainWindow.Instance?.Toast(copied > 0 ? $"已放入 {copied} 个 Mod" : "没找到 .jar 文件");
+            if (copied > 0)
+                MainWindow.Instance?.Toast($"已放入 {copied} 个 Mod");
+            else if (skippedDir > 0)
+                MainWindow.Instance?.Toast("拖的是文件夹：请把 .jar 文件本身拖进来");
+            else
+                MainWindow.Instance?.Toast("没找到 .jar 文件");
         }
         catch (Exception ex)
         {

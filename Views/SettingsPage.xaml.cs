@@ -89,6 +89,8 @@ public sealed partial class SettingsPage : Page
 
         AboutText.Text = $"XML Launcher 1.0.0 · WinUI 3 · 配置目录 {Paths.AppData}";
 
+        RefreshXmlAccount();
+
         _loading = false;
 
         // 「检测到 X 个 Java 运行时」这类文字是数据填完才出现的，

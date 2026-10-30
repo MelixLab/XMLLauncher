@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LinxLauncher.Views.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -22,6 +22,122 @@
                     Style="{StaticResource PageSubtitleTextStyle}"
                     Text="游戏目录、启动参数与下载行为。改动保存在本机配置里。" />
             </StackPanel>
+
+            <!-- ================= XML 账号 ================= -->
+            <TextBlock
+                Margin="0,8,0,4"
+                Style="{StaticResource SectionTitleTextStyle}"
+                Text="XML 账号" />
+            <TextBlock
+                MaxWidth="600"
+                Margin="0,0,0,14"
+                HorizontalAlignment="Left"
+                Style="{StaticResource CaptionTextStyle}"
+                Text="联机大厅、云端存档和广场都用它认人。它和「账户」页里进游戏用的正版 / 离线身份是两回事。"
+                TextWrapping="Wrap" />
+
+            <!--  已登录  -->
+            <Grid
+                x:Name="XmlSignedIn"
+                Width="600"
+                HorizontalAlignment="Left"
+                ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Spacing="3">
+                    <TextBlock
+                        x:Name="XmlNameText"
+                        Style="{StaticResource BodyTextStyle}"
+                        Text="" />
+                    <TextBlock
+                        Style="{StaticResource CaptionTextStyle}"
+                        Text="联机大厅、广场和网页端都用这个名字。"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button Click="XmlAvatar_Click" Content="换头像" />
+                    <Button Click="XmlManage_Click" Content="管理账号" />
+                    <HyperlinkButton
+                        Click="XmlLogout_Click"
+                        Content="退出登录"
+                        VerticalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+
+            <!--  未登录：登录 + 注册  -->
+            <StackPanel
+                x:Name="XmlSignedOut"
+                Spacing="10"
+                Visibility="Collapsed">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="200" />
+                        <ColumnDefinition Width="200" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        x:Name="XmlUserBox"
+                        MaxLength="24"
+                        PlaceholderText="用户名"
+                        TextChanged="XmlInput_Changed" />
+                    <PasswordBox
+                        x:Name="XmlPassBox"
+                        Grid.Column="1"
+                        PlaceholderText="密码" />
+                    <Button
+                        x:Name="XmlLoginButton"
+                        Grid.Column="2"
+                        MinWidth="92"
+                        Click="XmlLogin_Click"
+                        Content="登录"
+                        Style="{StaticResource AccentButtonStyle}" />
+                </Grid>
+
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="240" />
+                        <ColumnDefinition Width="100" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="XmlEmailBox" PlaceholderText="邮箱（QQ / 163 / 126）" />
+                    <TextBox
+                        x:Name="XmlCodeBox"
+                        Grid.Column="1"
+                        MaxLength="6"
+                        PlaceholderText="验证码" />
+                    <Button
+                        x:Name="XmlSendCodeButton"
+                        Grid.Column="2"
+                        MinWidth="104"
+                        Click="XmlSendCode_Click"
+                        Content="发送验证码" />
+                    <Button
+                        x:Name="XmlRegisterButton"
+                        Grid.Column="3"
+                        MinWidth="72"
+                        Click="XmlRegister_Click"
+                        Content="注册" />
+                </Grid>
+
+                <TextBlock
+                    Style="{StaticResource CaptionTextStyle}"
+                    Text="没有账号的先填邮箱、点「发送验证码」，收信后填码点「注册」；已有账号直接填用户名和密码登录。"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <TextBlock
+                x:Name="XmlStatusText"
+                Margin="0,2,0,0"
+                Style="{StaticResource CaptionTextStyle}"
+                Text=""
+                TextWrapping="Wrap" />
 
             <!-- ================= 主题 ================= -->
             <TextBlock

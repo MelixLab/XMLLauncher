@@ -71,7 +71,7 @@ public sealed partial class RelayPage : Page
 
             var ping = guest.Ping;
 
-            var text = $"已连接 · {Describe(ping)}\n多人游戏 → 局域网列表里点房主的房间";
+            var text = $"已连接 · {Describe(ping)}\n多人游戏 → 等几秒 → 点局域网列表里房主的房间";
 
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -711,7 +711,7 @@ public sealed partial class RelayPage : Page
             _guest?.Stop();
             _guest = await P2P.JoinAsync(code, passBox.Password, P2P.DefaultGuestPort, PutStatus, CancellationToken.None);
 
-            PutStatus($"已连接 · {Describe(_guest.Ping)}\n多人游戏 → 局域网列表里点房主的房间");
+            PutStatus($"已连接 · {Describe(_guest.Ping)}\n\n等游戏启动完之后：\n1. 点「多人游戏」\n2. 等几秒，局域网列表里会出现房主的房间\n3. 直接点进去，不用输地址");
             Toast($"已连接房间 {code}");
             StartPingWatch();
             JoinButton.Content = "退出房间";
@@ -719,18 +719,73 @@ public sealed partial class RelayPage : Page
             JoinButton.Click -= Join_Click;
             JoinButton.Click += Leave_Click;
 
-            var versionId = AppState.Current?.Id ?? "";
-            if (!string.IsNullOrEmpty(versionId))
-            {
-                // ContentDialog 同一时间只能有一个：连接窗还开着的话，
-                // GameSession 里的 LaunchProgressDialog 会 ShowAsync 失败，
-                // 表现就是「游戏在启动但看不到进度」。先让用户看一眼，再让位。
-                await Task.Delay(1500);
-                try { progress.Hide(); } catch { }
-                await Task.Delay(150);
+            // 让用户看清「已连接 + 怎么进」再让出对话框
+            await Task.Delay(3000);
+            try { progress.Hide(); } catch { }
+            await Task.Delay(150);
 
-                // 不给 quickJoin：两台机器已经在同一虚拟局域网里，MC 会自己扫到房主的房间，
-                // 从「局域网列表」进去不做正版验证；直连 IP 会走验证，离线账号必失败。
+            // ---- 版本核验 ----
+            // 房主用的是某个版本，本地没装的话连上也进不去（进去就是版本不符被踢）。
+            var required = _guest.RequiredVersion;
+            var installed = string.IsNullOrWhiteSpace(required)
+                            || AppState.Versions.ScanInstalled()
+                                .Any(v => string.Equals(v.Id, required, StringComparison.OrdinalIgnoreCase));
+
+            if (!installed)
+            {
+                var missing = new ContentDialog
+                {
+                    XamlRoot = XamlRoot,
+                    Title = "版本对不上",
+                    Content = $"房主用的是 {required}，你本地还没有。\n\n"
+                              + "先去「版本管理」把它装好，再回来加入，不然进去了也会被踢。",
+                    PrimaryButtonText = "知道了",
+                    CloseButtonText = "稍后",
+                };
+                FontService.ApplyToDialog(missing);
+                _ = missing.ShowAsync();
+                return;
+            }
+
+            // ---- 问用户要不要现在启动 ----
+            // 以前是连上就直接拉游戏，用户可能只是想先连上看看，
+            // 或者根本不想用启动器开游戏（自己用别的客户端进）。
+            var versionId = AppState.Current?.Id ?? "";
+            var hasLocal = AppState.Versions.ScanInstalled()
+                .Any(v => string.Equals(v.Id, versionId, StringComparison.OrdinalIgnoreCase)
+                          && v.IsComplete);
+
+            if (string.IsNullOrEmpty(versionId) || !hasLocal)
+            {
+                var tip = new ContentDialog
+                {
+                    XamlRoot = XamlRoot,
+                    Title = "已经连上了",
+                    Content = string.IsNullOrEmpty(versionId)
+                        ? "打开游戏，进「多人游戏」→ 等几秒 → 点局域网列表里房主的房间。"
+                        : $"本地还没有 {versionId}，去「版本管理」装好后再启动。\n\n"
+                          + "进游戏后用「多人游戏」→ 局域网列表，点房主的房间即可。",
+                    PrimaryButtonText = "好",
+                };
+                FontService.ApplyToDialog(tip);
+                _ = tip.ShowAsync();
+                return;
+            }
+
+            var ask = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "要现在启动游戏吗",
+                Content = $"{versionId} 已经就绪。\n\n"
+                          + "启动后进「多人游戏」→ 等几秒 → 点局域网列表里房主的房间（不用输地址）。",
+                PrimaryButtonText = "启动游戏",
+                CloseButtonText = "我自己开",
+                DefaultButton = ContentDialogButton.Primary,
+            };
+            FontService.ApplyToDialog(ask);
+
+            if (await ask.ShowAsync() == ContentDialogResult.Primary)
+            {
                 _ = GameSession.StartAsync(versionId, XamlRoot, null);
             }
         }

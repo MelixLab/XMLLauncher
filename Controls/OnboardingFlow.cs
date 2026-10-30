@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -249,7 +249,7 @@ public sealed class OnboardingFlow
                 // 向导里已经有对话框开着，不能再弹验证码框：开了二次验证的账号提示去设置页登录
                 if (!await _window.ServerLoginAsync(user, pass, status, allowPrompt: false))
                 {
-                    SetStatus("这个账号开了邮箱二次验证，请先跳过向导，在「设置 → XML 账号」里登录。", error: true);
+                    SetStatus("这个账号开了邮箱二次验证，请先跳过向导，到「设置 → XML 账号」里登录。", error: true);
                     return;
                 }
 
