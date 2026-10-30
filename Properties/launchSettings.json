@@ -5,6 +5,12 @@
     },
     "LinxLauncher.WinUI (Unpackaged)": {
       "commandName": "Project"
+    },
+    "LinxLauncher.WinUI (Local Debug)": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "XML_LOCAL_DEV": "1"
+      }
     }
   }
 }

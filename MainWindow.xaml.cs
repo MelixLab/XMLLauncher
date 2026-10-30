@@ -345,7 +345,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task RunStartupChecksAsync()
     {
-        if (_startupChecked) return;
+        // 本地开发也跳过旧的强制更新缓存，保留缓存文件供正常模式继续使用。
+        if (_startupChecked || RemoteService.IsLocalDevelopment) return;
         _startupChecked = true;
 
         try

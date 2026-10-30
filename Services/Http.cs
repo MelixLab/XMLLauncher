@@ -106,7 +106,12 @@ public static class Http
             throw last ?? new IOException("连不上 " + context.DnsEndPoint);
         };
 
-        var client = new HttpClient(handler)
+        HttpMessageHandler pipeline = handler;
+#if DEBUG
+        pipeline = new LocalDevelopmentHandler { InnerHandler = handler };
+#endif
+
+        var client = new HttpClient(pipeline)
         {
             Timeout = TimeSpan.FromMinutes(15)
         };
@@ -114,6 +119,38 @@ public static class Http
         client.DefaultRequestHeaders.Accept.ParseAdd("*/*");
         return client;
     }
+
+#if DEBUG
+    private sealed class LocalDevelopmentHandler : DelegatingHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // 在 DNS 之前拦住私有服务器请求，其他下载源仍走原来的连接和重试逻辑。
+            if (RemoteService.IsLocalDevelopment
+                && request.RequestUri is { } target
+                && Uri.TryCreate(RemoteService.BaseUrl, UriKind.Absolute, out var server)
+                && Uri.Compare(target, server, UriComponents.SchemeAndServer,
+                    UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) == 0)
+            {
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable)
+                {
+                    RequestMessage = request,
+                    ReasonPhrase = "Private server disabled for local development",
+                    Content = new StringContent(
+                        new System.Text.Json.Nodes.JsonObject
+                        {
+                            ["error"] = "本地开发模式已停用私有服务器，请使用离线账号和本地功能。"
+                        }.ToJsonString(),
+                        System.Text.Encoding.UTF8, "application/json")
+                });
+            }
+
+            return base.SendAsync(request, ct);
+        }
+    }
+#endif
 
     /// <summary>GET 文本，自动走镜像并重试</summary>
     public static async Task<string> GetStringAsync(string url, CancellationToken ct, int retries = 3)

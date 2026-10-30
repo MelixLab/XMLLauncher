@@ -72,10 +72,30 @@ public static class RemoteService
     public static string BaseUrl =>
         Environment.GetEnvironmentVariable("XML_SERVER_OVERRIDE") is { Length: > 0 } o ? o.TrimEnd('/') : OfficialServer;
 
+    /// <summary>仅 Debug 支持本地开发；模板地址默认离线，0/1 可显式关闭/开启。</summary>
+    public static bool IsLocalDevelopment
+    {
+        get
+        {
+#if DEBUG
+            var mode = Environment.GetEnvironmentVariable("XML_LOCAL_DEV");
+            if (mode == "1") return true;
+            if (mode == "0") return false;
+
+            return Uri.TryCreate(BaseUrl, UriKind.Absolute, out var server)
+                && string.Equals(server.Host, "your-server.example.com", StringComparison.OrdinalIgnoreCase);
+#else
+            return false;
+#endif
+        }
+    }
+
     // ================= 公告 =================
 
     public static async Task<Announcement?> GetAnnouncementAsync(CancellationToken outer = default)
     {
+        if (IsLocalDevelopment) return null;
+
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(outer);
@@ -107,6 +127,8 @@ public static class RemoteService
 
     public static async Task<UpdateInfo?> CheckUpdateAsync(CancellationToken outer = default)
     {
+        if (IsLocalDevelopment) return null;
+
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(outer);
