@@ -48,6 +48,7 @@ internal sealed partial class WindowBackdrop : SystemBackdrop
         {
             _acrylicController ??= new DesktopAcrylicController();
             _acrylicController.SetSystemBackdropConfiguration(_configuration);
+            ConfigureAcrylic();
         }
 
         DetachController();
@@ -65,6 +66,47 @@ internal sealed partial class WindowBackdrop : SystemBackdrop
         }
     }
 
+    public void UpdateAcrylic()
+    {
+        // 复用但已脱离窗口的控制器不应再更新，避免影响当前选中的云母背景。
+        if (_attachedMaterial != ThemeMaterial.Acrylic) return;
+        ConfigureAcrylic();
+    }
+
+    private void ConfigureAcrylic()
+    {
+        if (_acrylicController is null) return;
+        var settings = AppState.Settings;
+        bool dark = ThemeService.IsDark;
+        // 自定义参数后控制器不再自动应用主题默认值，深浅色与高对比度需同步处理。
+        var accessibility = new Windows.UI.ViewManagement.AccessibilitySettings();
+        if (accessibility.HighContrast)
+        {
+            _acrylicController.ResetProperties();
+            return;
+        }
+        var tint = dark ? Microsoft.UI.ColorHelper.FromArgb(255, 32, 32, 32)
+                        : Microsoft.UI.ColorHelper.FromArgb(255, 243, 243, 243);
+        _acrylicController.TintColor = tint;
+        _acrylicController.FallbackColor = tint;
+        float luminosity = (float)(1 - Math.Clamp(settings.AcrylicTransparency, 0, 100) / 100);
+        float tintOpacity = (float)(1 - Math.Clamp(settings.AcrylicVividness, 0, 100) / 100);
+        bool tintChanged = _acrylicController.TintOpacity != tintOpacity;
+        _acrylicController.TintOpacity = tintOpacity;
+
+        // 部分系统上的亚克力效果图仅修改 TintOpacity 后不会立即刷新。
+        // 最后提交 LuminosityOpacity；若它没变，在同一次 UI 回调内轻微扰动再恢复，
+        // 强制重新提交效果参数。扰动不进入配置，也不回写滑块，避免用户手动“抖动”。
+        if (tintChanged && _acrylicController.LuminosityOpacity == luminosity)
+        {
+            const float refreshStep = 0.001f;
+            _acrylicController.LuminosityOpacity = luminosity <= 1 - refreshStep
+                ? luminosity + refreshStep
+                : luminosity - refreshStep;
+        }
+        _acrylicController.LuminosityOpacity = luminosity;
+    }
+
     protected override void OnTargetConnected(ICompositionSupportsSystemBackdrop connectedTarget, XamlRoot xamlRoot)
     {
         base.OnTargetConnected(connectedTarget, xamlRoot);
@@ -72,6 +114,19 @@ internal sealed partial class WindowBackdrop : SystemBackdrop
         // 默认配置持续跟随根元素主题、激活状态与高对比度，不另行缓存启动时的主题。
         _configuration = GetDefaultSystemBackdropConfiguration(connectedTarget, xamlRoot);
         SetMaterial(_material);
+    }
+
+    protected override void OnDefaultSystemBackdropConfigurationChanged(ICompositionSupportsSystemBackdrop target, XamlRoot xamlRoot)
+    {
+        base.OnDefaultSystemBackdropConfigurationChanged(target, xamlRoot);
+        _configuration = GetDefaultSystemBackdropConfiguration(target, xamlRoot);
+        if (_attachedMaterial is ThemeMaterial.Mica or ThemeMaterial.MicaAlt)
+            _micaController?.SetSystemBackdropConfiguration(_configuration);
+        else if (_attachedMaterial == ThemeMaterial.Acrylic)
+        {
+            _acrylicController?.SetSystemBackdropConfiguration(_configuration);
+            UpdateAcrylic();
+        }
     }
 
     protected override void OnTargetDisconnected(ICompositionSupportsSystemBackdrop disconnectedTarget)

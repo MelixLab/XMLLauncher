@@ -1,0 +1,43 @@
+<?xml version="1.0" ?>
+<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:LinxLauncher.Controls" x:Class="LinxLauncher.Views.SettingsAdvancedPage" NavigationCacheMode="Required" Background="Transparent">
+    <ScrollViewer Style="{StaticResource SettingsScrollStyle}">
+        <StackPanel Spacing="16">
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="启动参数" Style="{StaticResource SettingsSectionStyle}"/>
+                    <TextBlock Text="不确定用途时请留空。参数会应用到游戏启动过程。" Style="{StaticResource CaptionTextStyle}"/>
+                    <StackPanel Spacing="8">
+                        <TextBox x:Name="JvmArgsBox" Header="额外 JVM 参数" AcceptsReturn="True" MinHeight="104" MaxHeight="280" TextWrapping="Wrap" ScrollViewer.VerticalScrollBarVisibility="Auto" TextChanged="Args_TextChanged"/>
+                        <Button x:Name="JvmSaveButton" Content="保存" HorizontalAlignment="Right" IsEnabled="False"
+                                Click="SaveJvm_Click" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="保存额外 JVM 参数"/>
+                    </StackPanel>
+                    <StackPanel Spacing="8">
+                        <TextBox x:Name="GameArgsBox" Header="额外游戏参数" AcceptsReturn="True" MinHeight="104" MaxHeight="280" TextWrapping="Wrap" ScrollViewer.VerticalScrollBarVisibility="Auto" TextChanged="Args_TextChanged"/>
+                        <Button x:Name="GameSaveButton" Content="保存" HorizontalAlignment="Right" IsEnabled="False"
+                                Click="SaveGame_Click" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="保存额外游戏参数"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <controls:SettingsRow Title="新手向导" Description="重新了解登录方式、XML 账户与各个页面。不会下载文件，也不会改动版本库。">
+                    <controls:SettingsRow.Editor>
+                        <Button Content="重新开始向导" Click="RestartWizard_Click"/>
+                    </controls:SettingsRow.Editor>
+                </controls:SettingsRow>
+            </Border>
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <controls:SettingsRow Title="日志管理" Description="查看启动器运行记录，帮助排查问题。">
+                    <controls:SettingsRow.Editor>
+                        <Button Content="打开日志目录" Click="OpenLogs_Click"/>
+                    </controls:SettingsRow.Editor>
+                </controls:SettingsRow>
+            </Border>
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel Spacing="10">
+                    <TextBlock Text="应用信息" Style="{StaticResource SettingsSectionStyle}"/>
+                    <TextBlock x:Name="AboutText" Style="{StaticResource CaptionTextStyle}" IsTextSelectionEnabled="True"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

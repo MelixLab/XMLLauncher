@@ -38,6 +38,52 @@ public sealed partial class MainWindow : Window
     }
 
     private bool _sized;
+    // 概览/加载器三列卡片需要约 840 DIP 宽度，另留滚动条和取整余量。
+    private const double MinimumClientWidth = 860;
+    private const double MinimumClientHeight = 640;
+    private XamlRoot? _sizeRoot;
+    private bool _updatingMinimumSize;
+
+    private double WindowScale()
+    {
+        if (Content?.XamlRoot is { RasterizationScale: > 0 } root)
+            return root.RasterizationScale;
+        uint dpi = GetDpiForWindow(WindowNative.GetWindowHandle(this));
+        return dpi > 0 ? dpi / 96.0 : 1.0;
+    }
+
+    private void ApplyWindowMinimumSize()
+    {
+        if (_updatingMinimumSize || AppWindow.Presenter is not OverlappedPresenter presenter ||
+            presenter.State == OverlappedPresenterState.Minimized) return;
+
+        _updatingMinimumSize = true;
+        try
+        {
+            double scale = WindowScale();
+            var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+            int frameWidth = Math.Max(0, AppWindow.Size.Width - AppWindow.ClientSize.Width);
+            int frameHeight = Math.Max(0, AppWindow.Size.Height - AppWindow.ClientSize.Height);
+            // Presenter 限制整个窗口的物理像素尺寸；逻辑客户区下限需计入缩放及非客户区。
+            // 小屏/高缩放时，以工作区为限，保证窗口仍能放进屏幕。
+            int width = Math.Min((int)Math.Ceiling(MinimumClientWidth * scale) + frameWidth, Math.Max(1, area.Width - 40));
+            int height = Math.Min((int)Math.Ceiling(MinimumClientHeight * scale) + frameHeight, Math.Max(1, area.Height - 40));
+            if (presenter.PreferredMinimumWidth != width) presenter.PreferredMinimumWidth = width;
+            if (presenter.PreferredMinimumHeight != height) presenter.PreferredMinimumHeight = height;
+        }
+        finally { _updatingMinimumSize = false; }
+    }
+
+    private void SizeRoot_Changed(XamlRoot sender, XamlRootChangedEventArgs args)
+    {
+        ApplyWindowMinimumSize();
+        SyncTitleBarHeight();
+    }
+
+    private void Window_Changed(AppWindow sender, AppWindowChangedEventArgs args)
+    {
+        if (args.DidPositionChange || args.DidPresenterChange) ApplyWindowMinimumSize();
+    }
 
     /// <summary>
     /// 客户区宽度刚好放下概览页的六个卡片：48 图标栏 + 左右各 40 内边距 + 3×232 卡片 + 2×8 间距 = 840，
@@ -50,19 +96,8 @@ public sealed partial class MainWindow : Window
 
         // 缩放必须取 XamlRoot 的 RasterizationScale：窗口刚创建时 GetDpiForWindow 可能还是 96，
         // 拿它算会把 860 DIP 当成 860 物理像素，125% 屏上窗口就窄了一圈，右边那列卡片被裁。
-        double scale = 0;
-        try
-        {
-            if (Content?.XamlRoot is { } root && root.RasterizationScale > 0)
-                scale = root.RasterizationScale;
-        }
-        catch { }
-
-        if (scale <= 0.1)
-        {
-            var dpi = GetDpiForWindow(hwnd);
-            scale = dpi > 0 ? dpi / 96.0 : 1.0;
-        }
+        double scale = WindowScale();
+        ApplyWindowMinimumSize();
 
         int wantW = (int)Math.Round(860 * scale);
         int wantH = (int)Math.Round(780 * scale);
@@ -70,13 +105,15 @@ public sealed partial class MainWindow : Window
         Log.Info($"窗口尺寸 scale={scale} dpi={GetDpiForWindow(hwnd)} root={(Content?.XamlRoot is not null)} → {wantW}x{wantH}");
 
         var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-        int w = Math.Min(wantW, area.Width - 40);
-        int h = Math.Min(wantH, area.Height - 40);
+        int frameWidth = Math.Max(0, AppWindow.Size.Width - AppWindow.ClientSize.Width);
+        int frameHeight = Math.Max(0, AppWindow.Size.Height - AppWindow.ClientSize.Height);
+        int w = Math.Min(wantW, Math.Max(1, area.Width - 40 - frameWidth));
+        int h = Math.Min(wantH, Math.Max(1, area.Height - 40 - frameHeight));
 
         AppWindow.ResizeClient(new SizeInt32(w, h));
         AppWindow.Move(new PointInt32(
-            area.X + (area.Width - w) / 2,
-            area.Y + (area.Height - h) / 2));
+            area.X + (area.Width - AppWindow.Size.Width) / 2,
+            area.Y + (area.Height - AppWindow.Size.Height) / 2));
 
         SyncTitleBarHeight();
 
@@ -139,6 +176,19 @@ public sealed partial class MainWindow : Window
         // 标题栏：内容延伸到标题栏，材质才铺得到最顶上。
         // 以前用系统标题栏，它由系统单独画一条实色，云母 / 亚克力下会和窗口之间出现一道缝。
         SetupTitleBar();
+        ApplyWindowMinimumSize();
+        RootGrid.Loaded += (_, _) =>
+        {
+            _sizeRoot = RootGrid.XamlRoot;
+            _sizeRoot.Changed += SizeRoot_Changed;
+            ApplyWindowMinimumSize();
+        };
+        AppWindow.Changed += Window_Changed;
+        Closed += (_, _) =>
+        {
+            AppWindow.Changed -= Window_Changed;
+            if (_sizeRoot is not null) _sizeRoot.Changed -= SizeRoot_Changed;
+        };
         // 尺寸必须等窗口真正激活后再设，否则会被 WinUI 的默认 1024×768 覆盖掉。
         Activated += (_, _) =>
         {

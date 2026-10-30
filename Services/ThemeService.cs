@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using Microsoft.UI.Dispatching;
 using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
@@ -82,6 +84,9 @@ public static class ThemeService
     // 系统材质没有“首帧已就绪”事件，先留出稳定期，再渐隐承接底色；时长可按实机观感调整。
     private static readonly TimeSpan BackdropSettleDuration = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan BackdropRevealDuration = TimeSpan.FromMilliseconds(120);
+    // UI 计时不依赖 Rendering 事件的 object 参数投影；Native AOT 下不能靠动态 RCW 类型判断推进过渡。
+    private static readonly Stopwatch BackdropClock = Stopwatch.StartNew();
+    private static DispatcherQueueTimer? _backdropTimer;
     private static bool _backdropTransitionActive;
     private static double _backdropTransitionOpacity;
     private static ThemeMaterial? _pendingBackdrop;
@@ -105,6 +110,7 @@ public static class ThemeService
         window.Closed += (_, _) =>
         {
             StopBackdropTransition();
+            _backdropTimer = null;
             _initialized = false;
             _backdrop = null;
             _currentBackdrop = null;
@@ -148,6 +154,7 @@ public static class ThemeService
             var material = ResolveMaterial(s.ThemeMaterial);
             EffectiveMaterial = material;
             ApplyBackdrop(material);
+            _backdrop?.UpdateAcrylic();
 
             ApplyPalette(s, EffectiveMaterial);
             RefreshLiveBrushes();
@@ -224,7 +231,14 @@ public static class ThemeService
         if (!_backdropTransitionActive)
         {
             _backdropTransitionActive = true;
-            CompositionTarget.Rendering += BackdropTransition_Rendering;
+            if (_backdropTimer is null)
+            {
+                _backdropTimer = _root!.DispatcherQueue.CreateTimer();
+                _backdropTimer.Interval = TimeSpan.FromMilliseconds(16);
+                _backdropTimer.IsRepeating = true;
+                _backdropTimer.Tick += BackdropTransition_Tick;
+            }
+            _backdropTimer.Start();
         }
     }
 
@@ -256,28 +270,29 @@ public static class ThemeService
         }
     }
 
-    private static void BackdropTransition_Rendering(object? sender, object args)
+    private static void BackdropTransition_Tick(DispatcherQueueTimer sender, object args)
     {
-        if (!_backdropTransitionActive || args is not RenderingEventArgs frame) return;
+        if (!_backdropTransitionActive) return;
+        var now = BackdropClock.Elapsed;
 
         try
         {
             if (_pendingBackdrop is { } material)
             {
-                // Rendering 在绘制之前触发，不能把下一次回调当成画面已显示。
-                // 保持底色一段时间，并合并这段时间内的新选择，再实际切换控制器。
+                // 保持底色一段时间，让它有机会提交到渲染线程；合并期间的新选择后再切换控制器。
+                // 计时使用单调时钟，即使页面静止或 UI 线程短暂繁忙也会完成过渡。
                 if (_backdropCoverFrame is null)
                 {
-                    _backdropCoverFrame = frame.RenderingTime;
+                    _backdropCoverFrame = now;
                     return;
                 }
-                if (frame.RenderingTime - _backdropCoverFrame.Value < BackdropRequestDelay) return;
+                if (now - _backdropCoverFrame.Value < BackdropRequestDelay) return;
                 if (_backdropChangedAt is { } previousChange
-                    && frame.RenderingTime - previousChange < BackdropSettleDuration) return;
+                    && now - previousChange < BackdropSettleDuration) return;
 
                 _pendingBackdrop = null;
                 ReplaceBackdrop(material);
-                _backdropChangedAt = frame.RenderingTime;
+                _backdropChangedAt = now;
                 if (EffectiveMaterial != ThemeMaterial.Solid) return;
 
                 // 切到纯色或重建失败时保持不透明，不再等待材质显现。
@@ -288,13 +303,17 @@ public static class ThemeService
             }
 
             if (_backdropChangedAt is not { } changedAt) return;
-            var elapsed = frame.RenderingTime - changedAt;
+            var elapsed = now - changedAt;
             if (elapsed < BackdropSettleDuration) return;
 
             double progress = Math.Clamp(
                 (elapsed - BackdropSettleDuration).TotalMilliseconds / BackdropRevealDuration.TotalMilliseconds, 0, 1);
             _backdropTransitionOpacity = 1 - progress;
-            if (progress >= 1) StopBackdropTransition();
+            if (progress >= 1)
+            {
+                StopBackdropTransition();
+                Log.Info($"窗口材质过渡完成：{_currentBackdrop}，底色遮挡已移除。");
+            }
             RefreshPaneBackground();
         }
         catch (Exception ex)
@@ -307,8 +326,7 @@ public static class ThemeService
 
     private static void StopBackdropTransition()
     {
-        if (_backdropTransitionActive)
-            CompositionTarget.Rendering -= BackdropTransition_Rendering;
+        _backdropTimer?.Stop();
 
         _backdropTransitionActive = false;
         _backdropTransitionOpacity = 0;

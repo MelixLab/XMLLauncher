@@ -1,0 +1,80 @@
+<?xml version="1.0" ?>
+<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:LinxLauncher.Controls" x:Class="LinxLauncher.Views.SettingsAppearancePage" NavigationCacheMode="Required" Background="Transparent">
+    <ScrollViewer Style="{StaticResource SettingsScrollStyle}">
+        <StackPanel Spacing="16">
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <controls:SettingsRow Title="主题模式" Description="选择浅色、深色，或跟随 Windows 系统设置。">
+                    <controls:SettingsRow.Editor>
+                        <ComboBox x:Name="ThemeModeBox" MinWidth="160" HorizontalAlignment="Right"
+                                  SelectionChanged="ThemeMode_Changed" AutomationProperties.Name="主题模式">
+                            <ComboBoxItem Content="跟随系统"/>
+                            <ComboBoxItem Content="浅色"/>
+                            <ComboBoxItem Content="深色"/>
+                        </ComboBox>
+                    </controls:SettingsRow.Editor>
+                </controls:SettingsRow>
+            </Border>
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="窗口材质" Style="{StaticResource SettingsSectionStyle}"/>
+                    <controls:AdaptiveWrapPanel x:Name="MaterialHost" Spacing="10"/>
+                    <TextBlock x:Name="MaterialNote" Style="{StaticResource CaptionTextStyle}"/>
+                    <Grid x:Name="AcrylicReveal" Height="0" Opacity="0" Visibility="Collapsed" SizeChanged="AcrylicReveal_SizeChanged">
+                        <Grid.Clip>
+                            <RectangleGeometry x:Name="AcrylicClip"/>
+                        </Grid.Clip>
+                        <StackPanel x:Name="AcrylicOptions" Spacing="10" VerticalAlignment="Top">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="通透程度" Style="{StaticResource CardTitleTextStyle}"/>
+                                <TextBlock Grid.Column="1" x:Name="TransparencyValue" HorizontalAlignment="Right" Style="{StaticResource MetricValueTextStyle}"/>
+                            </Grid>
+                            <Slider x:Name="TransparencySlider" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="Acrylic_Changed" AutomationProperties.Name="亚克力通透程度"/>
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="鲜艳程度" Style="{StaticResource CardTitleTextStyle}"/>
+                                <TextBlock Grid.Column="1" x:Name="VividnessValue" HorizontalAlignment="Right" Style="{StaticResource MetricValueTextStyle}"/>
+                            </Grid>
+                            <Slider x:Name="VividnessSlider" Minimum="0" Maximum="100" StepFrequency="1" ValueChanged="Acrylic_Changed" AutomationProperties.Name="亚克力鲜艳程度"/>
+                            <TextBlock Text="提高数值可减少底色覆盖，让背景更通透、鲜艳。系统关闭透明效果或窗口未激活时，外观可能有所不同。" Style="{StaticResource CaptionTextStyle}"/>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel Spacing="10">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="内容区域不透明度" Style="{StaticResource SettingsSectionStyle}"/>
+                        <TextBlock Grid.Column="1" x:Name="OpacityValue" HorizontalAlignment="Right" Style="{StaticResource MetricValueTextStyle}"/>
+                    </Grid>
+                    <Slider x:Name="SurfaceSlider" Minimum="0.15" Maximum="1" StepFrequency="0.05" ValueChanged="Surface_Changed" AutomationProperties.Name="内容区域不透明度"/>
+                    <TextBlock Text="越低越能看见窗口材质；纯色材质下无效。" Style="{StaticResource CaptionTextStyle}"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="主题色" Style="{StaticResource SettingsSectionStyle}"/>
+                    <controls:AdaptiveWrapPanel x:Name="AccentHost" Spacing="10"/>
+                    <TextBlock x:Name="AccentNote" Style="{StaticResource CaptionTextStyle}"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource SettingsCardStyle}">
+                <controls:SettingsRow Title="正文使用 Noto Sans" Description="正文换成 Noto Sans，页面标题保持不变。">
+                    <controls:SettingsRow.Editor>
+                        <ToggleSwitch x:Name="FontSwitch" Toggled="Font_Toggled" AutomationProperties.Name="正文使用 Noto Sans"/>
+                    </controls:SettingsRow.Editor>
+                </controls:SettingsRow>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</Page>
