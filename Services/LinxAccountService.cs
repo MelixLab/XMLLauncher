@@ -142,6 +142,32 @@ public static class LinxAccountService
         }
     }
 
+    /// <summary>
+    /// 取当前账户在服务器上的头像。BitmapImage 带不了 Authorization 头，
+    /// 所以这里自己下载，交给调用方转成 ImageSource。
+    /// </summary>
+    public static async Task<byte[]?> GetAvatarBytesAsync(CancellationToken ct = default)
+    {
+        if (!IsLoggedIn) return null;
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, RemoteService.BaseUrl + "/api/avatar/me");
+            var token = AppState.Settings.ServerToken;
+            if (!string.IsNullOrEmpty(token))
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            using var resp = await Http.Client.SendAsync(request, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            return await resp.Content.ReadAsByteArrayAsync(ct);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static void Logout()
     {
         AppState.Settings.ServerToken = null;

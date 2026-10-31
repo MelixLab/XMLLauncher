@@ -1,4 +1,4 @@
-using LinxLauncher.Services;
+﻿using LinxLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -36,7 +36,13 @@ public sealed partial class SettingsPage : Page
         if (CategoryFrame.Navigate(CategoryPages[index], null, transition))
         {
             _selectedIndex = index;
+
+            // 页面刚导航完，子控件还没生成，这时候扫是空的。
+            // 等到下一帧再扫一次，外观/账户/高级页里的文字才会换成 Noto。
             FontService.RefreshAll();
+            DispatcherQueue.TryEnqueue(() => FontService.RefreshAll());
+            DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
+                () => FontService.RefreshAll());
         }
     }
 

@@ -11,8 +11,15 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <Border Width="56" Height="56" CornerRadius="28" Background="{ThemeResource CardBackgroundBrush}" VerticalAlignment="Center">
-                                <FontIcon Glyph="&#xE77B;" FontFamily="{StaticResource IconFontFamily}" FontSize="28" Foreground="{ThemeResource BrandBrush}"/>
+                            <Border Width="56" Height="56" CornerRadius="28" Background="{ThemeResource CardBackgroundBrush}"
+                                    BorderBrush="{ThemeResource DividerBrush}" BorderThickness="1" VerticalAlignment="Center">
+                                <Grid>
+                                    <Image x:Name="XmlAvatarImage" Stretch="UniformToFill"
+                                           Visibility="Collapsed"/>
+                                    <TextBlock x:Name="XmlAvatarInitial" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               FontSize="22" FontWeight="SemiBold"
+                                               Foreground="{ThemeResource BrandBrush}"/>
+                                </Grid>
                             </Border>
                             <StackPanel Grid.Column="1" Spacing="6">
                                 <TextBlock x:Name="XmlNameText" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap" Foreground="{ThemeResource PrimaryTextBrush}"/>

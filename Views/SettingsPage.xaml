@@ -1,6 +1,6 @@
-<?xml version="1.0" ?>
+﻿<?xml version="1.0" ?>
 <Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="LinxLauncher.Views.SettingsPage" Background="Transparent">
-    <Grid x:Name="PageLayout" Padding="32,28,32,16" SizeChanged="PageLayout_SizeChanged">
+    <Grid x:Name="PageLayout" Padding="32,28,20,16" SizeChanged="PageLayout_SizeChanged">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>

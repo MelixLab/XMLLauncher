@@ -1,8 +1,9 @@
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
+using LinxLauncher.Services;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Markup;
@@ -31,7 +32,13 @@ public sealed partial class SettingsExpander : UserControl
 
     public SettingsExpander()
     {
+
         InitializeComponent();
+
+        // 必须在 InitializeComponent 之后：之前 HeaderToggle 还是 null。
+        // ToggleButton 的 Content 会自己生成一个 TextBlock，
+        // 它不跟 FontService 的遍历走，这里直接点名设字体。
+        HeaderToggle.FontFamily = FontService.BodyFont;
         Loaded += (_, _) =>
         {
             AutomationProperties.SetName(HeaderToggle, AutomationProperties.GetName(this));
@@ -53,7 +60,13 @@ public sealed partial class SettingsExpander : UserControl
                 card.IsExpanded ? ExpandCollapseState.Expanded : ExpandCollapseState.Collapsed);
     }
 
-    private void Header_Checked(object sender, RoutedEventArgs e) => IsExpanded = true;
+    private void Header_Checked(object sender, RoutedEventArgs e)
+    {
+        IsExpanded = true;
+
+        // 展开的内容是 ContentPresenter 现给的，等一帧再扫字体
+        DispatcherQueue.TryEnqueue(() => FontService.Apply(this));
+    }
     private void Header_Unchecked(object sender, RoutedEventArgs e) => IsExpanded = false;
 
     private void AnimateExpansion()

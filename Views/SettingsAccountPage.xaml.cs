@@ -27,10 +27,53 @@ public sealed partial class SettingsAccountPage : Page
         InitializeComponent();
         TelemetrySwitch.IsOn = AppState.Settings.TelemetryEnabled;
         _loading = false;
-        Loaded += (_, _) => RefreshXmlAccount();
+        Loaded += (_, _) =>
+        {
+            RefreshXmlAccount();
+            RefreshXmlAvatar();
+        };
         _sendCodeButton.Click += SendCode_Click;
         _userBox.TextChanged += (_, _) => ResetLoginChallenge();
         _passBox.PasswordChanged += (_, _) => ResetLoginChallenge();
+    }
+
+    /// <summary>账户头像直接从服务器取（换头像后服务端那份才是最新的）。</summary>
+    private async void RefreshXmlAvatar()
+    {
+        if (!LinxAccountService.IsLoggedIn)
+        {
+            ShowInitial();
+            return;
+        }
+
+        var bytes = await LinxAccountService.GetAvatarBytesAsync();
+        if (bytes is null || bytes.Length == 0)
+        {
+            ShowInitial();
+            return;
+        }
+
+        try
+        {
+            var bmp = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+            using var stream = new MemoryStream(bytes);
+            await bmp.SetSourceAsync(stream.AsRandomAccessStream());
+            XmlAvatarImage.Source = bmp;
+            XmlAvatarImage.Visibility = Visibility.Visible;
+            XmlAvatarInitial.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            ShowInitial();
+        }
+
+        void ShowInitial()
+        {
+            XmlAvatarImage.Visibility = Visibility.Collapsed;
+            XmlAvatarInitial.Visibility = Visibility.Visible;
+            var name = LinxAccountService.DisplayName;
+            XmlAvatarInitial.Text = name.Length > 0 ? name.Substring(0, 1).ToUpperInvariant() : "?";
+        }
     }
 
     private void ResetLoginChallenge()
@@ -228,6 +271,7 @@ public sealed partial class SettingsAccountPage : Page
         window.RefreshAccountUi();
 
         SetXmlStatus("头像已换好，正在同步到服务器");
+        RefreshXmlAvatar();
         var uploaded = await LinxAccountService.UploadAvatarAsync(path, default);
         SetXmlStatus(
             uploaded ? "头像已同步，网页端和别的设备都能看到。" : "头像已保存在本机，同步到服务器失败。",
