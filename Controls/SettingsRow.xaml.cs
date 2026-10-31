@@ -13,10 +13,13 @@ public sealed partial class SettingsRow : UserControl
         nameof(Description), typeof(string), typeof(SettingsRow), new PropertyMetadata("", OnChanged));
     public static readonly DependencyProperty EditorProperty = DependencyProperty.Register(
         nameof(Editor), typeof(object), typeof(SettingsRow), new PropertyMetadata(null, OnChanged));
+    public static readonly DependencyProperty IconGlyphProperty = DependencyProperty.Register(
+        nameof(IconGlyph), typeof(string), typeof(SettingsRow), new PropertyMetadata("", OnChanged));
 
     public string Title { get => (string)GetValue(TitleProperty); set => SetValue(TitleProperty, value); }
     public string Description { get => (string)GetValue(DescriptionProperty); set => SetValue(DescriptionProperty, value); }
     public object? Editor { get => GetValue(EditorProperty); set => SetValue(EditorProperty, value); }
+    public string IconGlyph { get => (string)GetValue(IconGlyphProperty); set => SetValue(IconGlyphProperty, value); }
 
     public SettingsRow() => InitializeComponent();
 
@@ -26,6 +29,9 @@ public sealed partial class SettingsRow : UserControl
         row.TitleText.Text = row.Title;
         row.DescriptionText.Text = row.Description;
         row.DescriptionText.Visibility = string.IsNullOrEmpty(row.Description) ? Visibility.Collapsed : Visibility.Visible;
+        row.LeadingIcon.Glyph = row.IconGlyph;
+        row.LeadingIcon.Visibility = string.IsNullOrEmpty(row.IconGlyph) ? Visibility.Collapsed : Visibility.Visible;
+        row.LabelHost.ColumnSpacing = string.IsNullOrEmpty(row.IconGlyph) ? 0 : 16;
         row.EditorHost.Content = row.Editor;
         if (row.Editor is ToggleSwitch toggle)
         {

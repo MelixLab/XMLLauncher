@@ -457,6 +457,84 @@
         <Setter Property="FontSize" Value="17" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+    <!-- 四个设置分类共享单项设置行和环境/身份摘要。 -->
+    <Style x:Key="SettingsItemCardStyle" TargetType="Border" BasedOn="{StaticResource SettingsCardStyle}">
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="18,14" />
+        <Setter Property="MinHeight" Value="76" />
+    </Style>
+    <Style x:Key="SettingsInfoCardStyle" TargetType="Border" BasedOn="{StaticResource SettingsCardStyle}">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="20" />
+        <Setter Property="MinHeight" Value="256" />
+    </Style>
+    <Style x:Key="SettingsGroupHeadingStyle" TargetType="TextBlock" BasedOn="{StaticResource SettingsSectionStyle}">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Margin" Value="0,0,0,10" />
+    </Style>
+    <Style x:Key="SettingsExpanderHeaderStyle" TargetType="ToggleButton">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="MinHeight" Value="76" />
+        <Setter Property="Padding" Value="18,14" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{ThemeResource PrimaryTextBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Grid x:Name="HeaderRoot" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}"
+                          CornerRadius="4" ColumnSpacing="20">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="HeaderRoot.Background" Value="{ThemeResource CardHoverBackgroundBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="HeaderRoot.Background" Value="{ThemeResource CardPressedBackgroundBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="HeaderRoot.Opacity" Value="0.4" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Checked">
+                                    <VisualState.Setters>
+                                        <Setter Target="Chevron.Glyph" Value="&#xE70E;" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="CheckedPointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="Chevron.Glyph" Value="&#xE70E;" />
+                                        <Setter Target="HeaderRoot.Background" Value="{ThemeResource CardHoverBackgroundBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="CheckedPressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="Chevron.Glyph" Value="&#xE70E;" />
+                                        <Setter Target="HeaderRoot.Background" Value="{ThemeResource CardPressedBackgroundBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" />
+                        <FontIcon x:Name="Chevron" Grid.Column="1" Glyph="&#xE70D;" FontSize="12" Width="16"
+                                  FontFamily="{StaticResource IconFontFamily}" Foreground="{ThemeResource SecondaryTextBrush}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
     <Style x:Key="SettingsScrollStyle" TargetType="ScrollViewer">
         <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
         <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />

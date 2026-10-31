@@ -9,10 +9,18 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <StackPanel VerticalAlignment="Center" Spacing="4">
-            <TextBlock x:Name="TitleText" Style="{StaticResource CardTitleTextStyle}"/>
-            <TextBlock x:Name="DescriptionText" Style="{StaticResource CaptionTextStyle}"/>
-        </StackPanel>
+        <Grid x:Name="LabelHost" ColumnSpacing="16" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <FontIcon x:Name="LeadingIcon" FontFamily="{StaticResource IconFontFamily}" FontSize="20"
+                      Width="24" Foreground="{ThemeResource PrimaryTextBrush}" Visibility="Collapsed"/>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                <TextBlock x:Name="TitleText" Style="{StaticResource CardTitleTextStyle}"/>
+                <TextBlock x:Name="DescriptionText" Style="{StaticResource CaptionTextStyle}"/>
+            </StackPanel>
+        </Grid>
         <ContentPresenter x:Name="EditorHost" Grid.Column="1" VerticalAlignment="Center" HorizontalContentAlignment="Stretch"/>
     </Grid>
 </UserControl>

@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.UI.Xaml;
@@ -30,7 +31,7 @@ public sealed partial class SettingsGeneralPage : Page
     {
         InitializeComponent();
         var s = AppState.Settings;
-        GameDirBox.Text = Paths.GameDir;
+        UpdateDirectorySummary();
         PlayerNameBox.Text = s.PlayerName;
         _savedPlayerName = PlayerName(s.PlayerName);
         MemorySlider.Value = Math.Clamp(s.MemoryMb, 1024, 16384);
@@ -47,14 +48,35 @@ public sealed partial class SettingsGeneralPage : Page
         Unloaded += (_, _) => FlushPendingSave();
     }
 
-    private void Columns_SizeChanged(object sender, SizeChangedEventArgs e)
+    private void EnvironmentCards_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        bool wide = e.NewSize.Width >= 920;
-        Columns.ColumnSpacing = wide ? 16 : 0;
-        Columns.RowSpacing = wide ? 0 : 16;
-        Columns.ColumnDefinitions[1].Width = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-        Grid.SetColumn(RightColumn, wide ? 1 : 0);
-        Grid.SetRow(RightColumn, wide ? 0 : 1);
+        bool wide = e.NewSize.Width >= 640;
+        EnvironmentCards.ColumnSpacing = wide ? 12 : 0;
+        EnvironmentCards.ColumnDefinitions[1].Width = wide ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        Grid.SetColumn(JavaCard, wide ? 1 : 0);
+        Grid.SetRow(JavaCard, wide ? 0 : 1);
+
+        double editorWidth = e.NewSize.Width < 600 ? 220 : 300;
+        ThreadEditor.Width = Math.Min(260, editorWidth);
+        MemoryEditor.Width = editorWidth;
+        PlayerNameEditor.Width = editorWidth;
+        WindowSizeEditor.Width = editorWidth;
+    }
+
+    private void UpdateDirectorySummary()
+    {
+        GameDirBox.Text = Paths.GameDir;
+        ToolTipService.SetToolTip(GameDirBox, Paths.GameDir);
+        DirectoryStatus.Text = Directory.Exists(Paths.GameDir) ? "目录已就绪" : "目录不可访问";
+    }
+
+    private void InfoCardSurface_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // 大图标只是装饰，裁切在卡片边界内，不参与前景控件的交互。
+        ((Grid)sender).Clip = new RectangleGeometry
+        {
+            Rect = new Windows.Foundation.Rect(0, 0, e.NewSize.Width, e.NewSize.Height)
+        };
     }
 
     private void RefreshImportList()
@@ -133,7 +155,7 @@ public sealed partial class SettingsGeneralPage : Page
     {
         try
         {
-            MainWindow.Instance?.Toast("开始导入，文件多的话要等一会儿…");
+            MainWindow.Instance?.Toast("开始导入，文件多的话要等一会儿");
             var progress = new Progress<string>(m => Log.Info("导入：" + m));
             var result = await Task.Run(() => ImportService.ImportAsync(sourceDir, progress, default));
 
@@ -164,8 +186,32 @@ public sealed partial class SettingsGeneralPage : Page
             JavaBox.SelectedItem = string.IsNullOrWhiteSpace(keep)
                 ? items[0]
                 : items.FirstOrDefault(o => o.Info is not null && o.Info.Home.Equals(keep, StringComparison.OrdinalIgnoreCase)) ?? items[0];
+            UpdateJavaSummary();
         }
         finally { _loading = wasLoading; }
+    }
+
+    private void UpdateJavaSummary()
+    {
+        var selected = (JavaBox.SelectedItem as JavaOption)?.Info;
+        var detected = JavaService.Detect();
+        if (selected is null)
+        {
+            JavaSummary.Text = "按版本自动选择";
+            JavaDetails.Text = detected.Count == 0
+                ? "根据游戏要求匹配合适的运行时。"
+                : "已发现 " + string.Join(" / ", detected.Select(j => $"Java {j.Major}").Distinct());
+            JavaPath.Text = "启动时按游戏版本确定运行时与路径。";
+            JavaStatus.Text = detected.Count == 0 ? "尚未检测到 Java" : $"已检测到 {detected.Count} 个运行时";
+        }
+        else
+        {
+            JavaSummary.Text = selected.Major > 0 ? $"Java {selected.Major}" : "自定义运行时";
+            JavaDetails.Text = selected.Major > 0 ? $"{selected.Version} · {selected.Arch}" : "保留已配置的 Java 路径。";
+            JavaPath.Text = selected.Home;
+            JavaStatus.Text = selected.Major > 0 ? "已检测到此运行时" : "未检测到此路径，请检查安装位置";
+        }
+        ToolTipService.SetToolTip(JavaPath, JavaPath.Text);
     }
 
     private void Memory_Changed(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e)
@@ -210,7 +256,7 @@ public sealed partial class SettingsGeneralPage : Page
             AppState.Settings.GameDir = folder.Path;
             SettingsService.Save();
             AppState.RefreshInstalled();
-            GameDirBox.Text = folder.Path;
+            UpdateDirectorySummary();
             MainWindow.Instance?.Toast("游戏目录已切换");
         }
         catch (Exception ex)
@@ -255,6 +301,7 @@ public sealed partial class SettingsGeneralPage : Page
     private void Java_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_loading) return;
+        UpdateJavaSummary();
         AppState.Settings.JavaHome = (JavaBox.SelectedItem as JavaOption)?.Info?.Home;
         ScheduleSave();
     }

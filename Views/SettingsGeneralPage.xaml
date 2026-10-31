@@ -1,98 +1,194 @@
-<?xml version="1.0" ?>
+﻿<?xml version="1.0" ?>
 <Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:controls="using:LinxLauncher.Controls" x:Class="LinxLauncher.Views.SettingsGeneralPage" NavigationCacheMode="Required" Background="Transparent">
     <ScrollViewer Style="{StaticResource SettingsScrollStyle}">
-        <Grid x:Name="Columns" ColumnSpacing="16" RowSpacing="16" SizeChanged="Columns_SizeChanged">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="0"/>
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
-            <StackPanel x:Name="LeftColumn" Spacing="16">
-                <Border Style="{StaticResource SettingsCardStyle}">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="游戏目录" Style="{StaticResource SettingsSectionStyle}"/>
-                        <TextBlock Text="所有版本、依赖库与资源文件都保存在这里。" Style="{StaticResource CaptionTextStyle}"/>
-                        <TextBox x:Name="GameDirBox" Header="当前路径" IsReadOnly="True" TextWrapping="Wrap"/>
-                        <Button Content="浏览文件夹…" Click="Browse_Click"/>
-                    </StackPanel>
-                </Border>
-                <Border Style="{StaticResource SettingsCardStyle}">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="从其他启动器导入" Style="{StaticResource SettingsSectionStyle}"/>
-                        <TextBlock Text="识别 PCL2 / HMCL / 官方启动器的 .minecraft 目录，复制版本、存档和模组，不覆盖已有文件。" Style="{StaticResource CaptionTextStyle}"/>
-                        <StackPanel x:Name="ImportHost" Spacing="8"/>
-                        <controls:AdaptiveWrapPanel Spacing="8">
-                            <Button Content="重新检测" Click="RefreshImport_Click"/>
-                            <Button Content="选择其他文件夹…" Click="ChooseImportDir_Click"/>
-                        </controls:AdaptiveWrapPanel>
-                    </StackPanel>
-                </Border>
-                <Border Style="{StaticResource SettingsCardStyle}">
-                    <StackPanel Spacing="16">
-                        <TextBlock Text="下载设置" Style="{StaticResource SettingsSectionStyle}"/>
-                        <controls:SettingsRow Title="使用 BMCLAPI 镜像" Description="关闭后直连 Mojang 官方源，国内通常较慢。">
+        <StackPanel Spacing="28">
+            <StackPanel>
+                <TextBlock Text="游戏环境" Style="{StaticResource SettingsGroupHeadingStyle}"/>
+                <Grid x:Name="EnvironmentCards" ColumnSpacing="12" RowSpacing="12" SizeChanged="EnvironmentCards_SizeChanged">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Border Style="{StaticResource SettingsInfoCardStyle}" Padding="0" Background="{ThemeResource SettingsDirectoryBackgroundBrush}" VerticalAlignment="Top">
+                        <Grid SizeChanged="InfoCardSurface_SizeChanged">
+                            <FontIcon Glyph="&#xE8B7;" FontFamily="{StaticResource IconFontFamily}" FontSize="184" Width="184" Height="184"
+                                      HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-44,-44" Opacity="0.14"
+                                      Foreground="{ThemeResource SettingsDirectoryAccentBrush}" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
+                            <Grid RowSpacing="12" Margin="20">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <FontIcon Glyph="&#xE8B7;" FontFamily="{StaticResource IconFontFamily}" FontSize="20" Foreground="{ThemeResource SettingsDirectoryAccentBrush}"/>
+                                    <TextBlock Text="游戏目录" Style="{StaticResource CardTitleTextStyle}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Spacing="6" MinHeight="56">
+                                    <TextBlock Text="Minecraft 文件管理" FontSize="20" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" TextWrapping="Wrap"/>
+                                    <TextBlock Text="版本、存档、模组与资源的存放位置。" Style="{StaticResource CaptionTextStyle}"/>
+                                </StackPanel>
+                                <TextBlock x:Name="GameDirBox" Grid.Row="2" MinHeight="36" MaxLines="2" IsTextSelectionEnabled="True" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" FontSize="13" Foreground="{ThemeResource PrimaryTextBrush}" AutomationProperties.Name="当前游戏目录"/>
+                                <Grid Grid.Row="3" BorderBrush="{ThemeResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="DirectoryStatus" Style="{StaticResource CaptionTextStyle}" VerticalAlignment="Center"/>
+                                    <Button Grid.Column="1" Content="更改目录" Click="Browse_Click" AutomationProperties.Name="更改游戏目录"/>
+                                </Grid>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                    <Border x:Name="JavaCard" Grid.Column="1" Style="{StaticResource SettingsInfoCardStyle}" Padding="0" Background="{ThemeResource SettingsJavaBackgroundBrush}" VerticalAlignment="Top">
+                        <Grid SizeChanged="InfoCardSurface_SizeChanged">
+                            <FontIcon Glyph="&#xE943;" FontFamily="{StaticResource IconFontFamily}" FontSize="184" Width="184" Height="184"
+                                      HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,-44,-44" Opacity="0.14"
+                                      Foreground="{ThemeResource SettingsJavaAccentBrush}" IsHitTestVisible="False" AutomationProperties.AccessibilityView="Raw"/>
+                            <Grid RowSpacing="12" Margin="20">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <FontIcon Glyph="&#xE943;" FontFamily="{StaticResource IconFontFamily}" FontSize="20" Foreground="{ThemeResource SettingsJavaAccentBrush}"/>
+                                    <TextBlock Text="Java 环境" Style="{StaticResource CardTitleTextStyle}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Row="1" Spacing="6" MinHeight="56">
+                                    <TextBlock x:Name="JavaSummary" FontSize="20" FontWeight="SemiBold" Foreground="{ThemeResource PrimaryTextBrush}" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="JavaDetails" Style="{StaticResource CaptionTextStyle}"/>
+                                </StackPanel>
+                                <TextBlock x:Name="JavaPath" Grid.Row="2" MinHeight="36" MaxLines="2" IsTextSelectionEnabled="True" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" FontSize="13" Foreground="{ThemeResource PrimaryTextBrush}"/>
+                                <StackPanel Grid.Row="3" Spacing="10" BorderBrush="{ThemeResource DividerBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                                    <controls:SettingsExpander Background="Transparent" BorderThickness="0" MinHeight="44" AutomationProperties.Name="Java 运行时设置">
+                                        <controls:SettingsExpander.Header>
+                                            <TextBlock x:Name="JavaStatus" Style="{StaticResource CaptionTextStyle}" AutomationProperties.LiveSetting="Polite"/>
+                                        </controls:SettingsExpander.Header>
+                                        <StackPanel Spacing="10">
+                                            <ComboBox x:Name="JavaBox" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" SelectionChanged="Java_Changed" AutomationProperties.Name="Java 运行时"/>
+                                            <Button Content="重新检测 Java" Click="RescanJava_Click"/>
+                                        </StackPanel>
+                                    </controls:SettingsExpander>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </StackPanel>
+
+            <StackPanel>
+                <TextBlock Text="下载设置" Style="{StaticResource SettingsGroupHeadingStyle}"/>
+                <StackPanel Spacing="4">
+                    <Border Style="{StaticResource SettingsItemCardStyle}">
+                        <controls:SettingsRow IconGlyph="&#xE774;" Title="使用 BMCLAPI 镜像" Description="通过国内镜像加速下载；关闭后使用 Mojang 官方源。">
                             <controls:SettingsRow.Editor>
                                 <ToggleSwitch x:Name="MirrorSwitch" Toggled="Mirror_Toggled" AutomationProperties.Name="使用 BMCLAPI 镜像"/>
                             </controls:SettingsRow.Editor>
                         </controls:SettingsRow>
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="并发下载线程" Style="{StaticResource CaptionTextStyle}"/>
-                            <TextBlock Grid.Column="1" x:Name="ThreadValue" HorizontalAlignment="Right" Style="{StaticResource MetricValueTextStyle}"/>
-                        </Grid>
-                        <Slider x:Name="ThreadSlider" Minimum="2" Maximum="24" StepFrequency="1" ValueChanged="Thread_Changed" AutomationProperties.Name="并发下载线程"/>
-                    </StackPanel>
-                </Border>
+                    </Border>
+                    <Border Style="{StaticResource SettingsItemCardStyle}">
+                        <controls:SettingsRow IconGlyph="&#xE896;" Title="并发下载线程" Description="调整同时下载的任务数量，范围为 2–24。">
+                            <controls:SettingsRow.Editor>
+                                <Grid x:Name="ThreadEditor" Width="260" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="40"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Slider x:Name="ThreadSlider" Minimum="2" Maximum="24" StepFrequency="1" VerticalAlignment="Center" ValueChanged="Thread_Changed" AutomationProperties.Name="并发下载线程"/>
+                                    <TextBlock Grid.Column="1" x:Name="ThreadValue" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource MetricValueTextStyle}"/>
+                                </Grid>
+                            </controls:SettingsRow.Editor>
+                        </controls:SettingsRow>
+                    </Border>
+                </StackPanel>
             </StackPanel>
-            <StackPanel x:Name="RightColumn" Grid.Row="1" Spacing="16">
-                <Border Style="{StaticResource SettingsCardStyle}">
-                    <StackPanel Spacing="16">
-                        <TextBlock Text="启动配置" Style="{StaticResource SettingsSectionStyle}"/>
-                        <StackPanel Spacing="8">
-                            <TextBox x:Name="PlayerNameBox" Header="离线玩家名" MaxLength="16" TextChanged="PlayerName_Changed"/>
-                            <Button x:Name="PlayerNameSaveButton" Content="保存" HorizontalAlignment="Right" IsEnabled="False"
-                                    Click="SavePlayerName_Click" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="保存离线玩家名"/>
-                        </StackPanel>
-                        <StackPanel Spacing="8">
-                            <ComboBox x:Name="JavaBox" Header="Java 运行时" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" SelectionChanged="Java_Changed"/>
-                            <Button Content="重新检测 Java" Click="RescanJava_Click"/>
-                        </StackPanel>
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="内存分配" Style="{StaticResource CaptionTextStyle}"/>
-                            <TextBlock Grid.Column="1" x:Name="MemoryValue" HorizontalAlignment="Right" Style="{StaticResource MetricValueTextStyle}"/>
-                        </Grid>
-                        <Slider x:Name="MemorySlider" Minimum="1024" Maximum="16384" StepFrequency="512" ValueChanged="Memory_Changed" AutomationProperties.Name="内存分配 MB"/>
-                    </StackPanel>
-                </Border>
-                <Border Style="{StaticResource SettingsCardStyle}">
-                    <StackPanel Spacing="16">
-                        <TextBlock Text="游戏窗口" Style="{StaticResource SettingsSectionStyle}"/>
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <NumberBox x:Name="WidthBox" Header="宽度（像素）" Minimum="320" Maximum="7680" SpinButtonPlacementMode="Compact" ValueChanged="WindowSize_Changed"/>
-                            <NumberBox x:Name="HeightBox" Grid.Column="1" Header="高度（像素）" Minimum="240" Maximum="4320" SpinButtonPlacementMode="Compact" ValueChanged="WindowSize_Changed"/>
-                        </Grid>
-                        <controls:SettingsRow Title="全屏启动" Description="进入游戏时直接使用全屏模式。">
+
+            <StackPanel>
+                <TextBlock Text="启动配置" Style="{StaticResource SettingsGroupHeadingStyle}"/>
+                <StackPanel Spacing="4">
+                    <Border Style="{StaticResource SettingsItemCardStyle}">
+                        <controls:SettingsRow IconGlyph="&#xE77B;" Title="离线玩家名" Description="用于离线游戏，修改后点击保存。">
+                            <controls:SettingsRow.Editor>
+                                <Grid x:Name="PlayerNameEditor" Width="300" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="PlayerNameBox" MaxLength="16" TextChanged="PlayerName_Changed" AutomationProperties.Name="离线玩家名"/>
+                                    <Button Grid.Column="1" x:Name="PlayerNameSaveButton" Content="保存" IsEnabled="False" Click="SavePlayerName_Click" Style="{StaticResource AccentButtonStyle}" AutomationProperties.Name="保存离线玩家名"/>
+                                </Grid>
+                            </controls:SettingsRow.Editor>
+                        </controls:SettingsRow>
+                    </Border>
+                    <Border Style="{StaticResource SettingsItemCardStyle}">
+                        <controls:SettingsRow IconGlyph="&#xE950;" Title="内存分配" Description="设置游戏可使用的最大内存，范围为 1–16 GB。">
+                            <controls:SettingsRow.Editor>
+                                <Grid x:Name="MemoryEditor" Width="300" ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="80"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Slider x:Name="MemorySlider" Minimum="1024" Maximum="16384" StepFrequency="512" VerticalAlignment="Center" ValueChanged="Memory_Changed" AutomationProperties.Name="内存分配 MB"/>
+                                    <TextBlock Grid.Column="1" x:Name="MemoryValue" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource MetricValueTextStyle}"/>
+                                </Grid>
+                            </controls:SettingsRow.Editor>
+                        </controls:SettingsRow>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel>
+                <TextBlock Text="游戏窗口" Style="{StaticResource SettingsGroupHeadingStyle}"/>
+                <StackPanel Spacing="4">
+                    <Border Style="{StaticResource SettingsItemCardStyle}">
+                        <controls:SettingsRow IconGlyph="&#xE740;" Title="窗口大小" Description="设置游戏以窗口模式启动时的宽度与高度。">
+                            <controls:SettingsRow.Editor>
+                                <Grid x:Name="WindowSizeEditor" Width="300" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <NumberBox x:Name="WidthBox" Minimum="320" Maximum="7680" SpinButtonPlacementMode="Compact" ValueChanged="WindowSize_Changed" AutomationProperties.Name="游戏窗口宽度（像素）"/>
+                                    <TextBlock Grid.Column="1" Text="×" VerticalAlignment="Center" Foreground="{ThemeResource SecondaryTextBrush}"/>
+                                    <NumberBox x:Name="HeightBox" Grid.Column="2" Minimum="240" Maximum="4320" SpinButtonPlacementMode="Compact" ValueChanged="WindowSize_Changed" AutomationProperties.Name="游戏窗口高度（像素）"/>
+                                </Grid>
+                            </controls:SettingsRow.Editor>
+                        </controls:SettingsRow>
+                    </Border>
+                    <Border Style="{StaticResource SettingsItemCardStyle}">
+                        <controls:SettingsRow IconGlyph="&#xE7F4;" Title="全屏启动" Description="进入游戏时直接使用全屏模式。">
                             <controls:SettingsRow.Editor>
                                 <ToggleSwitch x:Name="FullscreenSwitch" Toggled="Fullscreen_Toggled" AutomationProperties.Name="全屏启动"/>
                             </controls:SettingsRow.Editor>
                         </controls:SettingsRow>
-                    </StackPanel>
-                </Border>
+                    </Border>
+                </StackPanel>
             </StackPanel>
-        </Grid>
+
+            <StackPanel>
+                <TextBlock Text="迁移与导入" Style="{StaticResource SettingsGroupHeadingStyle}"/>
+                <controls:SettingsExpander AutomationProperties.Name="从其他启动器导入">
+                    <controls:SettingsExpander.Header>
+                        <controls:SettingsRow IconGlyph="&#xE8B5;" Title="从其他启动器导入" Description="识别 PCL2、HMCL 或官方启动器目录，复制版本、存档与模组。"/>
+                    </controls:SettingsExpander.Header>
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="只复制文件，不覆盖已有内容。" Style="{StaticResource CaptionTextStyle}"/>
+                        <StackPanel x:Name="ImportHost" Spacing="8"/>
+                        <controls:AdaptiveWrapPanel Spacing="8">
+                            <Button Content="重新检测" Click="RefreshImport_Click"/>
+                            <Button Content="选择其他文件夹" Click="ChooseImportDir_Click"/>
+                        </controls:AdaptiveWrapPanel>
+                    </StackPanel>
+                </controls:SettingsExpander>
+            </StackPanel>
+        </StackPanel>
     </ScrollViewer>
 </Page>

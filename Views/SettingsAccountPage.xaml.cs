@@ -1,4 +1,4 @@
-using LinxLauncher.Services;
+﻿using LinxLauncher.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -53,6 +53,7 @@ public sealed partial class SettingsAccountPage : Page
     private void SetXmlStatus(string text, bool error = false)
     {
         XmlStatusText.Text = text;
+        XmlStatusText.Visibility = string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
         _dialogStatus.Text = text;
         var brush = ThemeService.Brush(error ? "NoticeTextBrush" : "SecondaryTextBrush");
         XmlStatusText.Foreground = brush;
@@ -145,7 +146,7 @@ public sealed partial class SettingsAccountPage : Page
         string email = _emailBox.Text.Trim();
         if (!email.Contains('@')) { SetXmlStatus("先填写有效邮箱。", true); return; }
         SetBusy(true);
-        SetXmlStatus("正在发送验证码…");
+        SetXmlStatus("正在发送验证码");
         try
         {
             var (message, debug) = await LinxAccountService.SendEmailCodeAsync(email, "register", default);
@@ -174,7 +175,7 @@ public sealed partial class SettingsAccountPage : Page
         {
             if (_registering)
             {
-                SetXmlStatus("正在注册…");
+                SetXmlStatus("正在注册");
                 await LinxAccountService.RegisterAsync(user, pass, _emailBox.Text.Trim(), _codeBox.Text.Trim(), default);
                 // 注册已成功后切换为登录，重试时不会重复注册。
                 _registering = false;
@@ -185,7 +186,7 @@ public sealed partial class SettingsAccountPage : Page
                 _codeBox.Text = "";
                 _codeBox.Visibility = Visibility.Collapsed;
             }
-            SetXmlStatus(_registrationCompleted ? "注册成功，正在登录…" : "正在登录…");
+            SetXmlStatus(_registrationCompleted ? "注册成功，正在登录" : "正在登录");
             var result = await LinxAccountService.LoginAsync(user, pass, _needsLoginCode ? _codeBox.Text.Trim() : null, default);
             if (result.NeedCode)
             {
@@ -226,7 +227,7 @@ public sealed partial class SettingsAccountPage : Page
         SettingsService.Save();
         window.RefreshAccountUi();
 
-        SetXmlStatus("头像已换好，正在同步到服务器…");
+        SetXmlStatus("头像已换好，正在同步到服务器");
         var uploaded = await LinxAccountService.UploadAvatarAsync(path, default);
         SetXmlStatus(
             uploaded ? "头像已同步，网页端和别的设备都能看到。" : "头像已保存在本机，同步到服务器失败。",

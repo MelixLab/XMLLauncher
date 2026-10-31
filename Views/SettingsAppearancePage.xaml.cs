@@ -1,13 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
 using LinxLauncher.Services;
-using Windows.Foundation;
-using Windows.UI.ViewManagement;
 
 namespace LinxLauncher.Views;
 
@@ -15,7 +12,7 @@ public sealed partial class SettingsAppearancePage : Page
 {
     private bool _loading = true;
     private bool _acrylicOptionsOpen;
-    private Storyboard? _acrylicTransition;
+    private bool? _previewIsDark;
     public SettingsAppearancePage()
     {
         InitializeComponent();
@@ -26,12 +23,8 @@ public sealed partial class SettingsAppearancePage : Page
         UpdateAcrylicLabels();
         _loading = false;
         ActualThemeChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateMaterialPreviews);
-        Loaded += (_, _) => FinishAcrylicTransition();
-        Unloaded += (_, _) =>
-        {
-            FlushPendingSave();
-            FinishAcrylicTransition();
-        };
+        Loaded += (_, _) => UpdateMaterialPreviews();
+        Unloaded += (_, _) => FlushPendingSave();
     }
 
     private void FlushPendingSave()
@@ -41,68 +34,13 @@ public sealed partial class SettingsAppearancePage : Page
         SettingsService.Save();
     }
 
-    // 这段展开效果仅服务本页的亚克力选项，直接使用原生 Storyboard，避免引入一次性公共控件。
     private void SetAcrylicOptionsOpen(bool open)
     {
+        AcrylicOptionsCard.IsEnabled = open;
         if (_acrylicOptionsOpen == open) return;
         _acrylicOptionsOpen = open;
-        if (!IsLoaded || !new UISettings().AnimationsEnabled)
-        {
-            FinishAcrylicTransition();
-            return;
-        }
-
-        double startHeight = AcrylicReveal.ActualHeight;
-        double startOpacity = AcrylicReveal.Opacity;
-        _acrylicTransition?.Stop();
-        AcrylicReveal.Visibility = Visibility.Visible;
-        AcrylicReveal.IsHitTestVisible = open;
-        AcrylicOptions.MinHeight = 0;
-        AcrylicOptions.Measure(new Size(Math.Max(AcrylicReveal.ActualWidth, 1), double.PositiveInfinity));
-        double fullHeight = AcrylicOptions.DesiredSize.Height;
-        AcrylicOptions.MinHeight = fullHeight;
-        AcrylicReveal.Height = startHeight;
-        AcrylicReveal.Opacity = startOpacity;
-
-        var transition = new Storyboard();
-        AddAcrylicAnimation(transition, "Height", startHeight, open ? fullHeight : 0);
-        AddAcrylicAnimation(transition, "Opacity", startOpacity, open ? 1 : 0);
-        transition.Completed += (_, _) =>
-        {
-            if (ReferenceEquals(_acrylicTransition, transition)) FinishAcrylicTransition();
-        };
-        _acrylicTransition = transition;
-        transition.Begin();
+        AcrylicOptionsCard.IsExpanded = open;
     }
-
-    private void AddAcrylicAnimation(Storyboard storyboard, string property, double from, double to)
-    {
-        var animation = new DoubleAnimation
-        {
-            From = from,
-            To = to,
-            Duration = new Duration(TimeSpan.FromMilliseconds(220)),
-            EnableDependentAnimation = true,
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
-        };
-        Storyboard.SetTarget(animation, AcrylicReveal);
-        Storyboard.SetTargetProperty(animation, property);
-        storyboard.Children.Add(animation);
-    }
-
-    private void FinishAcrylicTransition()
-    {
-        _acrylicTransition?.Stop();
-        _acrylicTransition = null;
-        AcrylicOptions.MinHeight = 0;
-        AcrylicReveal.Height = _acrylicOptionsOpen ? double.NaN : 0;
-        AcrylicReveal.Opacity = _acrylicOptionsOpen ? 1 : 0;
-        AcrylicReveal.Visibility = _acrylicOptionsOpen ? Visibility.Visible : Visibility.Collapsed;
-        AcrylicReveal.IsHitTestVisible = _acrylicOptionsOpen;
-    }
-
-    private void AcrylicReveal_SizeChanged(object sender, SizeChangedEventArgs e)
-        => AcrylicClip.Rect = new Rect(0, 0, e.NewSize.Width, e.NewSize.Height);
 
     private void UpdateAcrylicLabels()
     {
@@ -231,6 +169,8 @@ public sealed partial class SettingsAppearancePage : Page
     {
         ThemeService.Apply();
 
+        // 预览使用手动生成的画笔，必须在主题引擎完成更新后同步，不能只依赖主题事件时序。
+        UpdateMaterialPreviews();
         UpdateMaterialSelection();
         UpdateAccentSelection();
         UpdateThemeNotes();
@@ -290,7 +230,7 @@ public sealed partial class SettingsAppearancePage : Page
                 Tag = id,
                 Padding = new Thickness(5),
                 BorderThickness = new Thickness(2),
-                CornerRadius = new CornerRadius(7),
+                CornerRadius = new CornerRadius(4),
             };
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, name);
             button.Click += Material_Click;
@@ -302,17 +242,20 @@ public sealed partial class SettingsAppearancePage : Page
 
     private void UpdateMaterialPreviews()
     {
+        bool dark = IsLoaded ? ActualTheme == ElementTheme.Dark : ThemeService.IsDark;
+        if (_previewIsDark == dark) return;
         foreach (var (id, button) in _materialButtons)
         {
             if (button.Content is StackPanel content)
                 content.Children[0] = BuildMaterialPreview(id);
         }
+        _previewIsDark = dark;
     }
 
     /// <summary>材质预览：一张模拟壁纸 + 一层按当前不透明度盖上去的内容层 + 一张卡片。</summary>
     private Border BuildMaterialPreview(int id)
     {
-        bool dark = ThemeService.IsDark;
+        bool dark = IsLoaded ? ActualTheme == ElementTheme.Dark : ThemeService.IsDark;
         var surfaceBase = dark ? Windows.UI.Color.FromArgb(255, 0x0D, 0x0D, 0x0D) : Windows.UI.Color.FromArgb(255, 0xFD, 0xFD, 0xFD);
         var cardBase = dark ? Windows.UI.Color.FromArgb(255, 0x1C, 0x1C, 0x1C) : Windows.UI.Color.FromArgb(255, 0xFF, 0xFF, 0xFF);
 
@@ -426,22 +369,16 @@ public sealed partial class SettingsAppearancePage : Page
             ApplyTheme();
         };
 
-        var custom = new Button
-        {
-            Content = "自定义…",
-            VerticalAlignment = VerticalAlignment.Center,
-            Padding = new Thickness(12, 5, 12, 5),
-        };
-        custom.Flyout = new Flyout { Content = picker };
-        AccentHost.Children.Add(custom);
+        CustomAccentButton.Flyout = new Flyout { Content = picker };
+    }
 
-        var reset = new HyperlinkButton
-        {
-            Content = "用品牌默认色",
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        reset.Click += AccentReset_Click;
-        AccentHost.Children.Add(reset);
+    private void AccentLayout_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool narrow = e.NewSize.Width < 520;
+        Grid.SetColumn(AccentActions, narrow ? 0 : 1);
+        Grid.SetRow(AccentActions, narrow ? 1 : 0);
+        AccentLayout.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : GridLength.Auto;
+        AccentLayout.ColumnSpacing = narrow ? 0 : 16;
     }
 
     private void UpdateMaterialSelection()
@@ -483,7 +420,7 @@ public sealed partial class SettingsAppearancePage : Page
             MaterialNote.Text += "　（这台机器的系统不支持该材质，已回落到纯色。）";
 
         AccentNote.Text = string.IsNullOrWhiteSpace(AppState.Settings.AccentColor)
-            ? "当前用品牌默认色：浅色模式青绿、深色模式自动提亮。点色点或「自定义…」换一个。"
+            ? "当前用品牌默认色：浅色模式青绿、深色模式自动提亮。点色点或「自定义」换一个。"
             : $"当前主题色 {AppState.Settings.AccentColor}，深色模式下会自动提亮，保证对比度。";
     }
 

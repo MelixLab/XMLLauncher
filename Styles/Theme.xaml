@@ -102,6 +102,11 @@
             <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FFFFFF" />
             <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#FFFFFF" />
             <SolidColorBrush x:Key="ToggleSwitchKnobStrokeOn" Color="Transparent" />
+
+            <SolidColorBrush x:Key="SettingsDirectoryBackgroundBrush" Color="#EFF4FA" />
+            <SolidColorBrush x:Key="SettingsDirectoryAccentBrush" Color="#316598" />
+            <SolidColorBrush x:Key="SettingsJavaBackgroundBrush" Color="#EFF6F2" />
+            <SolidColorBrush x:Key="SettingsJavaAccentBrush" Color="#367451" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Light">
@@ -190,6 +195,11 @@
             <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FFFFFF" />
             <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#FFFFFF" />
             <SolidColorBrush x:Key="ToggleSwitchKnobStrokeOn" Color="Transparent" />
+
+            <SolidColorBrush x:Key="SettingsDirectoryBackgroundBrush" Color="#EFF4FA" />
+            <SolidColorBrush x:Key="SettingsDirectoryAccentBrush" Color="#316598" />
+            <SolidColorBrush x:Key="SettingsJavaBackgroundBrush" Color="#EFF6F2" />
+            <SolidColorBrush x:Key="SettingsJavaAccentBrush" Color="#367451" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Dark">
@@ -286,6 +296,11 @@
             <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#0A0A0A" />
             <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#0A0A0A" />
             <SolidColorBrush x:Key="ToggleSwitchKnobStrokeOn" Color="Transparent" />
+
+            <SolidColorBrush x:Key="SettingsDirectoryBackgroundBrush" Color="#18222D" />
+            <SolidColorBrush x:Key="SettingsDirectoryAccentBrush" Color="#90B7DA" />
+            <SolidColorBrush x:Key="SettingsJavaBackgroundBrush" Color="#192720" />
+            <SolidColorBrush x:Key="SettingsJavaAccentBrush" Color="#8AC4A1" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="HighContrast">
@@ -345,6 +360,11 @@
                 我们自己再写一遍极容易把 ColorAnimation 用的键写成画笔而踩坑；
                 直接沿用系统高对比配色也才是正确做法。
             -->
+
+            <SolidColorBrush x:Key="SettingsDirectoryBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="SettingsDirectoryAccentBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <SolidColorBrush x:Key="SettingsJavaBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+            <SolidColorBrush x:Key="SettingsJavaAccentBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
