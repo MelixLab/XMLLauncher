@@ -1,19 +1,21 @@
 using System;
-using System.IO;
-using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices.WindowsRuntime;
 using LinxLauncher.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Storage.Pickers;
 
 namespace LinxLauncher.Views;
 
 /// <summary>
-/// 皮肤页：头像 + 正/背全身预览 + 导入 / 同步 / 上传 / 模型切换。
+/// 皮肤页：头像 + 可旋转 3D 预览 + 导入 / 同步 / 上传 / 模型切换。
 /// 所有预览都由 <see cref="SkinService"/> 从皮肤 PNG 现场渲染；没设皮肤时用内置的 Steve / Alex。
 /// </summary>
 public sealed partial class SkinsPage : Page
@@ -22,25 +24,36 @@ public sealed partial class SkinsPage : Page
     private bool _loading;
     private int _renderVersion;
     private bool _operationBusy;
+    private bool _previewActive;
+    private double _yaw = 24;
+    private double _pitch = -8;
+    private uint? _dragPointerId;
+    private double _dragX, _dragY;
+    private SkinRenderer3D.SkinImage? _skinPixels;
+    private CancellationTokenSource? _previewCancellation;
+    private bool _frameRequested;
+    private bool _frameWorkerRunning;
+    private int _frameVersion;
+    private long _lastRenderTick;
 
     private void PageContent_SizeChanged(object sender, SizeChangedEventArgs e)
         => PageContent.Padding = new Thickness(e.NewSize.Width < 720 ? 16 : 32, 28, e.NewSize.Width < 720 ? 16 : 32, 24);
 
     private void AccountRow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        var narrow = e.NewSize.Width < 800;
+        var narrow = e.NewSize.Width < 480;
         Grid.SetRow(AccountPicker, narrow ? 1 : 0);
         Grid.SetColumn(AccountPicker, narrow ? 0 : 1);
         Grid.SetColumnSpan(AccountPicker, narrow ? 3 : 1);
-        Grid.SetRow(DefaultHint, narrow ? 2 : 0);
-        Grid.SetColumn(DefaultHint, narrow ? 0 : 2);
-        Grid.SetColumnSpan(DefaultHint, narrow ? 3 : 1);
+        Grid.SetRow(DefaultHint, narrow ? 2 : 1);
+        Grid.SetColumn(DefaultHint, 0);
+        Grid.SetColumnSpan(DefaultHint, 3);
     }
 
     private void SkinContent_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        var narrow = e.NewSize.Width < 800;
-        PreviewColumn.Width = narrow ? new GridLength(1, GridUnitType.Star) : new GridLength(380);
+        var narrow = e.NewSize.Width < 600;
+        PreviewColumn.Width = narrow ? new GridLength(1, GridUnitType.Star) : new GridLength(e.NewSize.Width < 900 ? 280 : 320);
         Grid.SetColumnSpan(PreviewCard, narrow ? 2 : 1);
         Grid.SetColumn(EditingCard, narrow ? 0 : 1);
         Grid.SetColumnSpan(EditingCard, narrow ? 2 : 1);
@@ -51,9 +64,10 @@ public sealed partial class SkinsPage : Page
     public SkinsPage()
     {
         InitializeComponent();
-        Unloaded += (_, _) => _renderVersion++;
+        Unloaded += (_, _) => StopPreview();
         Loaded += (_, _) =>
         {
+            _previewActive = true;
             if (_accountId is null) _accountId = AccountService.Current?.Id;
             BuildPicker();
             Refresh();
@@ -64,6 +78,12 @@ public sealed partial class SkinsPage : Page
     {
         base.OnNavigatedTo(e);
         _accountId = e.Parameter as string ?? AccountService.Current?.Id;
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        StopPreview();
+        base.OnNavigatedFrom(e);
     }
 
     // ================= 账户选择 =================
@@ -119,8 +139,13 @@ public sealed partial class SkinsPage : Page
 
     private void Refresh()
     {
+        ResetPreview();
         var acc = Account;
-        if (acc is null) return;
+        if (acc is null)
+        {
+            UpdateActionState();
+            return;
+        }
 
         _loading = true;
         ModelChoice.SelectedIndex = acc.SkinModel == "slim" ? 1 : 0;
@@ -138,6 +163,8 @@ public sealed partial class SkinsPage : Page
             : $"默认皮肤 · {defaultName}";
 
         DefaultHint.Text = acc.HasSkin ? "" : $"未设置皮肤，正在用默认的 {defaultName}";
+        DefaultHint.Visibility = acc.HasSkin ? Visibility.Collapsed : Visibility.Visible;
+        EmptyHint.Visibility = acc.HasSkin ? Visibility.Collapsed : Visibility.Visible;
 
         EmptyHint.Text = acc.HasSkin
             ? ""
@@ -147,9 +174,7 @@ public sealed partial class SkinsPage : Page
 
         AvatarImage.Visibility = Visibility.Collapsed;
         AvatarInitial.Visibility = Visibility.Visible;
-        BodyFront.Source = null;
-        BodyBack.Source = null;
-        _ = RenderAsync(acc, ++_renderVersion);
+        _ = RenderAsync(acc, _renderVersion);
 
         UpdateActionState();
 
@@ -158,7 +183,11 @@ public sealed partial class SkinsPage : Page
             : "离线账户的皮肤只在本机生效：启动器里的头像和预览会跟着变；装了 CustomSkinLoader 的整合包，换皮肤时会顺手写进 CustomSkinLoader/LocalSkin/skin/名字.png，进游戏也能看到。服务器若开着在线验证，别人的客户端仍然看到默认皮肤。";
 
         // 和账户页一样：页面是导航后才真正布局的，补刷一次字体
-        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => FontService.Apply(this));
+        var version = _renderVersion;
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            if (_previewActive && version == _renderVersion && IsViewing(acc)) FontService.Apply(this);
+        });
     }
 
     private void UpdateActionState()
@@ -171,7 +200,7 @@ public sealed partial class SkinsPage : Page
         ModelChoice.IsEnabled = !_operationBusy && acc is not null;
     }
 
-    private bool IsViewing(GameAccount acc) => IsLoaded && Account?.Id == acc.Id;
+    private bool IsViewing(GameAccount acc) => _previewActive && IsLoaded && Account?.Id == acc.Id;
 
     private async Task RenderAsync(GameAccount acc, int version)
     {
@@ -179,8 +208,6 @@ public sealed partial class SkinsPage : Page
         var model = acc.SkinModel;
 
         var avatar = await SkinService.RenderAvatarAsync(path, 256, model);
-        var front = await SkinService.RenderBodyAsync(path, model, false, 6);
-        var back = await SkinService.RenderBodyAsync(path, model, true, 6);
         if (version != _renderVersion || !IsViewing(acc)) return;
         if (avatar is null)
         {
@@ -194,8 +221,13 @@ public sealed partial class SkinsPage : Page
             AvatarInitial.Visibility = Visibility.Collapsed;
         }
 
-        BodyFront.Source = front;
-        BodyBack.Source = back;
+        // 每次刷新重新加载；路径相同也可能已覆盖文件，或切换了 Classic / Slim。
+        var skin = await SkinService.LoadSkinImageAsync(path, model);
+        if (version != _renderVersion || !IsViewing(acc)) return;
+        _skinPixels = skin;
+        SkinModelHint.Text = skin is null ? "无法读取皮肤预览" : "按住拖动可以转一圈";
+        SkinModelHint.Visibility = Visibility.Visible;
+        RequestFrame();
     }
 
     // ================= 操作 =================
@@ -337,6 +369,132 @@ public sealed partial class SkinsPage : Page
             MainWindow.Instance?.RefreshAccountUi();
 
         if (IsViewing(acc)) Refresh();
+    }
+
+    // ================= 3D 预览 =================
+
+    private void StopPreview()
+    {
+        _previewActive = false;
+        ResetPreview();
+    }
+
+    private void ResetPreview()
+    {
+        ++_renderVersion;
+        ++_frameVersion;
+        _frameRequested = false;
+        _previewCancellation?.Cancel();
+        _previewCancellation?.Dispose();
+        _previewCancellation = _previewActive ? new CancellationTokenSource() : null;
+        // 先清掉状态，ReleasePointerCaptures 引发的 CaptureLost 不再排队。
+        _dragPointerId = null;
+        SkinModelHost.ReleasePointerCaptures();
+        _skinPixels = null;
+        SkinModel3D.Source = null;
+        AvatarImage.Source = null;
+        AvatarImage.Visibility = Visibility.Collapsed;
+        AvatarInitial.Visibility = Visibility.Visible;
+    }
+
+    private void SkinModelHost_SizeChanged(object sender, SizeChangedEventArgs e) => RequestFrame();
+
+    private void SkinModel_Pressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_previewActive || _skinPixels is null || _dragPointerId is not null) return;
+        var point = e.GetCurrentPoint(SkinModelHost);
+        if (!point.Properties.IsLeftButtonPressed || !SkinModelHost.CapturePointer(e.Pointer)) return;
+        _dragPointerId = e.Pointer.PointerId;
+        _dragX = point.Position.X;
+        _dragY = point.Position.Y;
+        SkinModelHint.Visibility = Visibility.Collapsed;
+        e.Handled = true;
+    }
+
+    private void SkinModel_Moved(object sender, PointerRoutedEventArgs e)
+    {
+        if (_dragPointerId != e.Pointer.PointerId) return;
+        var point = e.GetCurrentPoint(SkinModelHost);
+        _yaw = (_yaw + (point.Position.X - _dragX) * 0.6) % 360;
+        _pitch = Math.Clamp(_pitch + (point.Position.Y - _dragY) * 0.35, -35, 35);
+        _dragX = point.Position.X;
+        _dragY = point.Position.Y;
+        RequestFrame();
+        e.Handled = true;
+    }
+
+    private void SkinModel_Released(object sender, PointerRoutedEventArgs e)
+    {
+        if (_dragPointerId != e.Pointer.PointerId) return;
+        // 松手事件可能携带最后一次 Moved 之后的位置，先合入最终角度。
+        SkinModel_Moved(sender, e);
+        _dragPointerId = null;
+        SkinModelHost.ReleasePointerCapture(e.Pointer);
+        RequestFrame();
+        e.Handled = true;
+    }
+
+    private void RequestFrame()
+    {
+        if (!_previewActive || !IsLoaded || _skinPixels is null) return;
+        ++_frameVersion;
+        _frameRequested = true;
+        if (!_frameWorkerRunning) _ = RenderFramesAsync();
+    }
+
+    private async Task RenderFramesAsync()
+    {
+        _frameWorkerRunning = true;
+        try
+        {
+            // 单一循环合并拖动/缩放请求；不为每次指针事件创建渲染任务。
+            while (_frameRequested && _previewActive && IsLoaded && _skinPixels is not null)
+            {
+                var token = _previewCancellation!.Token;
+                var delay = 40 - (Environment.TickCount64 - _lastRenderTick);
+                if (delay > 0) await Task.Delay((int)delay, token);
+                token.ThrowIfCancellationRequested();
+
+                var skin = _skinPixels;
+                if (skin is null) break;
+                var version = _renderVersion;
+                var frameVersion = _frameVersion;
+                var accountId = Account?.Id;
+                var width = (int)Math.Max(1, Math.Ceiling(SkinModelHost.ActualWidth));
+                var height = (int)Math.Max(1, Math.Ceiling(SkinModelHost.ActualHeight));
+                var yaw = _yaw;
+                var pitch = _pitch;
+                _frameRequested = false;
+                _lastRenderTick = Environment.TickCount64;
+
+                // 后台只处理托管像素；XAML 对象和 PixelBuffer 始终留在 UI 线程。
+                var pixels = await Task.Run(() => SkinRenderer3D.Render(
+                    skin, width, height, yaw, pitch), token);
+                token.ThrowIfCancellationRequested();
+                if (!_previewActive || !IsLoaded || version != _renderVersion ||
+                    frameVersion != _frameVersion || Account?.Id != accountId) continue;
+
+                var bitmap = new WriteableBitmap(width, height);
+                using (var stream = bitmap.PixelBuffer.AsStream())
+                    stream.Write(pixels, 0, pixels.Length);
+                bitmap.Invalidate();
+                SkinModel3D.Source = bitmap;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 换账户/换模型/离页取消旧帧；新一代请求由 finally 接续。
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("3D 皮肤渲染失败：" + ex.Message);
+        }
+        finally
+        {
+            _frameWorkerRunning = false;
+            if (_frameRequested && _previewActive && IsLoaded && _skinPixels is not null)
+                _ = RenderFramesAsync();
+        }
     }
 
     // ================= 工具 =================

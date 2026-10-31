@@ -53,6 +53,8 @@ public sealed partial class VersionsPage : Page
     private int _manifestRequest;
     private int _loaderRequest;
     private Storyboard? _viewTransition;
+    private Storyboard? _loaderBounce;
+    private FrameworkElement? _bouncingCard;
     private int _viewGeneration;
 
     public VersionsPage()
@@ -304,6 +306,7 @@ public sealed partial class VersionsPage : Page
 
     private void StopViewTransition()
     {
+        StopLoaderBounce();
         ++_viewGeneration;
         var previous = _viewTransition;
         _viewTransition = null;
@@ -419,6 +422,50 @@ public sealed partial class VersionsPage : Page
         {
             b.IsChecked = b == card;
         }
+
+    }
+
+    private void StopLoaderBounce()
+    {
+        var previous = _loaderBounce;
+        _loaderBounce = null;
+        previous?.Stop();
+        if (_bouncingCard is not null) _bouncingCard.RenderTransform = null;
+        _bouncingCard = null;
+    }
+
+    /// <summary>点卡片的回弹：0.955 → 1.018 → 1，只动 transform，不触发重排。</summary>
+    private void Bounce(FrameworkElement card)
+    {
+        StopLoaderBounce();
+        if (!_active || !_showingDetail || !new UISettings().AnimationsEnabled) return;
+        var scale = new ScaleTransform
+        {
+            CenterX = card.ActualWidth / 2,
+            CenterY = card.ActualHeight / 2,
+        };
+        card.RenderTransform = scale;
+
+        var sb = new Storyboard();
+        foreach (var prop in new[] { "ScaleX", "ScaleY" })
+        {
+            var anim = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(280) };
+            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 0.955 });
+            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(140)), Value = 1.018 });
+            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(280)), Value = 1.0 });
+
+            Storyboard.SetTarget(anim, scale);
+            Storyboard.SetTargetProperty(anim, prop);
+            sb.Children.Add(anim);
+        }
+
+        _loaderBounce = sb;
+        _bouncingCard = card;
+        sb.Completed += (_, _) =>
+        {
+            if (ReferenceEquals(_loaderBounce, sb)) StopLoaderBounce();
+        };
+        sb.Begin();
     }
 
     // ================= 实例设置 =================
@@ -886,6 +933,7 @@ public sealed partial class VersionsPage : Page
         SelectLoaderCard(card);
 
         if (!IsLoaded || _selected is null) return;
+        Bounce(card);
 
         _loader = tag switch
         {
