@@ -27,11 +27,17 @@ public sealed class AppSettings
     /// <summary>深浅模式："System" / "Light" / "Dark"。</summary>
     public string ThemeMode { get; set; } = "System";
 
-    /// <summary>窗口材质：0 纯色 / 1 云母 / 2 云母 Alt / 3 亚克力 / 4 高透（见 ThemeMaterial）。</summary>
+    /// <summary>窗口材质：0 纯色 / 1 云母 / 2 云母 Alt / 3 亚克力（见 ThemeMaterial）。</summary>
     public int ThemeMaterial { get; set; } = 1;
 
     /// <summary>内容层不透明度，0.15~1。越低越透，越能看见桌面的云母 / 亚克力。</summary>
     public double SurfaceOpacity { get; set; } = 0.5;
+
+    /// <summary>亚克力通透程度（0–100），反向映射到 LuminosityOpacity。</summary>
+    public double AcrylicTransparency { get; set; } = 70;
+
+    /// <summary>亚克力鲜艳程度（0–100），反向映射到 TintOpacity。</summary>
+    public double AcrylicVividness { get; set; } = 70;
 
     /// <summary>主题色（#RRGGBB）。留空表示用品牌默认色（浅色青、深色亮青）。</summary>
     public string? AccentColor { get; set; } = "";
@@ -147,14 +153,17 @@ public static class SettingsService
     /// 这里改成「三方合并」：读回磁盘上的最新版本，只把我们**确实改过**的字段盖上去，
     /// 再原子替换文件（先写临时文件再替换），避免写一半被读到半截 JSON。
     /// </summary>
-    public static void Save()
+    public static void Save() => TrySave();
+
+    /// <summary>保留原有保存入口，同时允许设置页准确反馈写盘结果。</summary>
+    public static bool TrySave()
     {
         lock (Gate)
         {
             try
             {
                 if (_current is null) _current = Load();
-                if (_current is null) return;
+                if (_current is null) return false;
 
                 var disk = TryReadFromDisk() ?? new AppSettings { GameDir = Paths.GameDir };
                 var merged = Merge(disk, _current, _baseline ?? new AppSettings());
@@ -166,10 +175,12 @@ public static class SettingsService
                 // 内存里的对象是 AppState.Settings 指着的那一份，别换掉它；
                 // 只把「磁盘上有、我们没动」的字段回填进来（比如实例配置）。
                 SyncFromMerged(merged, _current);
+                return true;
             }
             catch (Exception ex)
             {
                 Log.Warn("保存设置失败：" + ex.Message);
+                return false;
             }
         }
     }
@@ -189,6 +200,8 @@ public static class SettingsService
     }
 
     /// <summary>把 current 相对 baseline 的改动应用到 disk 上。</summary>
+    [System.Diagnostics.CodeAnalysis.DynamicDependency(
+        System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.PublicProperties, typeof(AppSettings))]
     private static AppSettings Merge(AppSettings disk, AppSettings current, AppSettings baseline)
     {
         foreach (var prop in typeof(AppSettings).GetProperties())

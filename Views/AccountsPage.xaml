@@ -22,10 +22,16 @@
             </Grid.RowDefinitions>
 
             <!--  标题 + 操作  -->
-            <Grid Grid.Row="0">
-                <StackPanel
-                    MaxWidth="620"
-                    HorizontalAlignment="Left">
+            <Grid x:Name="PageHeader" Grid.Row="0" ColumnSpacing="24" RowSpacing="16" SizeChanged="PageHeader_SizeChanged">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel>
                     <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="账户" />
                     <TextBlock
                         Margin="0,11,0,0"
@@ -34,6 +40,8 @@
                 </StackPanel>
 
                 <StackPanel
+                    x:Name="HeaderActions"
+                    Grid.Column="1"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Top"
                     Orientation="Horizontal"
@@ -63,10 +71,10 @@
             <Canvas
                 x:Name="DeckHost"
                 Grid.Row="2"
-                Width="620"
                 Height="140"
                 Margin="0,14,0,0"
-                HorizontalAlignment="Left" />
+                HorizontalAlignment="Stretch"
+                SizeChanged="DeckHost_SizeChanged" />
 
         </Grid>
     </ScrollViewer>

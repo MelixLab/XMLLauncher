@@ -8,6 +8,12 @@
 *.suo
 *.userosscache
 *.sln.docstates
+# 本地解决方案与 Agent 约定
+*.sln
+*.slnx
+*.slnf
+[Aa][Gg][Ee][Nn][Tt].md
+[Aa][Gg][Ee][Nn][Tt][Ss].md
 artifacts/
 
 # Build logs

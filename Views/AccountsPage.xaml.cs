@@ -25,7 +25,6 @@ namespace LinxLauncher.Views;
 /// </summary>
 public sealed partial class AccountsPage : Page
 {
-    private const double CardWidth = 620;
     private const double CardHeight = 140;
     private const double StripHeight = 80;
     private const double StripOverlap = 22;
@@ -65,6 +64,22 @@ public sealed partial class AccountsPage : Page
         InitializeComponent();
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+    }
+
+    private void DeckHost_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Canvas 不会自动拉伸子元素；卡片宽度跟随卡包实际可用宽度。
+        foreach (var card in _cards.Values) card.Root.Width = e.NewSize.Width;
+    }
+
+    private void PageHeader_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool narrow = e.NewSize.Width < 720;
+        Grid.SetColumn(HeaderActions, narrow ? 0 : 1);
+        Grid.SetRow(HeaderActions, narrow ? 1 : 0);
+        HeaderActions.HorizontalAlignment = narrow ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+        PageHeader.ColumnSpacing = narrow ? 0 : 24;
+        PageHeader.RowSpacing = narrow ? 16 : 0;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -219,8 +234,8 @@ public sealed partial class AccountsPage : Page
 
     private CardRefs BuildCard(GameAccount account)
     {
-        var secondary = Brush("SecondaryTextBrush", 0x60, 0x60, 0x60);
-        var primary = Brush("PrimaryTextBrush", 0x1B, 0x1B, 0x1B);
+        var secondary = ThemeService.Brush("SecondaryTextBrush");
+        var primary = ThemeService.Brush("PrimaryTextBrush");
 
         // ---------- 展开态 ----------
         var initial = new TextBlock
@@ -240,7 +255,7 @@ public sealed partial class AccountsPage : Page
             Width = 52,
             Height = 52,
             CornerRadius = new CornerRadius(6),
-            Background = Brush("CardHoverBackgroundBrush", 0xF2, 0xF2, 0xF2),
+            Background = ThemeService.Brush("CardHoverBackgroundBrush"),
             VerticalAlignment = VerticalAlignment.Top,
             Child = new Grid { Children = { initial, avatar } }
         };
@@ -260,7 +275,7 @@ public sealed partial class AccountsPage : Page
             Text = account.KindText,
             FontSize = 12,
             FontFamily = FontService.BodyFont,
-            Foreground = Brush("LinkTextBrush", 0x00, 0x6B, 0x5B),
+            Foreground = ThemeService.Brush("LinkTextBrush"),
             VerticalAlignment = VerticalAlignment.Center
         };
 
@@ -268,7 +283,7 @@ public sealed partial class AccountsPage : Page
         {
             Padding = new Thickness(7, 2, 7, 2),
             CornerRadius = new CornerRadius(3),
-            Background = Brush("BrandSoftBrush", 0xE7, 0xF6, 0xF2),
+            Background = ThemeService.Brush("BrandSoftBrush"),
             Child = kindText
         };
 
@@ -357,7 +372,7 @@ public sealed partial class AccountsPage : Page
             Width = 34,
             Height = 34,
             CornerRadius = new CornerRadius(5),
-            Background = Brush("CardHoverBackgroundBrush", 0xF2, 0xF2, 0xF2),
+            Background = ThemeService.Brush("CardHoverBackgroundBrush"),
             VerticalAlignment = VerticalAlignment.Center,
             Child = new Grid { Children = { compactInitial, compactAvatar } }
         };
@@ -406,13 +421,13 @@ public sealed partial class AccountsPage : Page
         // ---------- 卡片本体 ----------
         var root = new Border
         {
-            Width = CardWidth,
+            Width = DeckHost.ActualWidth,
             Height = CardHeight,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
             CornerRadius = new CornerRadius(12),
-            Background = Brush("CardBackgroundBrush", 0xFF, 0xFF, 0xFF),
-            BorderBrush = Brush("DividerBrush", 0xE5, 0xE5, 0xE5),
+            Background = ThemeService.Brush("CardBackgroundBrush"),
+            BorderBrush = ThemeService.Brush("DividerBrush"),
             BorderThickness = new Thickness(1),
             Child = new Grid { Children = { expanded, compact } }
         };
@@ -469,12 +484,12 @@ public sealed partial class AccountsPage : Page
         refs.RefreshToken.Visibility = account.IsMicrosoft ? Visibility.Visible : Visibility.Collapsed;
 
         refs.KindBadge.Background = account.IsMicrosoft
-            ? Brush("BrandSoftBrush", 0xE7, 0xF6, 0xF2)
-            : Brush("CardHoverBackgroundBrush", 0xF2, 0xF2, 0xF2);
+            ? ThemeService.Brush("BrandSoftBrush")
+            : ThemeService.Brush("CardHoverBackgroundBrush");
 
         refs.Root.BorderBrush = isCurrent
-            ? Brush("BrandBrush", 0x00, 0xA8, 0x8E)
-            : Brush("DividerBrush", 0xE5, 0xE5, 0xE5);
+            ? ThemeService.Brush("BrandBrush")
+            : ThemeService.Brush("DividerBrush");
         refs.Root.BorderThickness = new Thickness(isCurrent ? 1.5 : 1);
 
         _ = UpdateAvatarsAsync(refs, account);
@@ -529,7 +544,7 @@ public sealed partial class AccountsPage : Page
                         TextWrapping = TextWrapping.Wrap,
                         FontSize = 13,
                         FontFamily = FontService.BodyFont,
-                        Foreground = Brush("SecondaryTextBrush", 0x60, 0x60, 0x60)
+                        Foreground = ThemeService.Brush("SecondaryTextBrush")
                     },
                     box
                 }
@@ -681,15 +696,4 @@ public sealed partial class AccountsPage : Page
         return false;
     }
 
-    private static Brush Brush(string key, byte r, byte g, byte b)
-    {
-        try
-        {
-            if (Application.Current.Resources.TryGetValue(key, out var value) && value is Brush brush)
-                return brush;
-        }
-        catch { }
-
-        return new SolidColorBrush(Windows.UI.Color.FromArgb(0xFF, r, g, b));
-    }
 }

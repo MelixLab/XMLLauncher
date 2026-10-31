@@ -1,0 +1,25 @@
+<?xml version="1.0" ?>
+<UserControl xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="LinxLauncher.Controls.SettingsExpander"
+             Background="{ThemeResource CardBackgroundBrush}" BorderBrush="{ThemeResource DividerBrush}"
+             BorderThickness="1" CornerRadius="4" MinHeight="76" Padding="18,16"
+             HorizontalAlignment="Stretch" VerticalAlignment="Top">
+    <Border Background="{x:Bind Background, Mode=OneWay}" BorderBrush="{x:Bind BorderBrush, Mode=OneWay}"
+            BorderThickness="{x:Bind BorderThickness, Mode=OneWay}" CornerRadius="{x:Bind CornerRadius, Mode=OneWay}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <ToggleButton x:Name="HeaderToggle" Content="{x:Bind Header, Mode=OneWay}" MinHeight="{x:Bind MinHeight, Mode=OneWay}"
+                          Style="{StaticResource SettingsExpanderHeaderStyle}" Checked="Header_Checked" Unchecked="Header_Unchecked"/>
+            <Border x:Name="Reveal" Grid.Row="1" Height="0" Opacity="0" Visibility="Collapsed" SizeChanged="Reveal_SizeChanged">
+                <Border x:Name="DetailBorder" VerticalAlignment="Top" Padding="{x:Bind Padding, Mode=OneWay}"
+                        BorderBrush="{x:Bind BorderBrush, Mode=OneWay}" BorderThickness="0,1,0,0">
+                    <ContentPresenter Content="{x:Bind Details, Mode=OneWay}" HorizontalContentAlignment="Stretch"/>
+                </Border>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>
