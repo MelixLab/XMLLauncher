@@ -355,6 +355,36 @@ public sealed partial class VersionsPage : Page
         {
             b.IsChecked = b == card;
         }
+
+        // 点卡片的回弹。PR #1 把 Button 换成 ToggleButton 时把这句连方法一起删了，
+        // 结果选中卡片变成了硬切。这里补回来。
+        Bounce(card);
+    }
+
+    /// <summary>点卡片的回弹：0.955 → 1.018 → 1，只动 transform，不触发重排。</summary>
+    private static void Bounce(FrameworkElement card)
+    {
+        var scale = new ScaleTransform
+        {
+            CenterX = card.ActualWidth / 2,
+            CenterY = card.ActualHeight / 2,
+        };
+        card.RenderTransform = scale;
+
+        var sb = new Storyboard();
+        foreach (var prop in new[] { "ScaleX", "ScaleY" })
+        {
+            var anim = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(280) };
+            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 0.955 });
+            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(140)), Value = 1.018 });
+            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(280)), Value = 1.0 });
+
+            Storyboard.SetTarget(anim, scale);
+            Storyboard.SetTargetProperty(anim, prop);
+            sb.Children.Add(anim);
+        }
+
+        sb.Begin();
     }
 
     // ================= 实例设置 =================

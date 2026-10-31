@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LinxLauncher.Views.SkinsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -142,38 +142,35 @@
 
                         <Rectangle Height="1" Fill="{ThemeResource DividerBrush}" />
 
-                        <StackPanel Orientation="Horizontal" Spacing="24">
-                            <StackPanel Spacing="8">
+                        <!-- 3D 模型：拖动旋转 -->
+                        <Border
+                            Padding="0"
+                            Background="{ThemeResource CardHoverBackgroundBrush}"
+                            CornerRadius="8">
+                            <Grid
+                                x:Name="SkinModelHost"
+                                Height="380"
+                                Background="Transparent"
+                                PointerCanceled="SkinModel_Released"
+                                PointerCaptureLost="SkinModel_Released"
+                                PointerMoved="SkinModel_Moved"
+                                PointerPressed="SkinModel_Pressed"
+                                PointerReleased="SkinModel_Released">
+                                <Image
+                                    x:Name="SkinModel3D"
+                                    IsHitTestVisible="False"
+                                    Stretch="Uniform" />
                                 <TextBlock
+                                    x:Name="SkinModelHint"
+                                    Margin="0,0,0,10"
                                     HorizontalAlignment="Center"
+                                    VerticalAlignment="Bottom"
                                     FontSize="12"
                                     Foreground="{ThemeResource SecondaryTextBrush}"
-                                    Text="正面" />
-                                <Border
-                                    Width="104"
-                                    Height="208"
-                                    Background="{ThemeResource CardHoverBackgroundBrush}"
-                                    CornerRadius="6">
-                                    <Image x:Name="BodyFront" Stretch="Uniform" />
-                                </Border>
-                            </StackPanel>
-
-                            <StackPanel Spacing="8">
-                                <TextBlock
-                                    HorizontalAlignment="Center"
-                                    FontSize="12"
-                                    Foreground="{ThemeResource SecondaryTextBrush}"
-                                    Text="背面" />
-                                <Border
-                                    Width="104"
-                                    Height="208"
-                                    Background="{ThemeResource CardHoverBackgroundBrush}"
-                                    CornerRadius="6">
-                                    <Image x:Name="BodyBack" Stretch="Uniform" />
-                                </Border>
-                            </StackPanel>
-                        </StackPanel>
-
+                                    IsHitTestVisible="False"
+                                    Text="按住拖动可以转一圈" />
+                            </Grid>
+                        </Border>
                         <TextBlock
                             x:Name="EmptyHint"
                             FontSize="13"

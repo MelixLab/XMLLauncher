@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -316,6 +316,24 @@ public static class SkinService
     private static long Stamp(string path)
     {
         try { return File.GetLastWriteTimeUtc(path).Ticks; } catch { return 0; }
+    }
+
+    /// <summary>给 3D 渲染用：拿到未缩放的原始皮肤像素。</summary>
+    public static async Task<SkinRenderer3D.SkinImage?> LoadSkinImageAsync(string? skinPath, string model)
+    {
+        var path = ResolveSkin(skinPath, model);
+        if (path.Length == 0) return null;
+
+        try
+        {
+            var (pixels, w, h) = await LoadSkinAsync(path);
+            return new SkinRenderer3D.SkinImage { Pixels = pixels, Width = w, Height = h };
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("读取皮肤失败：" + ex.Message);
+            return null;
+        }
     }
 
     private static async Task<(byte[] pixels, int w, int h)> LoadSkinAsync(string path)

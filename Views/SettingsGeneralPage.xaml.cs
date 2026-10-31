@@ -26,9 +26,12 @@ public sealed partial class SettingsGeneralPage : Page
     private string _savedPlayerName = "";
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _saveTimer;
     private bool _savePending;
+    private bool _loadingPet;
 
     public SettingsGeneralPage()
     {
+
+
         InitializeComponent();
         var s = AppState.Settings;
         UpdateDirectorySummary();

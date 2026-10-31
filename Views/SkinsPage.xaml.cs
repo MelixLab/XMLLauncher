@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,6 +6,7 @@ using LinxLauncher.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.Storage.Pickers;
@@ -18,6 +19,15 @@ namespace LinxLauncher.Views;
 /// </summary>
 public sealed partial class SkinsPage : Page
 {
+
+    // 3D 预览：当前旋转角度 + 拖动状态
+    private double _yaw = 24;
+    private double _pitch = -8;
+    private bool _dragging;
+    private long _lastRenderTick;
+    private double _dragX, _dragY;
+    private SkinRenderer3D.SkinImage? _skinPixels;
+    private string? _renderedSkinPath;
     private string? _accountId;
     private bool _loading;
 
@@ -144,11 +154,8 @@ public sealed partial class SkinsPage : Page
             AvatarInitial.Visibility = Visibility.Collapsed;
         }
 
-        var front = await SkinService.RenderBodyAsync(path, acc.SkinModel, false, 6);
-        var back = await SkinService.RenderBodyAsync(path, acc.SkinModel, true, 6);
-
-        BodyFront.Source = front;
-        BodyBack.Source = back;
+        // 正面/背面两张小图换成可拖动的 3D 模型
+        await LoadSkinModelAsync(path, acc.SkinModel);
     }
 
     // ================= 操作 =================
@@ -311,4 +318,94 @@ public sealed partial class SkinsPage : Page
             return null;
         }
     }
+
+    /* ==================== 3D 皮肤预览 ==================== */
+
+    private void SkinModel_Pressed(object sender, PointerRoutedEventArgs e)
+    {
+        _dragging = true;
+        var p = e.GetCurrentPoint(SkinModelHost);
+        _dragX = p.Position.X;
+        _dragY = p.Position.Y;
+        SkinModelHost.CapturePointer(e.Pointer);
+        if (SkinModelHint is not null) SkinModelHint.Visibility = Visibility.Collapsed;
+    }
+
+    private void SkinModel_Moved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_dragging) return;
+
+        var p = e.GetCurrentPoint(SkinModelHost);
+        var dx = p.Position.X - _dragX;
+        var dy = p.Position.Y - _dragY;
+        _dragX = p.Position.X;
+        _dragY = p.Position.Y;
+
+        _yaw += dx * 0.6;
+        _pitch = Math.Clamp(_pitch + dy * 0.35, -35, 35);
+
+        // 节流：软件渲染一帧要几十毫秒，指针事件比这密得多，
+        // 每帧都渲染会排长队，表现就是拖一下停一下。
+        var now = Environment.TickCount64;
+        if (now - _lastRenderTick < 40) return;
+        _lastRenderTick = now;
+
+        _ = RenderSkinModelAsync();
+    }
+
+    private void SkinModel_Released(object sender, PointerRoutedEventArgs e)
+    {
+        _dragging = false;
+        SkinModelHost.ReleasePointerCapture(e.Pointer);
+
+        // 松手后补一张全分辨率的
+        _ = RenderSkinModelAsync();
+    }
+
+    /// <summary>按当前角度重画一帧 3D。</summary>
+    private async Task RenderSkinModelAsync()
+    {
+        if (_skinPixels is null) return;
+
+        // 不降分辨率：之前拖动时按 0.55 渲染，再放大显示就是马赛克。
+        // 卡顿改用节流解决（见 SkinModel_Moved）。
+        try
+        {
+            var w = (int)Math.Max(180, SkinModelHost.ActualWidth);
+            var h = (int)Math.Max(240, SkinModelHost.ActualHeight);
+
+            SkinModel3D.Source = await SkinRenderer3D.RenderAsync(_skinPixels, w, h, _yaw, _pitch);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("3D 皮肤渲染失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>皮肤换了之后重新读像素并重画。</summary>
+    private async Task LoadSkinModelAsync(string? skinPath, string model)
+    {
+        if (_renderedSkinPath == skinPath && _skinPixels is not null)
+        {
+            await RenderSkinModelAsync();
+            return;
+        }
+
+        _skinPixels = await SkinService.LoadSkinImageAsync(skinPath, model);
+        _renderedSkinPath = skinPath;
+
+        if (_skinPixels is null)
+        {
+            SkinModel3D.Source = null;
+            if (SkinModelHint is not null)
+            {
+                SkinModelHint.Text = "这个账户还没有皮肤";
+                SkinModelHint.Visibility = Visibility.Visible;
+            }
+            return;
+        }
+
+        await RenderSkinModelAsync();
+    }
+
 }

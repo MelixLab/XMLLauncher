@@ -77,6 +77,11 @@ public sealed class AppSettings
     /// <summary>服务器账号的头像图片（和游戏账号分开，登录后优先显示这张）。</summary>
     public string? ServerAvatarPath { get; set; }
 
+    /// <summary>桌宠：是否显示，以及用哪个账户的形象。</summary>
+    public bool PetEnabled { get; set; }
+    public string? PetAccountId { get; set; }
+    public bool PetFollowCursor { get; set; }
+
     // ---- 微软正版账号 ----
     public bool UseMsAccount { get; set; }
     public string? MsName { get; set; }
