@@ -15,7 +15,7 @@ namespace LinxLauncher.Views;
 
 /// <summary>
 /// 联机页：三张入口卡片（和首页同一套样式），点按钮进二级对话框做事。
-/// 开房 / 浏览大厅 / 加入房间分别是三个 ContentDialog。
+/// 开房 / 加入使用对话框，大厅使用可自适应的房间卡片视图。
 /// </summary>
 public sealed partial class RelayPage : Page
 {
@@ -25,11 +25,14 @@ public sealed partial class RelayPage : Page
     private NatInfo _nat = new(NatKind.Unknown, null, "");
     private DispatcherQueueTimer? _tick;
     private bool _busy;
+    private CancellationTokenSource? _lobbyCts;
+    private bool _detectingNat;
 
     public RelayPage()
     {
         InitializeComponent();
         NavigationCacheMode = NavigationCacheMode.Required;
+        SizeChanged += (_, _) => UpdateContentPadding();
     }
 
     private FeatureCard[] _cards = Array.Empty<FeatureCard>();
@@ -152,6 +155,7 @@ public sealed partial class RelayPage : Page
 
         // 首页那套「鼠标跟随描边」是页面统一驱动的：这里也要把三张卡片收集起来
         _cards = new[] { HostCard, LobbyCard, JoinCard };
+        UpdateContentPadding();
 
         RefreshHostCard();
 
@@ -160,6 +164,7 @@ public sealed partial class RelayPage : Page
 
         _tick ??= CreateTick();
         _tick.Start();
+        if (LobbyView.Visibility == Visibility.Visible) _ = LoadLobbyAsync();
 
         // 自动化测试入口：设了 XML_TEST_JOIN=<房间号> 就直接加入，不用点界面
         var autoJoin = Environment.GetEnvironmentVariable("XML_TEST_JOIN");
@@ -171,6 +176,23 @@ public sealed partial class RelayPage : Page
     {
         base.OnNavigatedFrom(e);
         _tick?.Stop();
+        CancelLobbyRequest();
+    }
+
+    private void UpdateContentPadding()
+    {
+        var padding = ActualWidth < 720 ? new Thickness(16, 20, 16, 24) : new Thickness(32, 28, 32, 24);
+        MainContent.Padding = padding;
+        LobbyContent.Padding = padding;
+    }
+
+    private void CancelLobbyRequest()
+    {
+        var pending = _lobbyCts;
+        _lobbyCts = null;
+        pending?.Cancel();
+        LobbyLoadingRing.IsActive = false;
+        LobbyRefreshButton.IsEnabled = true;
     }
 
     // ==================== 卡片悬停描边 ====================
@@ -223,6 +245,9 @@ public sealed partial class RelayPage : Page
 
     private async Task DetectNatAsync()
     {
+        if (_detectingNat) return;
+        _detectingNat = true;
+        RedetectButton.IsEnabled = false;
         NatText.Text = "网络检测中…";
         PublicAddrText.Text = "";
 
@@ -235,6 +260,11 @@ public sealed partial class RelayPage : Page
         catch (Exception ex)
         {
             NatText.Text = "检测失败：" + ex.Message;
+        }
+        finally
+        {
+            _detectingNat = false;
+            RedetectButton.IsEnabled = true;
         }
     }
 
@@ -298,7 +328,7 @@ public sealed partial class RelayPage : Page
         {
             XamlRoot = XamlRoot,
             Title = "开启新世界",
-            Content = new StackPanel { Spacing = 12, MinWidth = 380, Children = { tip, world, portBox, pass } },
+            Content = new StackPanel { Spacing = 12, MaxWidth = 400, Children = { tip, world, portBox, pass } },
             PrimaryButtonText = "开房间",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary
@@ -336,6 +366,7 @@ public sealed partial class RelayPage : Page
         finally
         {
             _busy = false;
+            HostButton.IsEnabled = true;
         }
     }
 
@@ -390,12 +421,15 @@ public sealed partial class RelayPage : Page
         LobbyTitle.FontFamily = FontService.DisplayFont;
 
         DispatcherQueue.TryEnqueue(() => FontService.Apply(LobbyView));
+        BackButton.Focus(FocusState.Programmatic);
     }
 
     private void ShowMain()
     {
+        CancelLobbyRequest();
         LobbyView.Visibility = Visibility.Collapsed;
         MainView.Visibility = Visibility.Visible;
+        BrowseButton.Focus(FocusState.Programmatic);
     }
 
     private void Back_Click(object sender, RoutedEventArgs e) => ShowMain();
@@ -405,81 +439,81 @@ public sealed partial class RelayPage : Page
     /// <summary>读一遍大厅，把房间排成卡片墙（和主页三张卡片一个样式）。</summary>
     private async Task LoadLobbyAsync()
     {
+        CancelLobbyRequest();
+        var request = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        _lobbyCts = request;
         LobbyList.Children.Clear();
         _lobbyCards.Clear();
-        LobbyHint.Text = "正在读取大厅…";
+        LobbyHint.Text = "公开的世界会显示在这里，点「加入」连接房间。";
+        LobbyState.Visibility = Visibility.Visible;
+        LobbyStateText.Text = "正在读取大厅…";
+        LobbyLoadingRing.Visibility = Visibility.Visible;
+        LobbyLoadingRing.IsActive = true;
+        LobbyRetryButton.Visibility = Visibility.Collapsed;
+        LobbyRefreshButton.IsEnabled = false;
 
-        var rooms = await FetchRoomsAsync(LobbyHint);
-
-        if (rooms.Count == 0)
-        {
-            LobbyHint.Text = "现在还没人开房。回上一页开一个，朋友就能在这里看到。";
-            return;
-        }
-
-        LobbyHint.Text = $"{rooms.Count} 个房间 · 点「加入」直接进";
-
-        // 一行三张，卡片宽度和主页的 232 略宽一点，能放下房间号
-        const int columns = 3;
-        const double cardWidth = 300;
-
-        var grid = new Grid { ColumnSpacing = 8, RowSpacing = 8 };
-        for (var i = 0; i < columns; i++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(cardWidth) });
-
-        var row = -1;
-        for (var i = 0; i < rooms.Count; i++)
-        {
-            if (i % columns == 0)
-            {
-                grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                row++;
-            }
-
-            var card = BuildRoomCard(rooms[i]);
-            Grid.SetRow(card, row);
-            Grid.SetColumn(card, i % columns);
-            grid.Children.Add(card);
-            _lobbyCards.Add(card);
-        }
-
-        LobbyList.Children.Add(grid);
-        LobbyCard.Status = $"大厅里有 {rooms.Count} 个房间。";
-    }
-
-    private async Task<System.Collections.Generic.List<JsonElement>> FetchRoomsAsync(TextBlock hint)
-    {
-        var result = new System.Collections.Generic.List<JsonElement>();
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            var text = await Http.Client.GetStringAsync(RemoteService.BaseUrl + "/api/lobby/rooms", cts.Token);
-            using var doc = JsonDocument.Parse(text);
+            var rooms = await FetchRoomsAsync(request.Token);
+            if (_lobbyCts != request) return;
 
-            foreach (var room in doc.RootElement.GetProperty("items").EnumerateArray())
-                result.Add(room.Clone());
+            LobbyHint.Text = $"{rooms.Count} 个房间 · 点「加入」直接进";
+            LobbyCard.Status = $"大厅里有 {rooms.Count} 个房间。";
+            if (rooms.Count == 0)
+            {
+                LobbyStateText.Text = "现在还没人开房。返回联机开一个，朋友就能在这里看到。";
+                return;
+            }
 
-            hint.Text = result.Count == 0
-                ? "还没有人开房。你先开一个，朋友就能看到。"
-                : $"共 {result.Count} 个房间";
+            LobbyState.Visibility = Visibility.Collapsed;
+            foreach (var room in rooms)
+            {
+                var card = BuildRoomCard(room);
+                LobbyList.Children.Add(card);
+                _lobbyCards.Add(card);
+            }
+        }
+        catch (OperationCanceledException) when (_lobbyCts != request)
+        {
+            // 离页、返回或后续刷新已经接管 UI。
         }
         catch (Exception ex)
         {
-            hint.Text = "大厅读取失败：" + ex.Message.Split('\n')[0];
+            if (_lobbyCts != request) return;
+            Log.Error("Lobby", ex);
+            LobbyState.Visibility = Visibility.Visible;
+            LobbyStateText.Text = ex is OperationCanceledException
+                ? "大厅读取超时，请重试。"
+                : "暂时无法读取大厅，请检查网络后重试。";
+            LobbyRetryButton.Visibility = Visibility.Visible;
         }
+        finally
+        {
+            if (_lobbyCts == request)
+            {
+                _lobbyCts = null;
+                LobbyLoadingRing.IsActive = false;
+                LobbyLoadingRing.Visibility = Visibility.Collapsed;
+                LobbyRefreshButton.IsEnabled = true;
+            }
+            request.Dispose();
+        }
+    }
+
+    private static async Task<System.Collections.Generic.List<JsonElement>> FetchRoomsAsync(CancellationToken token)
+    {
+        var result = new System.Collections.Generic.List<JsonElement>();
+        var text = await Http.Client.GetStringAsync(RemoteService.BaseUrl + "/api/lobby/rooms", token);
+        using var doc = JsonDocument.Parse(text);
+
+        foreach (var room in doc.RootElement.GetProperty("items").EnumerateArray())
+            result.Add(room.Clone());
 
         return result;
     }
 
     /// <summary>
-    /// 大厅里的一行：世界名 / 房间号 / 谁在里面 / 信号条 / 加入。
-    ///
-    /// 原来这里挂着一句「对称型 NAT（可能连不上）」，用户看不懂也帮不上忙，
-    /// 现在直接把「能不能连、快不快」画成四格信号条。
-    /// </summary>
-    /// <summary>
-    /// 一个房间就是一张 FeatureCard —— 和主页那三张完全同一套观感：
-    /// 白底直角、悬停浅灰 + 鼠标跟随描边、底部按钮贴齐。
+    /// 房间复用 FeatureCard；可用宽度改变时只重排，不重建卡片或联机会话。
     /// </summary>
     private Controls.FeatureCard BuildRoomCard(JsonElement room)
     {
@@ -644,7 +678,7 @@ public sealed partial class RelayPage : Page
         {
             XamlRoot = XamlRoot,
             Title = "加入房间",
-            Content = new StackPanel { Spacing = 12, MinWidth = 360, Children = { codeBox, passBox } },
+            Content = new StackPanel { Spacing = 12, MaxWidth = 400, Children = { codeBox, passBox } },
             PrimaryButtonText = "加入",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary
@@ -685,7 +719,7 @@ public sealed partial class RelayPage : Page
         {
             XamlRoot = XamlRoot,
             Title = $"加入房间 {code}",
-            Content = new StackPanel { Spacing = 14, MinWidth = 400, Children = { ring, statusText } },
+            Content = new StackPanel { Spacing = 14, MaxWidth = 420, Children = { ring, statusText } },
             CloseButtonText = "后台运行",
         };
         FontService.ApplyToDialog(progress);

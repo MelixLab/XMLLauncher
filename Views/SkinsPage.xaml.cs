@@ -20,10 +20,38 @@ public sealed partial class SkinsPage : Page
 {
     private string? _accountId;
     private bool _loading;
+    private int _renderVersion;
+    private bool _operationBusy;
+
+    private void PageContent_SizeChanged(object sender, SizeChangedEventArgs e)
+        => PageContent.Padding = new Thickness(e.NewSize.Width < 720 ? 16 : 32, 28, e.NewSize.Width < 720 ? 16 : 32, 24);
+
+    private void AccountRow_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var narrow = e.NewSize.Width < 800;
+        Grid.SetRow(AccountPicker, narrow ? 1 : 0);
+        Grid.SetColumn(AccountPicker, narrow ? 0 : 1);
+        Grid.SetColumnSpan(AccountPicker, narrow ? 3 : 1);
+        Grid.SetRow(DefaultHint, narrow ? 2 : 0);
+        Grid.SetColumn(DefaultHint, narrow ? 0 : 2);
+        Grid.SetColumnSpan(DefaultHint, narrow ? 3 : 1);
+    }
+
+    private void SkinContent_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var narrow = e.NewSize.Width < 800;
+        PreviewColumn.Width = narrow ? new GridLength(1, GridUnitType.Star) : new GridLength(380);
+        Grid.SetColumnSpan(PreviewCard, narrow ? 2 : 1);
+        Grid.SetColumn(EditingCard, narrow ? 0 : 1);
+        Grid.SetColumnSpan(EditingCard, narrow ? 2 : 1);
+        Grid.SetRow(EditingCard, narrow ? 1 : 0);
+        SkinContent.ColumnSpacing = narrow ? 0 : 16;
+    }
 
     public SkinsPage()
     {
         InitializeComponent();
+        Unloaded += (_, _) => _renderVersion++;
         Loaded += (_, _) =>
         {
             if (_accountId is null) _accountId = AccountService.Current?.Id;
@@ -64,7 +92,11 @@ public sealed partial class SkinsPage : Page
             }
         }
 
-        if (AccountPicker.Items.Count > 0) AccountPicker.SelectedIndex = index;
+        if (AccountPicker.Items.Count > 0)
+        {
+            AccountPicker.SelectedIndex = index;
+            _accountId = (AccountPicker.Items[index] as ComboBoxItem)?.Tag as string;
+        }
         _loading = false;
     }
 
@@ -113,11 +145,13 @@ public sealed partial class SkinsPage : Page
 
         AvatarInitial.Text = string.IsNullOrWhiteSpace(acc.Name) ? "S" : acc.Name.Trim()[..1].ToUpperInvariant();
 
-        _ = RenderAsync(acc);
+        AvatarImage.Visibility = Visibility.Collapsed;
+        AvatarInitial.Visibility = Visibility.Visible;
+        BodyFront.Source = null;
+        BodyBack.Source = null;
+        _ = RenderAsync(acc, ++_renderVersion);
 
-        SyncButton.IsEnabled = acc.IsMicrosoft && !string.IsNullOrEmpty(acc.AccessToken);
-        UploadButton.IsEnabled = acc.IsMicrosoft && acc.HasSkin;
-        ClearButton.IsEnabled = acc.HasSkin;
+        UpdateActionState();
 
         StatusText.Text = acc.IsMicrosoft
             ? "从角色档案同步会拉 Mojang 上这张皮肤；上传会把当前皮肤（按上面的模型）写回你的正版账号，重启游戏后生效。"
@@ -127,11 +161,27 @@ public sealed partial class SkinsPage : Page
         DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => FontService.Apply(this));
     }
 
-    private async Task RenderAsync(GameAccount acc)
+    private void UpdateActionState()
+    {
+        var acc = Account;
+        ImportButton.IsEnabled = !_operationBusy && acc is not null;
+        SyncButton.IsEnabled = !_operationBusy && acc?.IsMicrosoft == true && !string.IsNullOrEmpty(acc.AccessToken);
+        UploadButton.IsEnabled = !_operationBusy && acc?.IsMicrosoft == true && acc.HasSkin;
+        ClearButton.IsEnabled = !_operationBusy && acc?.HasSkin == true;
+        ModelChoice.IsEnabled = !_operationBusy && acc is not null;
+    }
+
+    private bool IsViewing(GameAccount acc) => IsLoaded && Account?.Id == acc.Id;
+
+    private async Task RenderAsync(GameAccount acc, int version)
     {
         var path = acc.SkinPath;
+        var model = acc.SkinModel;
 
-        var avatar = await SkinService.RenderAvatarAsync(path, 256, acc.SkinModel);
+        var avatar = await SkinService.RenderAvatarAsync(path, 256, model);
+        var front = await SkinService.RenderBodyAsync(path, model, false, 6);
+        var back = await SkinService.RenderBodyAsync(path, model, true, 6);
+        if (version != _renderVersion || !IsViewing(acc)) return;
         if (avatar is null)
         {
             AvatarImage.Visibility = Visibility.Collapsed;
@@ -144,9 +194,6 @@ public sealed partial class SkinsPage : Page
             AvatarInitial.Visibility = Visibility.Collapsed;
         }
 
-        var front = await SkinService.RenderBodyAsync(path, acc.SkinModel, false, 6);
-        var back = await SkinService.RenderBodyAsync(path, acc.SkinModel, true, 6);
-
         BodyFront.Source = front;
         BodyBack.Source = back;
     }
@@ -156,14 +203,13 @@ public sealed partial class SkinsPage : Page
     private async void Import_Click(object sender, RoutedEventArgs e)
     {
         var acc = Account;
-        if (acc is null) return;
-
-        var path = await PickPngAsync();
-        if (path is null) return;
-
-        ImportButton.IsEnabled = false;
+        if (acc is null || _operationBusy) return;
+        _operationBusy = true;
+        UpdateActionState();
         try
         {
+            var path = await PickPngAsync();
+            if (path is null) return;
             var error = await SkinService.ImportAsync(acc, path, default);
             if (error is not null)
             {
@@ -177,23 +223,25 @@ public sealed partial class SkinsPage : Page
         }
         finally
         {
-            ImportButton.IsEnabled = true;
+            _operationBusy = false;
+            UpdateActionState();
         }
     }
 
     private async void Sync_Click(object sender, RoutedEventArgs e)
     {
         var acc = Account;
-        if (acc is null) return;
+        if (acc is null || _operationBusy) return;
 
-        SyncButton.IsEnabled = false;
+        _operationBusy = true;
+        UpdateActionState();
         StatusText.Text = "正在读取角色档案…";
         try
         {
             var error = await SkinService.SyncFromOfficialAsync(acc, default);
             if (error is not null)
             {
-                StatusText.Text = error;
+                if (IsViewing(acc)) StatusText.Text = error;
                 MainWindow.Instance?.Toast(error, true);
                 return;
             }
@@ -204,15 +252,15 @@ public sealed partial class SkinsPage : Page
         }
         finally
         {
-            SyncButton.IsEnabled = true;
-            Refresh();
+            _operationBusy = false;
+            UpdateActionState();
         }
     }
 
     private async void Upload_Click(object sender, RoutedEventArgs e)
     {
         var acc = Account;
-        if (acc?.IsMicrosoft != true || !acc.HasSkin) return;
+        if (acc?.IsMicrosoft != true || !acc.HasSkin || _operationBusy) return;
 
         var dialog = new ContentDialog
         {
@@ -230,13 +278,15 @@ public sealed partial class SkinsPage : Page
 
         FontService.ApplyToDialog(dialog);
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (_operationBusy) return;
 
-        UploadButton.IsEnabled = false;
-        StatusText.Text = "正在上传…";
+        _operationBusy = true;
+        UpdateActionState();
+        if (IsViewing(acc)) StatusText.Text = "正在上传…";
         try
         {
             var error = await SkinService.UploadToOfficialAsync(acc, default);
-            StatusText.Text = error ?? "上传成功，重启游戏后生效。";
+            if (IsViewing(acc)) StatusText.Text = error ?? "上传成功，重启游戏后生效。";
             if (error is null)
             {
                 acc.SkinSource = "mojang";
@@ -250,14 +300,15 @@ public sealed partial class SkinsPage : Page
         }
         finally
         {
-            UploadButton.IsEnabled = true;
+            _operationBusy = false;
+            UpdateActionState();
         }
     }
 
     private void Clear_Click(object sender, RoutedEventArgs e)
     {
         var acc = Account;
-        if (acc is null || !acc.HasSkin) return;
+        if (acc is null || !acc.HasSkin || _operationBusy) return;
 
         SkinService.ClearSkin(acc);
         AccountService.Save(acc);
@@ -267,7 +318,7 @@ public sealed partial class SkinsPage : Page
 
     private void ModelChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_loading) return;
+        if (_loading || _operationBusy) return;
 
         var acc = Account;
         if (acc is null) return;
@@ -277,7 +328,7 @@ public sealed partial class SkinsPage : Page
 
         acc.SkinModel = model;
         AccountService.Save(acc);
-        Refresh();
+        if (IsViewing(acc)) Refresh();
     }
 
     private void AfterSkinChanged(GameAccount acc)
@@ -285,7 +336,7 @@ public sealed partial class SkinsPage : Page
         if (acc.Id == AccountService.Current?.Id)
             MainWindow.Instance?.RefreshAccountUi();
 
-        Refresh();
+        if (IsViewing(acc)) Refresh();
     }
 
     // ================= 工具 =================

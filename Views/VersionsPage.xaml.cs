@@ -4,9 +4,10 @@ using System.Diagnostics;
 using System.IO;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
-using System.Numerics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using Windows.UI.ViewManagement;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -38,85 +39,173 @@ public sealed partial class VersionsPage : Page
     private bool _loading;
     private VersionSummary? _selected;
     private LoaderKind _loader = LoaderKind.Vanilla;
-    private List<LoaderVersion> _loaderList = new();
     private int _filter; // 0=全部 1=正式版 2=快照
     private bool _installedOnly; // 从主页「管理版本」进来时只看已安装实例
     private bool _loadingInstance; // 填充实例设置时屏蔽保存回写
+    private bool _initializingFilter;
+    private bool _active;
+    private bool _subscribed;
+    private bool _showingDetail;
+    private bool _installing;
+    private string? _returnVersionId;
+    private CancellationTokenSource? _manifestCts;
+    private CancellationTokenSource? _loaderCts;
+    private int _manifestRequest;
+    private int _loaderRequest;
+    private Storyboard? _viewTransition;
+    private int _viewGeneration;
 
     public VersionsPage()
     {
         InitializeComponent();
-        AppState.InstalledChanged += OnInstalledChanged;
+        Unloaded += (_, _) => DeactivatePage();
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        _active = true;
+        if (!_subscribed)
+        {
+            AppState.InstalledChanged += OnInstalledChanged;
+            _subscribed = true;
+        }
 
-        // 主页「管理版本」带 installed 参数进来：只列已安装的实例
         _installedOnly = e.Parameter as string == "installed";
-        FilterButton.Content = _installedOnly ? "已安装" : "全部";
-        ListViewHost.Visibility = Visibility.Visible;
-        DetailHost.Visibility = Visibility.Collapsed;
+        _filter = 0;
+        _initializingFilter = true;
+        // 已安装是独立模式；保留三项原生筛选，用户选择任一项才退出本地模式。
+        FilterBox.SelectedIndex = _installedOnly ? -1 : 0;
+        FilterBox.PlaceholderText = _installedOnly ? "已安装" : "版本类型";
+        _initializingFilter = false;
+        InstalledModeHint.Visibility = _installedOnly ? Visibility.Visible : Visibility.Collapsed;
+        ShowList(false);
 
-        if (_manifest is null && !_loading) _ = LoadManifestAsync();
-        else ApplyFilter();
+        if (_installedOnly || _manifest is not null) ApplyFilter();
+        else _ = LoadManifestAsync();
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        DeactivatePage();
+        base.OnNavigatedFrom(e);
+    }
+
+    private void DeactivatePage()
+    {
+        _active = false;
+        if (_subscribed)
+        {
+            AppState.InstalledChanged -= OnInstalledChanged;
+            _subscribed = false;
+        }
+        ++_manifestRequest;
+        _manifestCts?.Cancel();
+        _manifestCts = null;
+        _loading = false;
+        LoadingRing.IsActive = false;
+        CancelLoaderRequest();
+        StopViewTransition();
+    }
+
+    private void PageLayout_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        PageLayout.Padding = e.NewSize.Width < 720
+            ? new Thickness(16, 20, 16, 24)
+            : new Thickness(32, 28, 32, 24);
+    }
+
+    private void ListHeader_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool narrow = e.NewSize.Width < 900;
+        Grid.SetColumnSpan(ListHeading, narrow ? 2 : 1);
+        Grid.SetColumn(ListTools, narrow ? 0 : 1);
+        Grid.SetRow(ListTools, narrow ? 1 : 0);
+        Grid.SetColumnSpan(ListTools, narrow ? 2 : 1);
+        ListTools.Width = narrow ? double.NaN : 336;
+        ListTools.HorizontalAlignment = HorizontalAlignment.Stretch;
+    }
+
+    private void InstallLayout_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool narrow = e.NewSize.Width < 740;
+        InstallLayout.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : GridLength.Auto;
+        Grid.SetRow(InstallActions, narrow ? 1 : 0);
+        Grid.SetColumn(InstallActions, narrow ? 0 : 1);
+        InstallActions.HorizontalAlignment = narrow ? HorizontalAlignment.Left : HorizontalAlignment.Right;
     }
 
     private void OnInstalledChanged() => DispatcherQueue.TryEnqueue(() =>
     {
-        if (_manifest is not null) ApplyFilter();
-        UpdateBadge();
+        if (!_active) return;
+        ApplyFilter();
+        if (_showingDetail && _selected is not null)
+        {
+            if (_installedOnly && !AppState.Installed.Any(v => v.Id == _selected.Id))
+            {
+                ShowList();
+                return;
+            }
+            LoadInstance(_selected.Id);
+            UpdateBadge();
+        }
     });
 
     // ================= 清单 =================
     private async Task LoadManifestAsync(bool force = false)
     {
-        if (_loading) return;
+        if (!_active) return;
+        _manifestCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _manifestCts = cts;
+        int request = ++_manifestRequest;
         _loading = true;
-
         LoadingRing.Visibility = Visibility.Visible;
         LoadingRing.IsActive = true;
         ErrorPanel.Visibility = Visibility.Collapsed;
+        EmptyPanel.Visibility = Visibility.Collapsed;
         VersionList.Visibility = Visibility.Collapsed;
 
         try
         {
-            var manifest = await AppState.Versions.GetManifestAsync(force, default);
+            var manifest = await AppState.Versions.GetManifestAsync(force, cts.Token);
+            if (!_active || request != _manifestRequest || cts.IsCancellationRequested) return;
             _manifest = manifest;
+            _loading = false;
             ApplyFilter();
-
-            // 不再自动选中「最新版」：进版本库就该停在列表，由用户自己点
         }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
         catch (Exception ex)
         {
+            if (!_active || request != _manifestRequest) return;
             Log.Error("Manifest", ex);
-            ErrorText.Text = "版本清单获取失败，检查网络后重试。\n" + ex.Message;
+            ErrorText.Text = "版本清单获取失败，检查网络后重试。\n" + FirstLine(ex.Message);
             ErrorPanel.Visibility = Visibility.Visible;
             VersionList.Visibility = Visibility.Collapsed;
         }
         finally
         {
-            _loading = false;
-            LoadingRing.IsActive = false;
-            LoadingRing.Visibility = Visibility.Collapsed;
+            if (request == _manifestRequest)
+            {
+                _manifestCts = null;
+                _loading = false;
+                LoadingRing.IsActive = false;
+                LoadingRing.Visibility = Visibility.Collapsed;
+            }
+            cts.Dispose();
         }
     }
 
     private void ApplyFilter()
     {
-        if (_manifest is null) return;
-
-        // 「已安装」视图直接列本地实例（versions 目录里的全部目录），
-        // 不能只从远程清单里筛：Fabric / Forge 这类实例本地才有，远程清单里根本没有。
+        List<VersionSummary> list;
+        var keyword = SearchBox.Text?.Trim();
         if (_installedOnly)
         {
-            // 注意：这里不能调 AppState.RefreshInstalled()。
-            // 它会触发 InstalledChanged → OnInstalledChanged → ApplyFilter，
-            // 于是变成无限递归，界面直接卡死。
-            var keyword0 = SearchBox.Text?.Trim();
-            var locals = AppState.Installed
-                .Where(v => string.IsNullOrEmpty(keyword0) || v.Id.Contains(keyword0, StringComparison.OrdinalIgnoreCase))
+            // 本地加载器实例不存在于远程清单，也不应依赖网络请求成功。
+            // 不调用 RefreshInstalled，避免 InstalledChanged 递归。
+            list = AppState.Installed
+                .Where(v => string.IsNullOrEmpty(keyword) || v.Id.Contains(keyword, StringComparison.OrdinalIgnoreCase))
                 .Select(v => new VersionSummary
                 {
                     Id = v.Id,
@@ -125,225 +214,200 @@ public sealed partial class VersionsPage : Page
                     Installed = true
                 })
                 .ToList();
-
-            UiList.Fill(VersionList, locals);
-            VersionList.Visibility = Visibility.Visible;
-            return;
         }
-
-        var installed = AppState.Installed.Select(v => v.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var v in _manifest.Versions) v.Installed = installed.Contains(v.Id);
-
-        IEnumerable<VersionSummary> q = _manifest.Versions;
-
-        var keyword = SearchBox.Text?.Trim();
-        if (!string.IsNullOrEmpty(keyword))
-            q = q.Where(v => v.Id.Contains(keyword, StringComparison.OrdinalIgnoreCase));
-
-        var filter = _filter;
-        if (filter == 1) q = q.Where(v => v.IsRelease);
-        else if (filter == 2) q = q.Where(v => v.IsSnapshot);
-        if (_installedOnly) q = q.Where(v => v.Installed);
-
-        var list = q.ToList();
-        UiList.Fill(VersionList, list);
-        VersionList.Visibility = Visibility.Visible;
-
-        if (_selected is not null)
+        else
         {
-            var again = list.FirstOrDefault(v => v.Id == _selected.Id);
-            if (again is not null) VersionList.SelectedItem = again;
-            else { _selected = null; ShowList(); }
+            if (_manifest is null || _loading) return;
+            var installed = AppState.Installed.Select(v => v.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var v in _manifest.Versions) v.Installed = installed.Contains(v.Id);
+            IEnumerable<VersionSummary> query = _manifest.Versions;
+            if (!string.IsNullOrEmpty(keyword))
+                query = query.Where(v => v.Id.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+            if (_filter == 1) query = query.Where(v => v.IsRelease);
+            else if (_filter == 2) query = query.Where(v => v.IsSnapshot);
+            list = query.ToList();
         }
+
+        UiList.Fill(VersionList, list);
+        ErrorPanel.Visibility = Visibility.Collapsed;
+        LoadingRing.Visibility = Visibility.Collapsed;
+        LoadingRing.IsActive = false;
+        VersionList.Visibility = list.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyPanel.Visibility = list.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyText.Text = _installedOnly && string.IsNullOrEmpty(keyword)
+            ? "还没有已安装的版本。选择版本类型，开始安装第一个实例。"
+            : "没有找到匹配的版本。";
     }
 
     private void Search_Changed(object sender, TextChangedEventArgs e)
     {
-        if (SearchBox is null || _manifest is null) return;
+        if (!_active || SearchBox is null) return;
         ApplyFilter();
     }
 
-    private void Filter_Click(object sender, RoutedEventArgs e)
+    private void Filter_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (sender is MenuFlyoutItem item && item.Tag is string tag)
-        {
-            _filter = int.TryParse(tag, out var i) ? i : 0;
-            _installedOnly = false;
-            FilterButton.Content = item.Text;
-        }
-
-        if (!IsLoaded || _manifest is null) return;
-        ApplyFilter();
+        if (_initializingFilter || !_active || FilterBox.SelectedIndex < 0) return;
+        _filter = FilterBox.SelectedIndex;
+        _installedOnly = false;
+        FilterBox.PlaceholderText = "版本类型";
+        InstalledModeHint.Visibility = Visibility.Collapsed;
+        if (_manifest is null && !_loading) _ = LoadManifestAsync();
+        else ApplyFilter();
     }
 
     private void Retry_Click(object sender, RoutedEventArgs e) => _ = LoadManifestAsync(true);
 
     // ================= 选中 =================
-    private async void Version_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void Version_ItemClick(object sender, ItemClickEventArgs e)
     {
-        _selected = VersionList.SelectedItem as VersionSummary;
-        if (_selected is null) { ShowList(); return; }
+        if (!_active || e.ClickedItem is not VersionSummary version) return;
+        CancelLoaderRequest();
+        _selected = version;
+        _returnVersionId = version.Id;
+        _loader = LoaderKind.Vanilla;
+        UiList.Clear(LoaderVersionBox);
+        LoaderVersionPanel.Visibility = Visibility.Collapsed;
+        DetailScroll.ChangeView(null, 0, null, true);
+        DetailId.Text = version.Id;
+        DetailMeta.Text = $"{version.TypeLabel} · {version.ReleaseTime:yyyy 年 M 月 d 日}";
 
-        SwapView(ListViewHost, DetailHost);
-
-        // 详情区是同一页里切视图，不会触发 Navigated，这里自己补一次字体刷新
-        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
-            FontService.RefreshAll);
-
-        DetailId.Text = _selected.Id;
-        DetailMeta.Text = $"{_selected.TypeLabel} · {_selected.ReleaseTime:yyyy 年 M 月 d 日}";
-
-        // 实例真实类型以本地为准：Fabric / Forge 实例在远程清单里只是"release"，
-        // 照清单显示会变成"正式版（原版）"，还会让人以为能再叠一个加载器。
-        var localInstance = AppState.Installed.FirstOrDefault(v => v.Id == _selected.Id);
+        var localInstance = AppState.Installed.FirstOrDefault(v => v.Id == version.Id);
         var kind = localInstance?.DisplayKind ?? "原版";
-        var isLoader = kind != "原版";
-
+        bool isLoader = kind != "原版";
         if (isLoader)
         {
             var baseVersion = string.IsNullOrWhiteSpace(localInstance?.BaseVersion) ? "未知" : localInstance!.BaseVersion!;
             DetailMeta.Text = $"{kind} · 基于 {baseVersion} · 已含加载器，不能再叠加";
-
-            SelectLoaderCard(kind switch
-            {
-                "Fabric" => CardFabric,
-                "Forge" => CardForge,
-                "NeoForge" => CardNeoForge,
-                "Quilt" => CardQuilt,
-                _ => CardVanilla
-            });
         }
-
+        SelectLoaderCard(kind switch
+        {
+            "Fabric" => CardFabric,
+            "Forge" => CardForge,
+            "NeoForge" => CardNeoForge,
+            "Quilt" => CardQuilt,
+            _ => CardVanilla
+        });
         foreach (var card in new[] { CardVanilla, CardFabric, CardForge, CardNeoForge, CardQuilt })
             card.IsEnabled = !isLoader;
 
         UpdateBadge();
-
-        LoadInstance(_selected.Id);
-
-        // 每次进详情都回到「原版」
-        _loader = LoaderKind.Vanilla;
-        SelectLoaderCard(CardVanilla);
-        LoaderVersionPanel.Visibility = Visibility.Collapsed;
+        LoadInstance(version.Id);
         UpdateSummary();
-
-        await Task.CompletedTask;
+        _showingDetail = true;
+        SwapView(ListViewHost, DetailHost, () => BackButton.Focus(FocusState.Programmatic));
+        DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            if (_active && _showingDetail) FontService.RefreshAll();
+        });
     }
 
-    /// <summary>
-    /// 列表 ↔ 详情 的过场：旧视图快速淡出，新视图从 0.94 撑开 + 从下方 26 DIP 滑入 + 淡入。
-    /// 就是微软商店点进详情时那种「先合上、再散开」的过渡。
-    /// </summary>
-    private void SwapView(Grid from, Grid to)
+    private void StopViewTransition()
     {
+        ++_viewGeneration;
+        var previous = _viewTransition;
+        _viewTransition = null;
+        previous?.Stop();
+        foreach (var host in new[] { ListViewHost, DetailHost })
+        {
+            host.Opacity = 1;
+            host.RenderTransform = null;
+        }
+    }
+
+    /// <summary>轻量切换；动画关闭、离页和快速返回都直接归位，不留下透明遮层。</summary>
+    private void SwapView(Grid from, Grid to, Action focus)
+    {
+        StopViewTransition();
+        int generation = _viewGeneration;
+        from.Visibility = Visibility.Collapsed;
+        to.Visibility = Visibility.Visible;
+        void FocusTarget()
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                if (_active && generation == _viewGeneration) focus();
+            });
+        }
+        if (!IsLoaded || !new UISettings().AnimationsEnabled)
+        {
+            FocusTarget();
+            return;
+        }
         try
         {
+            var move = new TranslateTransform { Y = 10 };
+            to.RenderTransform = move;
             to.Opacity = 0;
-            to.Visibility = Visibility.Visible;
-            to.UpdateLayout();
-
-            var width = to.ActualWidth;
-            var height = to.ActualHeight;
-
-            if (width <= 0 || height <= 0)
+            var transition = new Storyboard();
+            var fade = new DoubleAnimation
             {
-                from.Visibility = Visibility.Collapsed;
-                from.Opacity = 1;
-                to.Opacity = 1;
-                return;
-            }
-
-            var scale = new ScaleTransform
-            {
-                ScaleX = 0.94,
-                ScaleY = 0.94,
-                CenterX = width / 2,
-                CenterY = height / 2
+                From = 0, To = 1,
+                Duration = new Duration(TimeSpan.FromMilliseconds(180))
             };
-            var move = new TranslateTransform { Y = 26 };
-            var group = new TransformGroup();
-            group.Children.Add(scale);
-            group.Children.Add(move);
-            to.RenderTransform = group;
-
-            from.Opacity = 1;
-            from.RenderTransform = null;
-
-            var sb = new Storyboard();
-
-            var fadeIn = new DoubleAnimation
-            {
-                To = 1,
-                Duration = new Duration(TimeSpan.FromMilliseconds(240))
-            };
-            Storyboard.SetTarget(fadeIn, to);
-            Storyboard.SetTargetProperty(fadeIn, "Opacity");
-            sb.Children.Add(fadeIn);
-
-            var zoomX = new DoubleAnimation
-            {
-                To = 1,
-                Duration = new Duration(TimeSpan.FromMilliseconds(420)),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            Storyboard.SetTarget(zoomX, scale);
-            Storyboard.SetTargetProperty(zoomX, "ScaleX");
-            sb.Children.Add(zoomX);
-
-            var zoomY = new DoubleAnimation
-            {
-                To = 1,
-                Duration = new Duration(TimeSpan.FromMilliseconds(420)),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            Storyboard.SetTarget(zoomY, scale);
-            Storyboard.SetTargetProperty(zoomY, "ScaleY");
-            sb.Children.Add(zoomY);
-
+            Storyboard.SetTarget(fade, to);
+            Storyboard.SetTargetProperty(fade, "Opacity");
+            transition.Children.Add(fade);
             var slide = new DoubleAnimation
             {
-                To = 0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(420)),
+                From = 10, To = 0,
+                Duration = new Duration(TimeSpan.FromMilliseconds(200)),
+                EnableDependentAnimation = true,
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             Storyboard.SetTarget(slide, move);
             Storyboard.SetTargetProperty(slide, "Y");
-            sb.Children.Add(slide);
-
-            var fadeOut = new DoubleAnimation
+            transition.Children.Add(slide);
+            transition.Completed += (_, _) =>
             {
-                To = 0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(160)),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(fadeOut, from);
-            Storyboard.SetTargetProperty(fadeOut, "Opacity");
-            sb.Children.Add(fadeOut);
-
-            sb.Completed += (_, _) =>
-            {
-                from.Visibility = Visibility.Collapsed;
-                from.Opacity = 1;
+                if (!ReferenceEquals(_viewTransition, transition)) return;
+                _viewTransition = null;
+                transition.Stop();
                 to.Opacity = 1;
                 to.RenderTransform = null;
+                FocusTarget();
             };
-
-            sb.Begin();
+            _viewTransition = transition;
+            transition.Begin();
         }
         catch (Exception ex)
         {
             Log.Error("VersionTransition", ex);
-            from.Visibility = Visibility.Collapsed;
-            from.Opacity = 1;
-            to.Visibility = Visibility.Visible;
+            StopViewTransition();
             to.Opacity = 1;
+            if (_active) focus();
         }
     }
 
-    private void ShowList()
+    private void ShowList(bool restoreFocus = true)
     {
-        SwapView(DetailHost, ListViewHost);
-        VersionList.SelectedItem = null;
+        CancelLoaderRequest();
+        _selected = null;
+        bool wasDetail = _showingDetail;
+        _showingDetail = false;
+        if (wasDetail && restoreFocus)
+            SwapView(DetailHost, ListViewHost, RestoreListFocus);
+        else
+        {
+            StopViewTransition();
+            DetailHost.Visibility = Visibility.Collapsed;
+            ListViewHost.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void RestoreListFocus()
+    {
+        var previous = VersionList.Items.OfType<VersionSummary>().FirstOrDefault(v => v.Id == _returnVersionId);
+        if (previous is null || VersionList.Visibility != Visibility.Visible)
+        {
+            SearchBox.Focus(FocusState.Programmatic);
+            return;
+        }
+        VersionList.ScrollIntoView(previous);
+        VersionList.UpdateLayout();
+        if (VersionList.ContainerFromItem(previous) is ListViewItem item)
+            item.Focus(FocusState.Programmatic);
+        else VersionList.Focus(FocusState.Programmatic);
     }
 
     private void Back_Click(object sender, RoutedEventArgs e) => ShowList();
@@ -396,12 +460,15 @@ public sealed partial class VersionsPage : Page
         }
 
         _loadingInstance = true;
-        MemoryBox.Value = inst.MemoryMb ?? s.MemoryMb;
-        WidthBox.Value = inst.Width ?? s.GameWidth;
-        HeightBox.Value = inst.Height ?? s.GameHeight;
-        FullscreenSwitch.IsOn = inst.Fullscreen ?? s.Fullscreen;
-        IsolatedSwitch.IsOn = inst.Isolated;
-        _loadingInstance = false;
+        try
+        {
+            MemoryBox.Value = inst.MemoryMb ?? s.MemoryMb;
+            WidthBox.Value = inst.Width ?? s.GameWidth;
+            HeightBox.Value = inst.Height ?? s.GameHeight;
+            FullscreenSwitch.IsOn = inst.Fullscreen ?? s.Fullscreen;
+            IsolatedSwitch.IsOn = inst.Isolated;
+        }
+        finally { _loadingInstance = false; }
 
         // 实例信息
         SizeValue.Text = GameInstaller.FormatSize(DirSize(Paths.VersionDir(id)));
@@ -729,24 +796,34 @@ public sealed partial class VersionsPage : Page
         if (_selected is null) return;
 
         var versionId = _selected.Id;
+        var operationKey = $"version:{versionId}";
+        if (AppState.Downloads.IsRunningFor(operationKey))
+        {
+            MainWindow.Instance?.NavigateTo("downloads");
+            return;
+        }
         RepairButton.IsEnabled = false;
 
-        var job = AppState.Downloads.Begin($"{versionId} · 校验文件");
-        var dialog = new Controls.DownloadProgressDialog(job) { XamlRoot = XamlRoot };
-        _ = dialog.ShowAsync();
+        var job = AppState.Downloads.Begin($"{versionId} · 校验文件", operationKey: operationKey);
 
         try
         {
+            MainWindow.Instance?.NavigateTo("downloads");
             var progress = new Progress<InstallProgress>(p =>
                 DispatcherQueue.TryEnqueue(() => job.Apply(p)));
 
             var fixedCount = await Task.Run(() =>
                 AppState.Installer.RepairAsync(versionId, progress, job.Cts.Token));
+            job.Cts.Token.ThrowIfCancellationRequested();
 
             AppState.Downloads.Finish(job, true);
             MainWindow.Instance?.Toast(fixedCount == 0
                 ? "文件是完整的，不用修"
                 : $"已补全 {fixedCount} 个缺失文件，再启动就是中文和正常背景了");
+        }
+        catch (OperationCanceledException) when (job.Cts.IsCancellationRequested)
+        {
+            AppState.Downloads.Finish(job, false, "已取消");
         }
         catch (Exception ex)
         {
@@ -822,8 +899,22 @@ public sealed partial class VersionsPage : Page
         await RefreshLoaderVersionsAsync();
     }
 
+    private void CancelLoaderRequest()
+    {
+        ++_loaderRequest;
+        _loaderCts?.Cancel();
+        _loaderCts = null;
+        LoaderRing.IsActive = false;
+        LoaderRing.Visibility = Visibility.Collapsed;
+        LoaderRetryButton.Visibility = Visibility.Collapsed;
+    }
+
     private async Task RefreshLoaderVersionsAsync()
     {
+        CancelLoaderRequest();
+        if (!_active || !_showingDetail || _selected is null) return;
+        UiList.Clear(LoaderVersionBox);
+        LoaderHint.Visibility = Visibility.Collapsed;
         if (_loader == LoaderKind.Vanilla)
         {
             LoaderVersionPanel.Visibility = Visibility.Collapsed;
@@ -831,49 +922,57 @@ public sealed partial class VersionsPage : Page
             return;
         }
 
-        // 入场动画：从下方 12 DIP 淡入到位（TranslationTransition 自动补间）
-        LoaderVersionPanel.Translation = new Vector3(0, 12, 0);
-        LoaderVersionPanel.Opacity = 0;
-        LoaderVersionPanel.Visibility = Visibility.Visible;
-        LoaderVersionPanel.Translation = Vector3.Zero;
-        LoaderVersionPanel.Opacity = 1;
+        var game = _selected.Id;
+        var kind = _loader;
+        var cts = new CancellationTokenSource();
+        _loaderCts = cts;
+        int request = _loaderRequest;
+        bool IsCurrent() => _active && request == _loaderRequest && _showingDetail
+            && _selected?.Id == game && _loader == kind;
 
+        LoaderVersionPanel.Visibility = Visibility.Visible;
+        LoaderVersionBox.IsEnabled = false;
         LoaderRing.Visibility = Visibility.Visible;
         LoaderRing.IsActive = true;
-        LoaderHint.Visibility = Visibility.Collapsed;
-        UiList.Clear(LoaderVersionBox);
-        _loaderList.Clear();
-
+        UpdateSummary();
         try
         {
-            var list = await AppState.Loaders.GetAvailableAsync(_loader, _selected!.Id, default);
-            _loaderList = list;
-            UiList.Fill(LoaderVersionBox, list);
+            var list = await AppState.Loaders.GetAvailableAsync(kind, game, cts.Token);
+            if (!IsCurrent() || cts.IsCancellationRequested) return;
             LoaderVersionBox.DisplayMemberPath = "Name";
-
+            UiList.Fill(LoaderVersionBox, list);
             if (list.Count > 0)
-            {
                 LoaderVersionBox.SelectedItem = list.FirstOrDefault(l => l.IsStable) ?? list[0];
-            }
             else
             {
-                LoaderHint.Text = $"该版本暂时没有可用的 {KindName(_loader)} 构建，换个加载器试试。";
+                LoaderHint.Text = $"该版本暂时没有可用的 {KindName(kind)} 构建，换个加载器试试。";
                 LoaderHint.Visibility = Visibility.Visible;
             }
         }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
         catch (Exception ex)
         {
-            Log.Error($"Loader {_loader}", ex);
-            LoaderHint.Text = $"{KindName(_loader)} 版本列表获取失败：{ex.Message}";
+            if (!IsCurrent()) return;
+            Log.Error($"Loader {kind}", ex);
+            LoaderHint.Text = $"{KindName(kind)} 版本列表获取失败：{FirstLine(ex.Message)}";
             LoaderHint.Visibility = Visibility.Visible;
+            LoaderRetryButton.Visibility = Visibility.Visible;
         }
         finally
         {
-            LoaderRing.IsActive = false;
-            LoaderRing.Visibility = Visibility.Collapsed;
-            UpdateSummary();
+            if (IsCurrent())
+            {
+                _loaderCts = null;
+                LoaderRing.IsActive = false;
+                LoaderRing.Visibility = Visibility.Collapsed;
+                LoaderVersionBox.IsEnabled = LoaderVersionBox.Items.Count > 0;
+                UpdateSummary();
+            }
+            cts.Dispose();
         }
     }
+
+    private void LoaderRetry_Click(object sender, RoutedEventArgs e) => _ = RefreshLoaderVersionsAsync();
 
     private void LoaderVersion_Changed(object sender, SelectionChangedEventArgs e) => UpdateSummary();
 
@@ -898,7 +997,8 @@ public sealed partial class VersionsPage : Page
                 : "会先补齐原版，再下载加载器依赖库";
         }
 
-        bool needJava = _loader is LoaderKind.Forge or LoaderKind.NeoForge && !JavaService.Detect().Any();
+        InstallButton.IsEnabled = !_installing && (_loader == LoaderKind.Vanilla || !string.IsNullOrEmpty(ver));
+        bool needJava = (_loader is LoaderKind.Forge or LoaderKind.NeoForge) && !JavaService.Detect().Any();
         WarnBar.IsOpen = needJava;
         if (needJava)
             WarnBar.Message = "未检测到 Java，Forge/NeoForge 安装器需要 Java 才能运行。";
@@ -916,7 +1016,7 @@ public sealed partial class VersionsPage : Page
     // ================= 安装 =================
     private async void Install_Click(object sender, RoutedEventArgs e)
     {
-        if (_selected is null) return;
+        if (_selected is null || _installing) return;
 
         var game = _selected.Id;
         var loader = _loader;
@@ -930,15 +1030,19 @@ public sealed partial class VersionsPage : Page
         }
 
         var title = loader == LoaderKind.Vanilla ? game : $"{game} + {KindName(loader)} {loaderVersion}";
-        var job = AppState.Downloads.Begin(title);
+        var operationKey = $"version:{game}";
+        if (AppState.Downloads.IsRunningFor(operationKey))
+        {
+            MainWindow.Instance?.NavigateTo("downloads");
+            return;
+        }
+        var job = AppState.Downloads.Begin(title, operationKey: operationKey);
 
-        // 应用内对话框（和「离线账号」同一个 ContentDialog 样式）；点「后台运行」关掉，安装继续。
-        var dialog = new Controls.DownloadProgressDialog(job) { XamlRoot = XamlRoot };
-        _ = dialog.ShowAsync();
-
+        _installing = true;
         InstallButton.IsEnabled = false;
         try
         {
+            MainWindow.Instance?.NavigateTo("downloads");
             var progress = new Progress<InstallProgress>(p =>
                 DispatcherQueue.TryEnqueue(() => job.Apply(p)));
 
@@ -955,6 +1059,7 @@ public sealed partial class VersionsPage : Page
                     finalId = await AppState.Loaders.InstallForgeLikeAsync(loader, game, loaderVersion!, loaderUrl, progress, job.Cts.Token);
             }
 
+            job.Cts.Token.ThrowIfCancellationRequested();
             AppState.SelectedVersion = finalId;
             AppState.Settings.LastVersionId = finalId;
             SettingsService.Save();
@@ -962,7 +1067,11 @@ public sealed partial class VersionsPage : Page
 
             AppState.Downloads.Finish(job, true);
             MainWindow.Instance?.Toast($"已安装 {finalId}");
-            UpdateBadge();
+            if (_active) UpdateBadge();
+        }
+        catch (OperationCanceledException) when (job.Cts.IsCancellationRequested)
+        {
+            AppState.Downloads.Finish(job, false, "已取消");
         }
         catch (Exception ex)
         {
@@ -972,7 +1081,8 @@ public sealed partial class VersionsPage : Page
         }
         finally
         {
-            InstallButton.IsEnabled = true;
+            _installing = false;
+            if (_active) UpdateSummary();
         }
     }
 

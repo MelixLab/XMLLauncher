@@ -4,14 +4,24 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:LinxLauncher.Controls"
-    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    mc:Ignorable="d">
+    MinWidth="0"
+    HorizontalContentAlignment="Stretch">
 
-    <!--
-        安装进度对话框：外壳是 WinUI 的 ContentDialog，
-        里面复用 DownloadSteps（固定五步 + 细进度条 + 速度 + 当前文件）。
-        关掉对话框安装照样继续。
-    -->
-    <local:DownloadSteps x:Name="Steps" Width="470" />
+    <ScrollViewer
+        x:Name="ContentScroller"
+        MaxWidth="470"
+        HorizontalContentAlignment="Stretch"
+        HorizontalScrollBarVisibility="Disabled"
+        HorizontalScrollMode="Disabled"
+        VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16">
+            <TextBlock
+                x:Name="JobTitle"
+                FontSize="15"
+                FontWeight="SemiBold"
+                Foreground="{ThemeResource PrimaryTextBrush}"
+                TextWrapping="Wrap" />
+            <local:DownloadSteps x:Name="Steps" />
+        </StackPanel>
+    </ScrollViewer>
 </ContentDialog>

@@ -1,11 +1,10 @@
-﻿using System;
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using Windows.UI;
+using Windows.UI.ViewManagement;
 
 namespace LinxLauncher.Controls;
 
@@ -41,15 +40,29 @@ public sealed partial class FeatureCard : UserControl
 
     public static readonly DependencyProperty NavTagProperty =
         DependencyProperty.Register(nameof(NavTag), typeof(string), typeof(FeatureCard),
-            new PropertyMetadata(string.Empty));
+            new PropertyMetadata(string.Empty, (sender, _) => ((FeatureCard)sender).UpdateNavigation()));
 
     private RadialGradientBrush? _revealBrush;
+    private readonly UISettings _uiSettings = new();
+    private readonly AccessibilitySettings _accessibilitySettings = new();
 
     public FeatureCard()
     {
         InitializeComponent();
         BuildRevealBrush();
         ActualThemeChanged += (_, _) => BuildRevealBrush();
+        Loaded += (_, _) =>
+        {
+            UpdateNavigation();
+            ConfigureMotion();
+        };
+        Unloaded += (_, _) => ResetReveal();
+        PointerMoved += (_, e) =>
+        {
+            var point = e.GetCurrentPoint(this).Position;
+            UpdateReveal(point.X, point.Y);
+        };
+        PointerExited += (_, _) => ResetReveal();
     }
 
     /// <summary>卡片图标（Icons.xaml 里的 DataTemplate，48×48 画布）。</summary>
@@ -96,6 +109,8 @@ public sealed partial class FeatureCard : UserControl
     public void UpdateReveal(double px, double py)
     {
         if (_revealBrush is null) return;
+        ConfigureMotion();
+        if (_accessibilitySettings.HighContrast) { ResetReveal(); return; }
 
         double w = ActualWidth;
         double h = ActualHeight;
@@ -164,22 +179,25 @@ public sealed partial class FeatureCard : UserControl
     //  点击跳转
     // ==================================================================
 
-    private void Root_Tapped(object sender, TappedRoutedEventArgs e)
+    private void UpdateNavigation()
     {
-        if (string.IsNullOrEmpty(NavTag) || IsFromInteractiveControl(e.OriginalSource as DependencyObject))
-            return;
-
-        MainWindow.Instance?.NavigateTo(NavTag);
+        if (NavigationButton is null) return;
+        NavigationButton.Visibility = string.IsNullOrWhiteSpace(NavTag) ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    private static bool IsFromInteractiveControl(DependencyObject? node)
+    private bool? _animationsEnabled;
+
+    private void ConfigureMotion()
     {
-        while (node is not null)
-        {
-            if (node is ButtonBase or ToggleSwitch or Selector)
-                return true;
-            node = VisualTreeHelper.GetParent(node);
-        }
-        return false;
+        bool enabled = _uiSettings.AnimationsEnabled;
+        if (_animationsEnabled == enabled) return;
+        _animationsEnabled = enabled;
+        HoverFill.OpacityTransition = enabled ? new ScalarTransition { Duration = TimeSpan.FromMilliseconds(150) } : null;
+        RevealStroke.OpacityTransition = enabled ? new ScalarTransition { Duration = TimeSpan.FromMilliseconds(100) } : null;
+    }
+
+    private void Navigation_Click(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(NavTag)) MainWindow.Instance?.NavigateTo(NavTag);
     }
 }

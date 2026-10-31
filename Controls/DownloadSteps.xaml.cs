@@ -1,50 +1,31 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.ComponentModel;
-using Microsoft.UI.Dispatching;
+using System.Threading;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using LinxLauncher.Services;
 
 namespace LinxLauncher.Controls;
 
-/// <summary>
-/// 下载进度面板：固定五步 + 进度条 + 指标 + 当前文件。
-/// 对话框和下载页共用一个，避免两处各写一套。
-/// </summary>
+/// <summary>下载页和安装弹窗共用的真实阶段、进度指标与结束状态。</summary>
 public sealed partial class DownloadSteps : UserControl
 {
     public static readonly DependencyProperty JobProperty =
         DependencyProperty.Register(nameof(Job), typeof(DownloadJob), typeof(DownloadSteps),
             new PropertyMetadata(null, OnJobChanged));
 
-    private sealed class Row
-    {
-        public required FontIcon Icon { get; init; }
-        public required TextBlock Label { get; init; }
-    }
-
-    private static readonly string[] Captions =
-    {
-        "准备",
-        "下载客户端",
-        "下载依赖库",
-        "下载资源文件",
-        "完成"
-    };
-
-    private readonly List<Row> _rows = new();
     private DownloadJob? _job;
-    private int _furthestStep; // 已经走到第几步，只增不减，避免阶段文案来回跳
+    private bool _isLoaded;
+    private int _refreshQueued;
 
     public DownloadSteps()
     {
         InitializeComponent();
-        BuildRows();
+        Loaded += Steps_Loaded;
+        Unloaded += Steps_Unloaded;
+        ActualThemeChanged += (_, _) => Refresh();
     }
 
-    /// <summary>当前要跟踪的下载任务。</summary>
     public DownloadJob? Job
     {
         get => (DownloadJob?)GetValue(JobProperty);
@@ -54,118 +35,80 @@ public sealed partial class DownloadSteps : UserControl
     private static void OnJobChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         var view = (DownloadSteps)d;
-
-        if (view._job is not null)
-        {
-            view._job.PropertyChanged -= view.OnJobPropertyChanged;
-        }
-
+        view.Unsubscribe();
         view._job = e.NewValue as DownloadJob;
-        view._furthestStep = 0;
-
-        if (view._job is not null)
-        {
-            view._job.PropertyChanged += view.OnJobPropertyChanged;
-        }
-
+        if (view._isLoaded) view.Subscribe();
         view.Refresh();
+    }
+
+    private void Steps_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (_isLoaded) return;
+        _isLoaded = true;
+        Subscribe();
+        Refresh();
+        FontService.Apply(this);
+    }
+
+    private void Steps_Unloaded(object sender, RoutedEventArgs e)
+    {
+        _isLoaded = false;
+        Unsubscribe();
+    }
+
+    private void Subscribe()
+    {
+        if (_job is not null) _job.PropertyChanged += OnJobPropertyChanged;
+    }
+
+    private void Unsubscribe()
+    {
+        if (_job is not null) _job.PropertyChanged -= OnJobPropertyChanged;
     }
 
     private void OnJobPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        // 下载进度是在后台线程改的，回到 UI 线程再刷。
-        DispatcherQueue.TryEnqueue(Refresh);
-    }
-
-    private void BuildRows()
-    {
-        var iconFont = (FontFamily)Application.Current.Resources["IconFontFamily"];
-        var idle = ThemeService.Brush("TertiaryTextBrush");
-        var text = ThemeService.Brush("SecondaryTextBrush");
-
-        foreach (var caption in Captions)
+        // 多个指标会连续通知，只为当前可见组件排一次 UI 刷新。
+        if (Interlocked.Exchange(ref _refreshQueued, 1) != 0) return;
+        if (!DispatcherQueue.TryEnqueue(() =>
         {
-            var icon = new FontIcon
-            {
-                FontFamily = iconFont,
-                FontSize = 12,
-                Glyph = "\uE72A",
-                Foreground = idle,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            var label = new TextBlock
-            {
-                Text = caption,
-                FontSize = 14,
-                Margin = new Thickness(12, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = text
-            };
-
-            var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(icon);
-            row.Children.Add(label);
-            StepsHost.Children.Add(row);
-
-            _rows.Add(new Row { Icon = icon, Label = label });
-        }
-    }
-
-    /// <summary>把 Stage 文案映射到固定的五步之一。</summary>
-    private static int StageIndex(string stage)
-    {
-        if (string.IsNullOrEmpty(stage)) return 0;
-        if (stage.Contains("完成") || stage.Contains("校验")) return 4;
-        if (stage.Contains("资源")) return 3;
-        if (stage.Contains("依赖") || stage.Contains("库")) return 2;
-        if (stage.Contains("客户端") || stage.Contains("下载")) return 1;
-        return 0;
+            Interlocked.Exchange(ref _refreshQueued, 0);
+            if (_isLoaded) Refresh();
+        })) Interlocked.Exchange(ref _refreshQueued, 0);
     }
 
     private void Refresh()
     {
         var job = _job;
-        if (job is null || _rows.Count == 0) return;
+        ContentRoot.Visibility = job is null ? Visibility.Collapsed : Visibility.Visible;
+        if (job is null) return;
 
-        int current = job.IsFinished ? 4 : Math.Max(_furthestStep, StageIndex(job.Stage));
-        if (!job.IsFailed) _furthestStep = current;
+        bool canceled = job.IsCanceled;
+        bool cancelling = job.IsCancelling;
+        bool failed = job.IsFinished && job.IsFailed;
+        bool indeterminate = job.IsRunning && job.IsIndeterminate;
 
-        var doneBrush = ThemeService.Brush("SecurityGreenBrush");
-        var activeBrush = ThemeService.Brush("BrandBrush");
-        var idleBrush = ThemeService.Brush("TertiaryTextBrush");
-        var primary = ThemeService.Brush("PrimaryTextBrush");
-        var secondary = ThemeService.Brush("SecondaryTextBrush");
+        StatusIcon.Glyph = canceled || cancelling ? "\uE711" : job.IsRunning ? "\uE896" : failed ? "\uE783" : "\uE73E";
+        StatusIcon.Foreground = ThemeService.Brush(canceled || cancelling ? "SecondaryTextBrush" :
+            job.IsRunning ? "BrandBrush" : failed ? "SecurityRedBrush" : "SecurityGreenBrush");
+        StatusText.Text = cancelling ? "正在取消" : job.IsRunning ? "正在进行" : canceled ? "已取消" : failed ? "下载失败" : "已完成";
+        StageText.Text = string.IsNullOrWhiteSpace(job.Stage) ? "准备" : job.Stage;
 
-        for (int i = 0; i < _rows.Count; i++)
-        {
-            var row = _rows[i];
-
-            if (i < current)
-            {
-                row.Icon.Glyph = "\uE73E";
-                row.Icon.Foreground = doneBrush;
-                row.Label.Foreground = secondary;
-            }
-            else if (i == current)
-            {
-                row.Icon.Glyph = job.IsFailed && i == 4 ? "\uE711" : "\uE72A";
-                row.Icon.Foreground = job.IsFailed && i == 4 ? ThemeService.Brush("SecurityRedBrush") : activeBrush;
-                row.Label.Foreground = primary;
-            }
-            else
-            {
-                row.Icon.Glyph = "\uE738";
-                row.Icon.Foreground = idleBrush;
-                row.Label.Foreground = secondary;
-            }
-        }
-
-        PercentText.Text = job.PercentText;
-        Progress.IsIndeterminate = false;
-        Progress.Value = Math.Clamp(job.Fraction * 100, 0, 100);
-        SpeedText.Text = job.SpeedText;
+        Progress.Visibility = job.IsRunning ? Visibility.Visible : Visibility.Collapsed;
+        Progress.IsIndeterminate = indeterminate;
+        Progress.Value = double.IsFinite(job.Fraction) ? Math.Clamp(job.Fraction * 100, 0, 100) : 0;
+        SpeedText.Visibility = job.IsRunning && !cancelling && !indeterminate ? Visibility.Visible : Visibility.Collapsed;
+        SpeedText.Text = $"速度 {job.SpeedText}";
+        SizeText.Visibility = job.TotalBytes > 0 && !indeterminate ? Visibility.Visible : Visibility.Collapsed;
         SizeText.Text = job.SizeText;
-        FileText.Text = string.IsNullOrEmpty(job.CurrentFile) ? "—" : job.CurrentFile;
+        PercentText.Visibility = job.IsRunning && !cancelling ? Visibility.Visible : Visibility.Collapsed;
+        PercentText.Text = indeterminate ? "正在处理…" : job.PercentText;
+        FilesText.Visibility = job.TotalFiles > 0 && !indeterminate ? Visibility.Visible : Visibility.Collapsed;
+        FilesText.Text = $"文件 {job.FilesText}";
+        FileText.Text = job.CurrentFile;
+        FileText.Visibility = !string.IsNullOrWhiteSpace(job.CurrentFile) ? Visibility.Visible : Visibility.Collapsed;
+        ToolTipService.SetToolTip(FileText, job.CurrentFile);
+        ErrorPanel.Visibility = failed && job.HasError ? Visibility.Visible : Visibility.Collapsed;
+        ErrorText.Text = failed ? job.Error : "";
     }
 }

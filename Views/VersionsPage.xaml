@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LinxLauncher.Views.VersionsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -6,12 +6,14 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:LinxLauncher.Models"
+    xmlns:controls="using:LinxLauncher.Controls"
     Background="Transparent"
     mc:Ignorable="d">
 
     <!-- 整页都能接 .jar：之前 AllowDrop 只挂在 Mod 面板上，
          而那个面板默认是 Collapsed，往页面别处拖一律没反应 -->
-    <Grid Padding="40,40,40,32"
+    <Grid x:Name="PageLayout" Style="{StaticResource PageContentStyle}"
+          SizeChanged="PageLayout_SizeChanged"
           AllowDrop="True"
           DragOver="Mods_DragOver"
           Drop="Mods_Drop">
@@ -25,46 +27,59 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <Grid Grid.Row="0">
-                <StackPanel>
+            <Grid Grid.Row="0" ColumnSpacing="24" RowSpacing="16" SizeChanged="ListHeader_SizeChanged">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel x:Name="ListHeading">
                     <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="版本库" />
                     <TextBlock
                         Margin="0,11,0,0"
                         Style="{StaticResource PageSubtitleTextStyle}"
-                        Text="挑一个版本，进去再选模组加载器。全部走国内镜像下载。" />
+                        Text="挑一个版本，进去再选模组加载器。全部走国内镜像下载。"
+                        TextWrapping="Wrap" />
+                    <TextBlock x:Name="InstalledModeHint" Margin="0,8,0,0"
+                               Style="{StaticResource CaptionTextStyle}"
+                               Text="正在显示本地已安装实例；选择筛选项可浏览在线版本。"
+                               TextWrapping="Wrap" Visibility="Collapsed" />
                 </StackPanel>
 
-                <StackPanel
+                <Grid x:Name="ListTools" Grid.Column="1"
                     VerticalAlignment="Bottom"
-                    HorizontalAlignment="Right"
-                    Orientation="Horizontal"
-                    Spacing="8">
-                    <Button
-                        x:Name="FilterButton"
-                        Content="全部"
-                        Style="{StaticResource RecordActionButtonStyle}">
-                        <Button.Flyout>
-                            <MenuFlyout Placement="BottomEdgeAlignedLeft">
-                                <MenuFlyoutItem Click="Filter_Click" Tag="0" Text="全部" />
-                                <MenuFlyoutItem Click="Filter_Click" Tag="1" Text="正式版" />
-                                <MenuFlyoutItem Click="Filter_Click" Tag="2" Text="快照" />
-                            </MenuFlyout>
-                        </Button.Flyout>
-                    </Button>
+                    ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ComboBox x:Name="FilterBox" MinWidth="112" MinHeight="32"
+                              PlaceholderText="版本类型" AutomationProperties.Name="版本类型筛选"
+                              SelectionChanged="Filter_Changed">
+                        <ComboBoxItem Content="全部" />
+                        <ComboBoxItem Content="正式版" />
+                        <ComboBoxItem Content="快照" />
+                    </ComboBox>
                     <TextBox
                         x:Name="SearchBox"
-                        Width="200"
-                        Height="32"
+                        Grid.Column="1"
+                        MinHeight="32"
+                        HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="搜索版本号"
                         PlaceholderText="搜索版本号"
                         TextChanged="Search_Changed" />
-                </StackPanel>
+                </Grid>
             </Grid>
 
             <Grid Grid.Row="1" Margin="0,20,0,0">
                 <ListView
                     x:Name="VersionList"
-                    SelectionChanged="Version_SelectionChanged"
-                    SelectionMode="Single">
+                    IsItemClickEnabled="True"
+                    ItemClick="Version_ItemClick"
+                    SelectionMode="None">
                     <ListView.ItemContainerStyle>
                         <Style TargetType="ListViewItem">
                             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
@@ -79,7 +94,7 @@
                             <Grid Padding="16,13">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="32" />
-                                    <ColumnDefinition Width="232" />
+                                    <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
@@ -96,19 +111,24 @@
                                     Grid.Column="1"
                                     Margin="16,0,0,0"
                                     VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <Grid ColumnSpacing="7" HorizontalAlignment="Left">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
                                         <TextBlock
                                             Style="{StaticResource CardTitleTextStyle}"
                                             Text="{x:Bind Id}"
                                             TextTrimming="CharacterEllipsis"
                                             TextWrapping="NoWrap" />
                                         <Ellipse
+                                            Grid.Column="1"
                                             Width="6"
                                             Height="6"
                                             VerticalAlignment="Center"
                                             Fill="{ThemeResource BrandBrush}"
-                                            Visibility="{Binding Installed, Converter={StaticResource BoolToVis}}" />
-                                    </StackPanel>
+                                            Visibility="{x:Bind Installed, Mode=OneTime, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}" />
+                                    </Grid>
                                     <TextBlock
                                         Margin="0,2,0,0"
                                         Style="{StaticResource RecordDateTextStyle}"
@@ -139,7 +159,17 @@
                     x:Name="LoadingRing"
                     Width="28"
                     Height="28"
-                    IsActive="True" />
+                    IsActive="False" Visibility="Collapsed" />
+
+                <StackPanel x:Name="EmptyPanel" Spacing="8" MaxWidth="360" Margin="16"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                    <FontIcon FontFamily="{StaticResource IconFontFamily}" Glyph="&#xE721;"
+                              FontSize="28" Foreground="{ThemeResource SecondaryTextBrush}" />
+                    <TextBlock x:Name="EmptyText" Style="{StaticResource BodyTextStyle}"
+                               TextAlignment="Center" TextWrapping="Wrap" />
+                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="试试其他版本类型或搜索关键词。"
+                               TextAlignment="Center" TextWrapping="Wrap" />
+                </StackPanel>
 
                 <StackPanel
                     x:Name="ErrorPanel"
@@ -173,44 +203,47 @@
             <!-- 返回 + 标题 -->
             <StackPanel Grid.Row="0">
                 <Button
-                    Padding="0"
-                    HorizontalAlignment="Left"
-                    Background="Transparent"
-                    BorderThickness="0"
+                    x:Name="BackButton"
+                    AutomationProperties.Name="返回版本列表"
+                    Style="{StaticResource PageBackButtonStyle}"
                     Click="Back_Click">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <FontIcon
                             FontFamily="{StaticResource IconFontFamily}"
-                            FontSize="12"
-                            Foreground="{ThemeResource LinkTextBrush}"
+                            FontSize="14"
+                            VerticalAlignment="Center"
                             Glyph="&#xE72B;" />
                         <TextBlock
-                            FontSize="13"
-                            Foreground="{ThemeResource LinkTextBrush}"
+                            VerticalAlignment="Center"
                             Text="返回版本列表" />
                     </StackPanel>
                 </Button>
 
-                <Grid Margin="0,14,0,0">
+                <Grid Margin="0,14,0,0" ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <StackPanel>
                         <TextBlock
                             x:Name="DetailId"
                             Style="{StaticResource PageTitleTextStyle}"
-                            Text="—" />
+                            Text="—" TextWrapping="Wrap" />
                         <TextBlock
                             x:Name="DetailMeta"
                             Margin="0,9,0,0"
                             Style="{StaticResource PageSubtitleTextStyle}"
-                            Text="" />
+                            Text="" TextWrapping="Wrap" />
                     </StackPanel>
 
                     <Border
                         x:Name="InstalledBadge"
+                        Grid.Column="1"
                         Padding="8,3"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Top"
                         Background="{ThemeResource BrandSoftBrush}"
-                        CornerRadius="0"
+                        CornerRadius="4"
                         Visibility="Collapsed">
                         <TextBlock
                             FontSize="11"
@@ -221,12 +254,10 @@
             </StackPanel>
 
             <ScrollViewer
+                x:Name="DetailScroll"
                 Grid.Row="1"
                 Margin="0,24,0,0"
-                HorizontalScrollBarVisibility="Disabled"
-                HorizontalScrollMode="Disabled"
-        HorizontalContentAlignment="Stretch"
-                VerticalScrollBarVisibility="Auto">
+                Style="{StaticResource PageScrollStyle}">
                 <StackPanel>
 
                     <TextBlock
@@ -237,24 +268,14 @@
                         Style="{StaticResource CaptionTextStyle}"
                         Text="原版只装游戏本体；装了加载器才能用模组。" />
 
-                    <!-- 九宫格：5 张加载器卡片，与主页卡片同一套观感 -->
-                    <Grid ColumnSpacing="8" RowSpacing="8" HorizontalAlignment="Left">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="232" />
-                            <ColumnDefinition Width="232" />
-                            <ColumnDefinition Width="232" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="132" />
-                            <RowDefinition Height="132" />
-                        </Grid.RowDefinitions>
+                    <!-- 保留加载器选择卡，按详情区实际宽度换列。 -->
+                    <controls:AdaptiveWrapPanel ItemMinWidth="220" MaxColumns="3" Spacing="8">
 
                         <ToggleButton
                             x:Name="CardVanilla"
                             AutomationProperties.Name="原版"
-                            Grid.Row="0"
-                            Grid.Column="0"
                             Tag="vanilla"
+                            MinHeight="132"
                             Style="{StaticResource LoaderCardStyle}"
                             Click="LoaderCard_Click">
                             <StackPanel>
@@ -267,9 +288,8 @@
                         <ToggleButton
                             x:Name="CardFabric"
                             AutomationProperties.Name="Fabric"
-                            Grid.Row="0"
-                            Grid.Column="1"
                             Tag="fabric"
+                            MinHeight="132"
                             Style="{StaticResource LoaderCardStyle}"
                             Click="LoaderCard_Click">
                             <StackPanel>
@@ -282,9 +302,8 @@
                         <ToggleButton
                             x:Name="CardForge"
                             AutomationProperties.Name="Forge"
-                            Grid.Row="0"
-                            Grid.Column="2"
                             Tag="forge"
+                            MinHeight="132"
                             Style="{StaticResource LoaderCardStyle}"
                             Click="LoaderCard_Click">
                             <StackPanel>
@@ -297,9 +316,8 @@
                         <ToggleButton
                             x:Name="CardNeoForge"
                             AutomationProperties.Name="NeoForge"
-                            Grid.Row="1"
-                            Grid.Column="0"
                             Tag="neoforge"
+                            MinHeight="132"
                             Style="{StaticResource LoaderCardStyle}"
                             Click="LoaderCard_Click">
                             <StackPanel>
@@ -312,9 +330,8 @@
                         <ToggleButton
                             x:Name="CardQuilt"
                             AutomationProperties.Name="Quilt"
-                            Grid.Row="1"
-                            Grid.Column="1"
                             Tag="quilt"
+                            MinHeight="132"
                             Style="{StaticResource LoaderCardStyle}"
                             Click="LoaderCard_Click">
                             <StackPanel>
@@ -323,7 +340,7 @@
                                 <TextBlock Margin="0,2,0,0" Style="{StaticResource CardStatusTextStyle}" Text="Fabric 的进阶分支" />
                             </StackPanel>
                         </ToggleButton>
-                    </Grid>
+                    </controls:AdaptiveWrapPanel>
 
                     <!-- 加载器版本 -->
                     <StackPanel
@@ -331,21 +348,16 @@
                         Margin="0,20,0,0"
                         Spacing="8"
                         Visibility="Collapsed">
-                        <StackPanel.OpacityTransition>
-                            <ScalarTransition Duration="0:0:0.22" />
-                        </StackPanel.OpacityTransition>
-                        <StackPanel.TranslationTransition>
-                            <Vector3Transition Duration="0:0:0.28" />
-                        </StackPanel.TranslationTransition>
                         <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="加载器版本" />
                         <Grid ColumnSpacing="10">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="260" />
-                                <ColumnDefinition Width="232" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <ComboBox
                                 x:Name="LoaderVersionBox"
-                                Height="32"
+                                MinHeight="32" MaxWidth="360" HorizontalAlignment="Stretch"
+                                AutomationProperties.Name="加载器版本"
                                 SelectionChanged="LoaderVersion_Changed" />
                             <ProgressRing
                                 x:Name="LoaderRing"
@@ -360,6 +372,8 @@
                             Style="{StaticResource CaptionTextStyle}"
                             TextWrapping="Wrap"
                             Visibility="Collapsed" />
+                        <Button x:Name="LoaderRetryButton" Content="重新获取加载器版本"
+                                Click="LoaderRetry_Click" Visibility="Collapsed" />
                     </StackPanel>
 
                     <!-- ================= 实例设置（只对已安装的版本显示） ================= -->
@@ -380,76 +394,73 @@
                         Visibility="Collapsed">
                         <StackPanel Spacing="16">
 
-                            <Grid>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource BodyTextStyle}" Text="最大内存 (MB)" />
-                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="这个实例启动时分配的堆大小。" />
-                                </StackPanel>
-                                <NumberBox
-                                    x:Name="MemoryBox"
-                                    Width="140"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Center"
-                                    Maximum="65536"
-                                    Minimum="1024"
-                                    SpinButtonPlacementMode="Compact"
-                                    ValueChanged="Number_Changed" />
-                            </Grid>
-
-                            <Grid>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource BodyTextStyle}" Text="窗口分辨率" />
-                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="只影响这个实例；全屏时忽略。" />
-                                </StackPanel>
-                                <StackPanel
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Center"
-                                    Orientation="Horizontal"
-                                    Spacing="8">
+                            <controls:SettingsRow Title="最大内存 (MB)" Description="这个实例启动时分配的堆大小。">
+                                <controls:SettingsRow.Editor>
                                     <NumberBox
-                                        x:Name="WidthBox"
-                                        Width="110"
-                                        Maximum="7680"
-                                        Minimum="320"
-                                        SpinButtonPlacementMode="Compact"
-                                        ValueChanged="Number_Changed" />
-                                    <TextBlock
+                                        x:Name="MemoryBox"
+                                        Width="140"
+                                        HorizontalAlignment="Right"
                                         VerticalAlignment="Center"
-                                        Style="{StaticResource CaptionTextStyle}"
-                                        Text="×" />
-                                    <NumberBox
-                                        x:Name="HeightBox"
-                                        Width="110"
-                                        Maximum="4320"
-                                        Minimum="240"
+                                        Maximum="65536"
+                                        Minimum="1024"
+                                        AutomationProperties.Name="实例最大内存（MB）"
                                         SpinButtonPlacementMode="Compact"
                                         ValueChanged="Number_Changed" />
-                                </StackPanel>
-                            </Grid>
+                                </controls:SettingsRow.Editor>
+                            </controls:SettingsRow>
 
-                            <Grid>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource BodyTextStyle}" Text="全屏启动" />
-                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="进游戏直接全屏。" />
-                                </StackPanel>
-                                <ToggleSwitch
-                                    x:Name="FullscreenSwitch"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Center"
-                                    Toggled="Toggle_Changed" />
-                            </Grid>
+                            <controls:SettingsRow Title="窗口分辨率" Description="只影响这个实例；全屏时忽略。">
+                                <controls:SettingsRow.Editor>
+                                    <StackPanel
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        Orientation="Horizontal"
+                                        Spacing="8">
+                                        <NumberBox
+                                            x:Name="WidthBox"
+                                            Width="110"
+                                            Maximum="7680"
+                                            Minimum="320"
+                                            AutomationProperties.Name="实例窗口宽度"
+                                            SpinButtonPlacementMode="Compact"
+                                            ValueChanged="Number_Changed" />
+                                        <TextBlock
+                                            VerticalAlignment="Center"
+                                            Style="{StaticResource CaptionTextStyle}"
+                                            Text="×" />
+                                        <NumberBox
+                                            x:Name="HeightBox"
+                                            Width="110"
+                                            Maximum="4320"
+                                            Minimum="240"
+                                            AutomationProperties.Name="实例窗口高度"
+                                            SpinButtonPlacementMode="Compact"
+                                            ValueChanged="Number_Changed" />
+                                    </StackPanel>
+                                </controls:SettingsRow.Editor>
+                            </controls:SettingsRow>
 
-                            <Grid>
-                                <StackPanel>
-                                    <TextBlock Style="{StaticResource BodyTextStyle}" Text="版本隔离" />
-                                    <TextBlock Style="{StaticResource CaptionTextStyle}" Text="开启后该版本的模组与存档独立存放。" />
-                                </StackPanel>
-                                <ToggleSwitch
-                                    x:Name="IsolatedSwitch"
-                                    HorizontalAlignment="Right"
-                                    VerticalAlignment="Center"
-                                    Toggled="Toggle_Changed" />
-                            </Grid>
+                            <controls:SettingsRow Title="全屏启动" Description="进游戏直接全屏。">
+                                <controls:SettingsRow.Editor>
+                                    <ToggleSwitch
+                                        x:Name="FullscreenSwitch"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.Name="全屏启动"
+                                        Toggled="Toggle_Changed" />
+                                </controls:SettingsRow.Editor>
+                            </controls:SettingsRow>
+
+                            <controls:SettingsRow Title="版本隔离" Description="开启后该版本的模组与存档独立存放。">
+                                <controls:SettingsRow.Editor>
+                                    <ToggleSwitch
+                                        x:Name="IsolatedSwitch"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.Name="版本隔离"
+                                        Toggled="Toggle_Changed" />
+                                </controls:SettingsRow.Editor>
+                            </controls:SettingsRow>
                         </StackPanel>
                     </Border>
 
@@ -461,15 +472,10 @@
                         Text="实例"
                         Visibility="Collapsed" />
 
-                    <Grid x:Name="InstanceInfoPanel" ColumnSpacing="8" Visibility="Collapsed">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
+                    <controls:AdaptiveWrapPanel x:Name="InstanceInfoPanel" ItemMinWidth="180"
+                                                MaxColumns="3" Spacing="8" Visibility="Collapsed">
 
                         <Border
-                            Grid.Column="0"
                             Padding="16,14"
                             Background="{ThemeResource CardBackgroundBrush}"
                             BorderBrush="{ThemeResource DividerBrush}"
@@ -482,7 +488,6 @@
                         </Border>
 
                         <Border
-                            Grid.Column="1"
                             Padding="16,14"
                             Background="{ThemeResource CardBackgroundBrush}"
                             BorderBrush="{ThemeResource DividerBrush}"
@@ -495,7 +500,6 @@
                         </Border>
 
                         <Border
-                            Grid.Column="2"
                             Padding="16,14"
                             Background="{ThemeResource CardBackgroundBrush}"
                             BorderBrush="{ThemeResource DividerBrush}"
@@ -506,9 +510,9 @@
                                 <TextBlock x:Name="SavesValue" Style="{StaticResource MetricValueTextStyle}" Text="—" />
                             </StackPanel>
                         </Border>
-                    </Grid>
+                    </controls:AdaptiveWrapPanel>
 
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <controls:AdaptiveWrapPanel Spacing="8">
                         <Button
                             x:Name="OpenModsButton"
                             Margin="0,12,0,0"
@@ -522,7 +526,7 @@
                             Click="CheckModUpdate_Click"
                             Content="检查 Mod 更新"
                             Visibility="Collapsed" />
-                    </StackPanel>
+                    </controls:AdaptiveWrapPanel>
 
                     <Button
                         x:Name="RepairButton"
@@ -615,7 +619,7 @@
 
                                             <Button
                                                 Grid.Column="2"
-                                                Height="28"
+                                                MinHeight="32"
                                                 Padding="12,0"
                                                 VerticalAlignment="Center"
                                                 Click="ModToggle_Click"
@@ -625,7 +629,7 @@
 
                                             <Button
                                                 Grid.Column="3"
-                                                Height="28"
+                                                MinHeight="32"
                                                 Padding="12,0"
                                                 VerticalAlignment="Center"
                                                 Click="ModDelete_Click"
@@ -652,38 +656,45 @@
                         Padding="20,18"
                         Background="{ThemeResource ThreatCardBackgroundBrush}"
                         CornerRadius="8">
-                        <Grid>
+                        <Grid x:Name="InstallLayout" ColumnSpacing="20" RowSpacing="12"
+                              SizeChanged="InstallLayout_SizeChanged">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock
                                     x:Name="InstallSummary"
                                     Style="{StaticResource BodyTextStyle}"
-                                    Text="将安装" />
+                                    Text="将安装" TextWrapping="Wrap" />
                                 <TextBlock
                                     x:Name="InstallHint"
                                     Margin="0,3,0,0"
                                     Style="{StaticResource CardStatusTextStyle}"
-                                    Text="客户端 / 依赖库 / 资源文件" />
+                                    Text="客户端 / 依赖库 / 资源文件" TextWrapping="Wrap" />
                             </StackPanel>
 
-                            <StackPanel
+                            <controls:AdaptiveWrapPanel x:Name="InstallActions" Grid.Column="1"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Center"
-                                Orientation="Horizontal"
-                                Spacing="10">
+                                Spacing="8">
                                 <Button
                                     Click="Back_Click"
                                     Content="返回"
-                                    CornerRadius="4"
-                                    Height="34"
+                                    MinHeight="32"
                                     MinWidth="88" />
                                 <Button
                                     x:Name="InstallButton"
                                     MinWidth="112"
-                                    Height="34"
+                                    MinHeight="32"
                                     Click="Install_Click"
                                     Content="下载并安装"
                                     Style="{StaticResource AccentButtonStyle}" />
-                            </StackPanel>
+                            </controls:AdaptiveWrapPanel>
                         </Grid>
                     </Border>
                 </StackPanel>

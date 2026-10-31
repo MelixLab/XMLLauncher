@@ -30,6 +30,7 @@ public sealed partial class CommunityPage : Page
     private readonly ObservableCollection<DmThread> _threads = new();
     private readonly ObservableCollection<DmMessage> _messages = new();
     private readonly List<ToggleButton> _tagButtons = new();
+    private static readonly string[] DefaultTagLabels = { "闲聊", "求助", "服务器", "作品", "资源" };
 
     private CancellationTokenSource _cts = new();
     private CommunityMeta? _meta;
@@ -156,10 +157,23 @@ public sealed partial class CommunityPage : Page
         _tagButtons.Clear();
 
         AddTagButton("全部", "");
-        if (_meta is not null)
+        if (_meta?.Tags.Count > 0)
         {
             foreach (var (key, label) in _meta.Tags)
                 AddTagButton(label, key);
+        }
+        else
+        {
+            // 分类名称属于页面结构；接口暂不可用时仍保留，不猜测服务端的筛选键。
+            foreach (var label in DefaultTagLabels)
+                TagRow.Children.Add(new ToggleButton
+                {
+                    Content = label,
+                    IsEnabled = false,
+                    Padding = new Thickness(12, 4, 12, 4),
+                    MinHeight = 30,
+                    CornerRadius = new CornerRadius(15),
+                });
         }
     }
 

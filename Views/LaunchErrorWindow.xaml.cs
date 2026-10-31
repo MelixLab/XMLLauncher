@@ -68,6 +68,8 @@ public sealed partial class LaunchErrorWindow : Window
 
             // 这是独立窗口，主窗口的字体遍历扫不到它，自己套一遍
             FontService.Apply(Content as DependencyObject);
+            // 日志保留等宽排版，避免正文的 Noto 切换覆盖诊断信息的列对齐。
+            LogText.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Consolas");
 
             var fix = DispatcherQueue.CreateTimer();
             fix.Interval = TimeSpan.FromMilliseconds(220);

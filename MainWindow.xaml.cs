@@ -280,7 +280,13 @@ public sealed partial class MainWindow : Window
         if (ContentFrame.CurrentSourcePageType != target)
         {
             bool ok;
-            try { ok = ContentFrame.Navigate(target, parameter, new DrillInNavigationTransitionInfo()); }
+            try
+            {
+                NavigationTransitionInfo transition = new Windows.UI.ViewManagement.UISettings().AnimationsEnabled
+                    ? new DrillInNavigationTransitionInfo()
+                    : new SuppressNavigationTransitionInfo();
+                ok = ContentFrame.Navigate(target, parameter, transition);
+            }
             catch (Exception ex) { Log.Fatal("Navigate", ex); return; }
             Log.Info($"导航结果 {ok} → {ContentFrame.CurrentSourcePageType} / {ContentFrame.Content?.GetType().Name}");
         }

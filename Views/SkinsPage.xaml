@@ -3,18 +3,14 @@
     x:Class="LinxLauncher.Views.SkinsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:LinxLauncher.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Background="{ThemeResource PageLayerBackgroundBrush}"
     mc:Ignorable="d">
 
-    <ScrollViewer
-        HorizontalScrollBarVisibility="Disabled"
-        HorizontalScrollMode="Disabled"
-        HorizontalContentAlignment="Stretch"
-        VerticalScrollBarVisibility="Auto"
-        VerticalScrollMode="Auto">
-        <Grid Padding="40,40,40,48">
+    <ScrollViewer Style="{StaticResource PageScrollStyle}">
+        <Grid x:Name="PageContent" Style="{StaticResource PageContentStyle}" SizeChanged="PageContent_SizeChanged">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -26,11 +22,16 @@
                 Grid.Row="0"
                 MaxWidth="620"
                 HorizontalAlignment="Left">
-                <HyperlinkButton
+                <Button
                     Margin="0,0,0,10"
                     Click="Back_Click"
-                    Content="← 账户"
-                    Style="{StaticResource LinkHyperlinkStyle}" />
+                    AutomationProperties.Name="返回账户"
+                    Style="{StaticResource PageBackButtonStyle}">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <FontIcon FontFamily="{StaticResource IconFontFamily}" FontSize="14" VerticalAlignment="Center" Glyph="&#xE72B;" />
+                        <TextBlock Text="返回账户" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="皮肤" />
                 <TextBlock
                     Margin="0,11,0,0"
@@ -40,14 +41,20 @@
 
             <!--  账户选择：单独一行，不跟标题抢位置  -->
             <Grid
+                x:Name="AccountRow"
                 Grid.Row="1"
                 Margin="0,28,0,0"
-                HorizontalAlignment="Left">
+                ColumnSpacing="12" RowSpacing="8" SizeChanged="AccountRow_SizeChanged">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
                 <TextBlock
                     VerticalAlignment="Center"
@@ -58,34 +65,38 @@
                 <ComboBox
                     x:Name="AccountPicker"
                     Grid.Column="1"
-                    MinWidth="280"
-                    Margin="12,0,0,0"
+                    HorizontalAlignment="Stretch"
+                    AutomationProperties.Name="正在查看的账户"
                     SelectionChanged="AccountPicker_SelectionChanged" />
 
                 <TextBlock
                     x:Name="DefaultHint"
                     Grid.Column="2"
-                    Margin="16,0,0,0"
                     VerticalAlignment="Center"
                     FontSize="12"
                     Foreground="{ThemeResource SecondaryTextBrush}"
-                    Text="" />
+                    Text="" TextWrapping="Wrap" />
             </Grid>
 
             <!--  内容  -->
             <Grid
+                x:Name="SkinContent"
                 Grid.Row="2"
                 Margin="0,24,0,0"
-                ColumnSpacing="16">
+                ColumnSpacing="16" RowSpacing="16" SizeChanged="SkinContent_SizeChanged">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition x:Name="PreviewColumn" Width="380" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
                 <!--  预览卡  -->
                 <Border
+                    x:Name="PreviewCard"
                     Grid.Column="0"
-                    Width="380"
                     Padding="24"
                     VerticalAlignment="Top"
                     Background="{ThemeResource CardBackgroundBrush}"
@@ -93,7 +104,11 @@
                     BorderThickness="1"
                     CornerRadius="8">
                     <StackPanel Spacing="20">
-                        <StackPanel Orientation="Horizontal" Spacing="20">
+                        <Grid ColumnSpacing="20">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
                             <Border
                                 x:Name="AvatarFrame"
                                 Width="128"
@@ -118,6 +133,7 @@
                             </Border>
 
                             <StackPanel
+                                Grid.Column="1"
                                 VerticalAlignment="Center"
                                 Spacing="6">
                                 <TextBlock
@@ -136,13 +152,13 @@
                                     x:Name="PreviewSource"
                                     FontSize="12"
                                     Foreground="{ThemeResource SecondaryTextBrush}"
-                                    Text="默认皮肤" />
+                                    Text="默认皮肤" TextWrapping="Wrap" />
                             </StackPanel>
-                        </StackPanel>
+                        </Grid>
 
                         <Rectangle Height="1" Fill="{ThemeResource DividerBrush}" />
 
-                        <StackPanel Orientation="Horizontal" Spacing="24">
+                        <controls:AdaptiveWrapPanel Spacing="24">
                             <StackPanel Spacing="8">
                                 <TextBlock
                                     HorizontalAlignment="Center"
@@ -172,7 +188,7 @@
                                     <Image x:Name="BodyBack" Stretch="Uniform" />
                                 </Border>
                             </StackPanel>
-                        </StackPanel>
+                        </controls:AdaptiveWrapPanel>
 
                         <TextBlock
                             x:Name="EmptyHint"
@@ -185,6 +201,7 @@
 
                 <!--  设置卡  -->
                 <Border
+                    x:Name="EditingCard"
                     Grid.Column="1"
                     Padding="24"
                     VerticalAlignment="Top"

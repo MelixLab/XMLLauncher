@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using LinxLauncher.Controls;
 using LinxLauncher.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -10,18 +11,16 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
+using Windows.Foundation;
+using Windows.UI.ViewManagement;
 
 namespace LinxLauncher.Views;
 
 /// <summary>
 /// 账户页：卡包。
 ///
-/// 结构：当前账户是一张 140 高的大卡，其余账户压成 68 高的信息条，
-/// 紧贴在大卡下面、彼此重叠 6px —— 看上去就是一摞卡，最上面那张抽出来展开。
-///
-/// 切换时 Height 和 Canvas.Top 一起做 240ms 的动画（高度动画会走布局，
-/// 所以这里给 Storyboard 开了 EnableDependentAnimation；卡片只有几张，开销可以忽略）。
-/// 折叠条上标题和类型都完整可见，不再靠「遮住一半」来省空间。
+/// 当前账户展开，其余账户叠成信息条；高度由实际文字和操作区测量决定。
+/// 切换时同步移动和展开，系统关闭动画或页面卸载时直接落到最终布局。
 /// </summary>
 public sealed partial class AccountsPage : Page
 {
@@ -43,21 +42,38 @@ public sealed partial class AccountsPage : Page
         public required TextBlock Uuid { get; init; }
         public required TextBlock Skin { get; init; }
         public required Border KindBadge { get; init; }
-        public required StackPanel Actions { get; init; }
+        public required AdaptiveWrapPanel Actions { get; init; }
         public required Button RefreshToken { get; init; }
         public required Image Avatar { get; init; }
         public required TextBlock Initial { get; init; }
 
         // 折叠态
         public required Grid Compact { get; init; }
+        public required Button Selector { get; init; }
         public required TextBlock CompactName { get; init; }
         public required TextBlock CompactMeta { get; init; }
         public required Image CompactAvatar { get; init; }
         public required TextBlock CompactInitial { get; init; }
+        public int AvatarVersion { get; set; }
     }
 
     private readonly Dictionary<string, CardRefs> _cards = new();
     private readonly List<string> _order = new();
+    private readonly UISettings _uiSettings = new();
+    private Storyboard? _deckAnimation;
+
+    private void PageScroller_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // Canvas 不将子卡片宽度计入 DesiredSize。明确指定滚动内容宽度，
+        // 避免 MaxWidth + Stretch 下测量宽度与实际宽度不同而产生额外居中偏移。
+        PageContent.Width = Math.Min(PageContent.MaxWidth, Math.Max(0, e.NewSize.Width));
+    }
+
+    private double DeckWidth => Math.Max(0,
+        Math.Min(PageScroller.ActualWidth, PageContent.MaxWidth) - PageContent.Padding.Left - PageContent.Padding.Right);
+
+    private void PageContent_SizeChanged(object sender, SizeChangedEventArgs e)
+        => PageContent.Padding = new Thickness(e.NewSize.Width < 720 ? 16 : 32, 28, e.NewSize.Width < 720 ? 16 : 32, 24);
 
     public AccountsPage()
     {
@@ -68,8 +84,9 @@ public sealed partial class AccountsPage : Page
 
     private void DeckHost_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        // Canvas 不会自动拉伸子元素；卡片宽度跟随卡包实际可用宽度。
-        foreach (var card in _cards.Values) card.Root.Width = e.NewSize.Width;
+        // 卡片宽度由外层视口决定，不再将 Canvas 的布局结果写回子项宽度。
+        if (Math.Abs(e.NewSize.Width - e.PreviousSize.Width) < .5) return;
+        LayoutDeck(_order, animate: false);
     }
 
     private void PageHeader_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -85,6 +102,7 @@ public sealed partial class AccountsPage : Page
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         AccountStore.Instance.Changed -= OnStoreChanged;
+        StopDeckAnimation();
         AccountStore.Instance.Changed += OnStoreChanged;
         Refresh();
     }
@@ -92,6 +110,7 @@ public sealed partial class AccountsPage : Page
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         AccountStore.Instance.Changed -= OnStoreChanged;
+        StopDeckAnimation();
     }
 
     private void OnStoreChanged() => DispatcherQueue.TryEnqueue(Refresh);
@@ -126,18 +145,25 @@ public sealed partial class AccountsPage : Page
         if (current is not null && _cards.ContainsKey(current.Id)) target.Add(current.Id);
         target.AddRange(_order.Where(id => id != current?.Id && _cards.ContainsKey(id)));
 
-        LayoutDeck(target, animate: !needRebuild);
+        var reordered = !_order.SequenceEqual(target);
+        if (_deckAnimation is null || reordered || needRebuild)
+            LayoutDeck(target, animate: !needRebuild && reordered);
 
         _order.Clear();
         _order.AddRange(target);
 
         CountText.Text = accounts.Count == 1 ? "1 个账户" : $"{accounts.Count} 个账户";
 
-        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () => FontService.Apply(this));
+        DispatcherQueue.TryEnqueue(DispatcherQueuePriority.Low, () =>
+        {
+            FontService.Apply(this);
+            if (_deckAnimation is null) LayoutDeck(_order, animate: false);
+        });
     }
 
     private void BuildCards(List<GameAccount> accounts)
     {
+        StopDeckAnimation();
         DeckHost.Children.Clear();
         _cards.Clear();
         _order.Clear();
@@ -153,6 +179,11 @@ public sealed partial class AccountsPage : Page
 
     private void LayoutDeck(List<string> order, bool animate)
     {
+        var previous = _cards.ToDictionary(pair => pair.Key,
+            pair => (Top: Canvas.GetTop(pair.Value.Root), Height: pair.Value.Root.Height));
+        StopDeckAnimation();
+        animate = animate && IsLoaded && _uiSettings.AnimationsEnabled;
+        var storyboard = new Storyboard();
         double cursor = 0;
         double total = 0;
 
@@ -160,22 +191,29 @@ public sealed partial class AccountsPage : Page
         {
             var refs = _cards[order[i]];
             var isCurrent = i == 0;
-            var height = isCurrent ? CardHeight : StripHeight;
+            var width = DeckWidth;
+            refs.Root.Width = width;
+            var narrow = width < 700;
+            Grid.SetColumn(refs.Actions, narrow ? 0 : 2);
+            Grid.SetColumnSpan(refs.Actions, narrow ? 3 : 1);
+            Grid.SetRow(refs.Actions, narrow ? 1 : 0);
 
             // 展开/折叠两套内容
             refs.Expanded.Visibility = isCurrent ? Visibility.Visible : Visibility.Collapsed;
             refs.Compact.Visibility = isCurrent ? Visibility.Collapsed : Visibility.Visible;
             refs.Actions.Visibility = isCurrent ? Visibility.Visible : Visibility.Collapsed;
+            var content = isCurrent ? refs.Expanded : refs.Compact;
+            content.Measure(new Size(Math.Max(0, width - 3), double.PositiveInfinity));
+            var height = Math.Max(isCurrent ? CardHeight : StripHeight, content.DesiredSize.Height + 3);
 
             Canvas.SetLeft(refs.Root, 0);
             Canvas.SetZIndex(refs.Root, 1000 - i);
 
-            if (animate) AnimateCard(refs.Root, cursor, height);
-            else
-            {
-                Canvas.SetTop(refs.Root, cursor);
-                refs.Root.Height = height;
-            }
+            var (oldTop, oldHeight) = previous[order[i]];
+            Canvas.SetTop(refs.Root, cursor);
+            refs.Root.Height = height;
+            if (animate)
+                AnimateCard(storyboard, refs.Root, double.IsNaN(oldTop) ? cursor : oldTop, oldHeight, cursor, height);
 
             cursor += height;
 
@@ -186,20 +224,41 @@ public sealed partial class AccountsPage : Page
         }
 
         DeckHost.Height = Math.Max(CardHeight, total);
+        if (storyboard.Children.Count > 0)
+        {
+            _deckAnimation = storyboard;
+            storyboard.Completed += (_, _) =>
+            {
+                if (!ReferenceEquals(_deckAnimation, storyboard)) return;
+                storyboard.Stop();
+                _deckAnimation = null;
+                LayoutDeck(_order, animate: false);
+            };
+            try { storyboard.Begin(); }
+            catch (Exception ex)
+            {
+                StopDeckAnimation();
+                Log.Warn("账户卡包动画失败：" + ex.Message);
+            }
+        }
+    }
 
-        if (animate) Log.Info($"账户卡包：{order.Count} 张，总高 {DeckHost.Height:0}");
+    private void StopDeckAnimation()
+    {
+        _deckAnimation?.Stop();
+        _deckAnimation = null;
     }
 
     /// <summary>高度 + 位置的同步动画。位置用 Canvas.Top（会走布局，所以两张都要开 dependent animation）。</summary>
-    private static void AnimateCard(Border card, double top, double height)
+    private static void AnimateCard(Storyboard storyboard, Border card, double oldTop, double oldHeight, double top, double height)
     {
         try
         {
-            var storyboard = new Storyboard();
             var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
             var move = new DoubleAnimation
             {
+                From = oldTop,
                 To = top,
                 Duration = AnimDuration,
                 EasingFunction = ease,
@@ -211,6 +270,7 @@ public sealed partial class AccountsPage : Page
 
             var grow = new DoubleAnimation
             {
+                From = oldHeight,
                 To = height,
                 Duration = AnimDuration,
                 EasingFunction = ease,
@@ -220,7 +280,6 @@ public sealed partial class AccountsPage : Page
             Storyboard.SetTargetProperty(grow, "Height");
             storyboard.Children.Add(grow);
 
-            storyboard.Begin();
         }
         catch (Exception ex)
         {
@@ -293,12 +352,12 @@ public sealed partial class AccountsPage : Page
             FontSize = 11,
             FontFamily = new FontFamily("Consolas"),
             Foreground = secondary,
+            TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center
         };
 
-        var metaRow = new StackPanel
+        var metaRow = new AdaptiveWrapPanel
         {
-            Orientation = Orientation.Horizontal,
             Spacing = 8,
             Children = { kindBadge, uuid }
         };
@@ -309,7 +368,7 @@ public sealed partial class AccountsPage : Page
             FontSize = 11,
             FontFamily = FontService.BodyFont,
             Foreground = secondary,
-            TextTrimming = TextTrimming.CharacterEllipsis
+            TextWrapping = TextWrapping.Wrap
         };
 
         var texts = new StackPanel
@@ -329,9 +388,8 @@ public sealed partial class AccountsPage : Page
         var removeButton = SmallButton("删除");
         removeButton.Click += async (_, _) => await RemoveAsync(account.Id);
 
-        var actions = new StackPanel
+        var actions = new AdaptiveWrapPanel
         {
-            Orientation = Orientation.Horizontal,
             Spacing = 8,
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 10, 0, 0),
@@ -342,6 +400,8 @@ public sealed partial class AccountsPage : Page
         expandedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         expandedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         expandedRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        expandedRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        expandedRow.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         expandedRow.Children.Add(avatarHost);
         Grid.SetColumn(texts, 1);
         expandedRow.Children.Add(texts);
@@ -410,18 +470,29 @@ public sealed partial class AccountsPage : Page
         Grid.SetColumn(compactTexts, 1);
         compactRow.Children.Add(compactTexts);
 
-        var compact = new Grid
+        var selector = new Button
         {
             // 顶部留出 26px：上面那张卡会盖住信息条的头 22px，内容要躲开
             Padding = new Thickness(18, 26, 18, 6),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(12),
+            Content = compactRow
+        };
+        selector.Click += (_, _) => SelectAccount(account.Id);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(selector, $"使用账户 {account.Name}");
+        var compact = new Grid
+        {
             Visibility = Visibility.Collapsed,
-            Children = { compactRow }
+            Children = { selector }
         };
 
         // ---------- 卡片本体 ----------
         var root = new Border
         {
-            Width = DeckHost.ActualWidth,
+            Width = DeckWidth,
             Height = CardHeight,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
@@ -447,6 +518,7 @@ public sealed partial class AccountsPage : Page
             Avatar = avatar,
             Initial = initial,
             Compact = compact,
+            Selector = selector,
             CompactName = compactName,
             CompactMeta = compactMeta,
             CompactAvatar = compactAvatar,
@@ -456,14 +528,18 @@ public sealed partial class AccountsPage : Page
         root.Tapped += (_, args) =>
         {
             if (IsFromButton(args.OriginalSource)) return;
-            if (AccountService.Current?.Id == refs.AccountId) return;
-
-            AccountService.SetCurrent(refs.AccountId);
-            MainWindow.Instance?.RefreshAccountUi();
-            Refresh();
+            SelectAccount(refs.AccountId);
         };
 
         return refs;
+    }
+
+    private void SelectAccount(string accountId)
+    {
+        if (AccountService.Current?.Id == accountId) return;
+        AccountService.SetCurrent(accountId);
+        MainWindow.Instance?.RefreshAccountUi();
+        Refresh();
     }
 
     private void UpdateCard(CardRefs refs, GameAccount account, bool isCurrent)
@@ -480,6 +556,7 @@ public sealed partial class AccountsPage : Page
 
         refs.CompactName.Text = account.Name;
         refs.CompactMeta.Text = $"{account.KindText} · {account.ModelText}";
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(refs.Selector, $"使用账户 {account.Name}");
 
         refs.RefreshToken.Visibility = account.IsMicrosoft ? Visibility.Visible : Visibility.Collapsed;
 
@@ -497,7 +574,9 @@ public sealed partial class AccountsPage : Page
 
     private static async Task UpdateAvatarsAsync(CardRefs refs, GameAccount account)
     {
+        var version = ++refs.AvatarVersion;
         var source = await SkinService.RenderAvatarAsync(account.SkinPath, 104, account.SkinModel);
+        if (version != refs.AvatarVersion) return;
 
         if (source is null)
         {
@@ -671,8 +750,8 @@ public sealed partial class AccountsPage : Page
             FontFamily = FontService.BodyFont,
             FontSize = 12,
             MinWidth = 72,
-            Height = 32,
-            Padding = new Thickness(12, 0, 12, 0)
+            MinHeight = 32,
+            Padding = new Thickness(12, 6, 12, 6)
         };
     }
 

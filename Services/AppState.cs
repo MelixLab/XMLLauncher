@@ -12,27 +12,45 @@ public sealed class DownloadJob : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public DownloadJob(string title, string subtitle = "")
+    public DownloadJob(string title, string subtitle = "", string operationKey = "")
     {
         Title = title;
         Subtitle = subtitle;
+        OperationKey = operationKey;
         StartedAt = DateTime.Now;
     }
 
     public string Title { get; }
     public string Subtitle { get; }
+    public string OperationKey { get; }
     public DateTime StartedAt { get; }
 
-    /// <summary>这个任务的取消令牌：点「取消安装」就会把它取消掉。</summary>
+    private readonly object _stateLock = new();
+    private bool _cancelRequested;
+
+    /// <summary>任务专用的取消令牌；网络超时不应取消此令牌。</summary>
     public CancellationTokenSource Cts { get; } = new();
 
     public void Cancel()
     {
+        lock (_stateLock)
+        {
+            if (!CanCancel) return;
+            _cancelRequested = true;
+            StatusText = "正在取消";
+            Speed = 0;
+            IsIndeterminate = true;
+            NotifyCancellationState();
+        }
+
         try
         {
-            if (!Cts.IsCancellationRequested) Cts.Cancel();
+            Cts.Cancel();
         }
-        catch { }
+        catch
+        {
+            // 取消回调异常或令牌已释放时，仍等待任务实际结束，不能提前移除条目。
+        }
     }
 
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
@@ -56,6 +74,10 @@ public sealed class DownloadJob : INotifyPropertyChanged
     }
 
     public string PercentText => Fraction >= 1 ? "100%" : $"{Fraction * 100:0}%";
+
+    // 仅供进度界面使用；不参与下载调度或任务完成判定。
+    private bool _isIndeterminate = true;
+    public bool IsIndeterminate { get => _isIndeterminate; set => Set(ref _isIndeterminate, value); }
 
     private long _doneBytes;
     private long _totalBytes;
@@ -100,7 +122,12 @@ public sealed class DownloadJob : INotifyPropertyChanged
     public bool IsRunning
     {
         get => _isRunning;
-        set { Set(ref _isRunning, value); OnPropertyChanged(nameof(IsFinished)); }
+        set
+        {
+            Set(ref _isRunning, value);
+            OnPropertyChanged(nameof(IsFinished));
+            NotifyCancellationState();
+        }
     }
 
     private bool _isFailed;
@@ -112,6 +139,12 @@ public sealed class DownloadJob : INotifyPropertyChanged
 
     public bool IsFinished => !IsRunning;
 
+    private bool _isCanceled;
+    public bool IsCanceled { get => _isCanceled; private set => Set(ref _isCanceled, value); }
+    public bool IsCancelling => IsRunning && (_cancelRequested || Cts.IsCancellationRequested);
+    public bool CanCancel => IsRunning && !IsCancelling;
+    public string CancelButtonText => IsCancelling ? "正在取消" : "取消";
+
     private string _error = "";
     public string Error { get => _error; set { Set(ref _error, value); OnPropertyChanged(nameof(HasError)); } }
     public bool HasError => !string.IsNullOrEmpty(Error);
@@ -121,58 +154,81 @@ public sealed class DownloadJob : INotifyPropertyChanged
 
     private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 
+    private void NotifyCancellationState()
+    {
+        OnPropertyChanged(nameof(IsCancelling));
+        OnPropertyChanged(nameof(CanCancel));
+        OnPropertyChanged(nameof(CancelButtonText));
+    }
+
     public void Apply(InstallProgress p)
     {
-        if (!string.IsNullOrEmpty(p.Stage)) Stage = p.Stage;
-        if (!string.IsNullOrEmpty(p.Message)) CurrentFile = p.Message;
-        else if (!string.IsNullOrEmpty(p.CurrentFile)) CurrentFile = p.CurrentFile;
-
-        if (p.TotalBytes > 0)
+        lock (_stateLock)
         {
-            DoneBytes = Math.Min(p.DoneBytes, p.TotalBytes);
-            TotalBytes = p.TotalBytes;
-            Fraction = Math.Clamp((double)p.DoneBytes / p.TotalBytes, 0, 1);
-        }
+            // 排队中的进度可能晚于取消请求或最终结果到达，不能覆盖等待取消及终态。
+            if (!IsRunning || IsCancelling) return;
 
-        DoneFiles = p.DoneFiles;
-        TotalFiles = p.TotalFiles;
+            IsIndeterminate = p.Indeterminate || p.TotalBytes <= 0;
+            if (!string.IsNullOrEmpty(p.Stage)) Stage = p.Stage;
+            if (!string.IsNullOrEmpty(p.Message)) CurrentFile = p.Message;
+            else if (!string.IsNullOrEmpty(p.CurrentFile)) CurrentFile = p.CurrentFile;
 
-        var now = DateTime.Now;
-        if (_lastTick != DateTime.MinValue)
-        {
-            var dt = (now - _lastTick).TotalSeconds;
-            if (dt > 0.12 && p.DoneBytes >= _lastBytes)
+            if (p.TotalBytes > 0)
             {
-                double inst = (p.DoneBytes - _lastBytes) / dt;
-                Speed = Speed <= 1 ? inst : Speed * 0.65 + inst * 0.35;
+                DoneBytes = Math.Min(p.DoneBytes, p.TotalBytes);
+                TotalBytes = p.TotalBytes;
+                Fraction = Math.Clamp((double)p.DoneBytes / p.TotalBytes, 0, 1);
+            }
+
+            DoneFiles = p.DoneFiles;
+            TotalFiles = p.TotalFiles;
+
+            var now = DateTime.Now;
+            if (_lastTick != DateTime.MinValue)
+            {
+                var dt = (now - _lastTick).TotalSeconds;
+                if (dt > 0.12 && p.DoneBytes >= _lastBytes)
+                {
+                    double inst = (p.DoneBytes - _lastBytes) / dt;
+                    Speed = Speed <= 1 ? inst : Speed * 0.65 + inst * 0.35;
+                    _lastTick = now;
+                    _lastBytes = p.DoneBytes;
+                }
+            }
+            else
+            {
                 _lastTick = now;
                 _lastBytes = p.DoneBytes;
             }
         }
-        else
+    }
+
+    public void Complete() => Finish(true);
+
+    public void Fail(string error) => Finish(false, error);
+
+    private void Finish(bool success, string? error = null)
+    {
+        lock (_stateLock)
         {
-            _lastTick = now;
-            _lastBytes = p.DoneBytes;
+            if (!IsRunning) return;
+
+            // 只依据用户请求、任务自身令牌或旧入口的明确取消标记判断取消。
+            // HttpClient 超时也会抛 OperationCanceledException，不能据异常名称判为取消。
+            IsCanceled = _cancelRequested || Cts.IsCancellationRequested || (!success && error == "已取消");
+            IsFailed = !success && !IsCanceled;
+            IsIndeterminate = false;
+            StatusText = IsCanceled ? "已取消" : IsFailed ? "失败" : "已完成";
+            Error = IsFailed ? error ?? "未知错误" : "";
+            if (success && !IsCanceled)
+            {
+                Fraction = 1;
+                DoneBytes = TotalBytes;
+                DoneFiles = TotalFiles;
+            }
+            Speed = 0;
+            IsRunning = false;
         }
-    }
-
-    public void Complete()
-    {
-        IsRunning = false;
-        StatusText = "已完成";
-        Fraction = 1;
-        DoneBytes = TotalBytes;
-        DoneFiles = TotalFiles;
-        Speed = 0;
-    }
-
-    public void Fail(string error)
-    {
-        IsRunning = false;
-        IsFailed = true;
-        StatusText = "失败";
-        Speed = 0;
-        Error = error;
     }
 }
 
@@ -190,12 +246,15 @@ public sealed class DownloadCenter
     public bool IsBusy => Jobs.Any(j => j.IsRunning);
     public bool HasAny => Jobs.Count > 0;
 
+    public bool IsRunningFor(string operationKey) =>
+        Jobs.Any(job => job.IsRunning && string.Equals(job.OperationKey, operationKey, StringComparison.Ordinal));
+
     public event Action? ActiveChanged;
 
     /// <summary>开一个新任务。允许在已有任务下载时再开一个。</summary>
-    public DownloadJob Begin(string title, string subtitle = "")
+    public DownloadJob Begin(string title, string subtitle = "", string operationKey = "")
     {
-        var job = new DownloadJob(title, subtitle);
+        var job = new DownloadJob(title, subtitle, operationKey);
         Jobs.Insert(0, job);
         ActiveChanged?.Invoke();
         return job;

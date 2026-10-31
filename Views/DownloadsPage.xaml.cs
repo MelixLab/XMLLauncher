@@ -1,57 +1,75 @@
-using System;
 using System.Linq;
+using System.Threading;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Navigation;
 using LinxLauncher.Services;
 
 namespace LinxLauncher.Views;
 
 public sealed partial class DownloadsPage : Page
 {
+    private bool _isLoaded;
+    private int _refreshQueued;
+
     public DownloadsPage()
     {
         InitializeComponent();
-        AppState.Downloads.ActiveChanged += OnActiveChanged;
-        Loaded += (_, _) => Refresh();
+        Loaded += Page_Loaded;
+        Unloaded += Page_Unloaded;
     }
 
-    protected override void OnNavigatedTo(NavigationEventArgs e)
+    private void Page_Loaded(object sender, RoutedEventArgs e)
     {
-        base.OnNavigatedTo(e);
+        if (_isLoaded) return;
+        _isLoaded = true;
+        AppState.Downloads.ActiveChanged += OnActiveChanged;
         Refresh();
+        FontService.Apply(this);
     }
 
-    private void OnActiveChanged() => DispatcherQueue.TryEnqueue(Refresh);
+    private void Page_Unloaded(object sender, RoutedEventArgs e)
+    {
+        _isLoaded = false;
+        AppState.Downloads.ActiveChanged -= OnActiveChanged;
+    }
+
+    private void OnActiveChanged()
+    {
+        if (Interlocked.Exchange(ref _refreshQueued, 1) != 0) return;
+        if (!DispatcherQueue.TryEnqueue(() =>
+        {
+            Interlocked.Exchange(ref _refreshQueued, 0);
+            if (_isLoaded) Refresh();
+        })) Interlocked.Exchange(ref _refreshQueued, 0);
+    }
 
     private void Refresh()
     {
-        var active = AppState.Downloads.Active;
+        var running = AppState.Downloads.Jobs.Where(job => job.IsRunning).ToList();
+        var history = AppState.Downloads.Jobs.Where(job => job.IsFinished).ToList();
 
-        if (active is null)
-        {
-            ActivePanel.Visibility = Visibility.Collapsed;
-            EmptyPanel.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            ActivePanel.Visibility = Visibility.Visible;
-            EmptyPanel.Visibility = Visibility.Collapsed;
-            JobTitle.Text = active.Title;
-            Steps.Job = active;
-        }
-
-        var history = AppState.Downloads.Jobs.Where(j => !ReferenceEquals(j, active)).ToList();
+        UiList.Fill(RunningList, running);
         UiList.Fill(HistoryList, history);
-        HistoryTitle.Visibility = history.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-        ClearButton.Visibility = AppState.Downloads.Jobs.Any(j => j.IsFinished)
-            ? Visibility.Visible : Visibility.Collapsed;
+        RunningTitle.Text = $"正在进行（{running.Count}）";
+        RunningPanel.Visibility = running.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        HistoryPanel.Visibility = history.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        EmptyPanel.Visibility = running.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ClearButton.Visibility = history.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void Clear_Click(object sender, RoutedEventArgs e)
+    private void Page_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        AppState.Downloads.ClearFinished();
-        Refresh();
+        if (ContentGrid is not null)
+            ContentGrid.Padding = e.NewSize.Width < 720
+                ? new Thickness(16, 20, 16, 24)
+                : new Thickness(32, 28, 32, 24);
+    }
+
+    private void Clear_Click(object sender, RoutedEventArgs e) => AppState.Downloads.ClearFinished();
+
+    private void Cancel_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: DownloadJob job }) job.Cancel();
     }
 
     private void GoVersions_Click(object sender, RoutedEventArgs e) => MainWindow.Instance?.NavigateTo("versions");

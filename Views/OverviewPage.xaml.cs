@@ -88,6 +88,13 @@ public sealed partial class OverviewPage : Page
             : $"正在下载 {active.Title}，已完成 {active.PercentText}。";
     }
 
+    private void CardHost_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        CardHost.Padding = e.NewSize.Width < 640
+            ? new Thickness(16, 20, 16, 24)
+            : new Thickness(32, 28, 32, 24);
+    }
+
     // ================= Reveal 驱动 =================
     private void CardHost_PointerMoved(object sender, PointerRoutedEventArgs e)
     {

@@ -86,6 +86,7 @@ public static class Http
             Exception? last = null;
             foreach (var address in ordered)
             {
+                ct.ThrowIfCancellationRequested();
                 var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
                 {
                     NoDelay = true
@@ -96,6 +97,11 @@ public static class Http
                     await socket.ConnectAsync(new IPEndPoint(address, context.DnsEndPoint.Port), ct);
                     return new NetworkStream(socket, ownsSocket: true);
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    socket.Dispose();
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     last = ex;
@@ -103,7 +109,8 @@ public static class Http
                 }
             }
 
-            throw last ?? new IOException("连不上 " + context.DnsEndPoint);
+            ct.ThrowIfCancellationRequested();
+            throw new HttpRequestException($"无法连接 {context.DnsEndPoint.Host}:{context.DnsEndPoint.Port}，请检查网络、代理或下载源。", last);
         };
 
         HttpMessageHandler pipeline = handler;

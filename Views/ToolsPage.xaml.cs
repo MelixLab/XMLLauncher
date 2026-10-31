@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -24,8 +24,10 @@ public sealed partial class ToolsPage : Page
     public ToolsPage()
     {
         InitializeComponent();
+        SizeChanged += (_, _) => UpdateContentPadding();
         Loaded += (_, _) =>
         {
+            UpdateContentPadding();
             FontService.Apply(this);
             ToolInit();
             RefreshMem();
@@ -33,6 +35,23 @@ public sealed partial class ToolsPage : Page
             RefreshSeed();
             RefreshCache();
         };
+    }
+
+    private void UpdateContentPadding() => PageContent.Padding = ActualWidth < 720
+        ? new Thickness(16, 20, 16, 24) : new Thickness(32, 28, 32, 24);
+
+    private void ToolCards_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        foreach (var card in new[] { MemCard, TranslateCard, SeedCard, CacheCard })
+        {
+            var point = e.GetCurrentPoint(card).Position;
+            card.UpdateReveal(point.X, point.Y);
+        }
+    }
+
+    private void ToolCards_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    {
+        foreach (var card in new[] { MemCard, TranslateCard, SeedCard, CacheCard }) card.ResetReveal();
     }
 
     private static void Toast(string msg) => MainWindow.Instance?.Toast(msg);
@@ -216,19 +235,25 @@ public sealed partial class ToolsPage : Page
     /// <summary>把翻译前后的对照摊开给用户看。</summary>
     private async Task ShowDiffAsync(string jarPath, List<(string Key, string En, string Zh)> entries)
     {
-        var panel = new StackPanel { Spacing = 8, Width = 640 };
+        if (!IsLoaded || XamlRoot is not { } root) return;
+        var panel = new Grid { RowSpacing = 8 };
+        panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         var head = new TextBlock
         {
             Text = $"{Path.GetFileName(jarPath)} · 共 {entries.Count} 条",
             FontFamily = FontService.BodyFont,
+            TextWrapping = TextWrapping.Wrap,
         };
         panel.Children.Add(head);
 
         var list = new ListView
         {
-            Height = 380,
-            ItemsSource = entries
+            SelectionMode = ListViewSelectionMode.None,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+        UiList.Fill(list, entries
                 .Select(x => new TextBlock
                 {
                     Text = $"{x.Key}\n  {x.En}\n  → {x.Zh}",
@@ -237,19 +262,29 @@ public sealed partial class ToolsPage : Page
                     FontFamily = FontService.BodyFont,
                     Margin = new Thickness(0, 4, 0, 4),
                 })
-                .ToList(),
-        };
+                .ToList());
+        Grid.SetRow(list, 1);
         panel.Children.Add(list);
 
         var dialog = new ContentDialog
         {
             XamlRoot = XamlRoot,
             Title = "汉化结果",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 460 },
+            Content = panel,
             CloseButtonText = "知道了",
         };
+        dialog.Resources["ContentDialogMaxWidth"] = 720d;
+        void UpdateDialogSize()
+        {
+            panel.MaxWidth = Math.Max(0, Math.Min(640, root.Size.Width - 96));
+            list.MaxHeight = Math.Max(0, Math.Min(380, root.Size.Height - 260));
+        }
+        void Root_Changed(XamlRoot sender, XamlRootChangedEventArgs args) => UpdateDialogSize();
+        UpdateDialogSize();
         FontService.ApplyToDialog(dialog);
-        await dialog.ShowAsync();
+        root.Changed += Root_Changed;
+        try { await dialog.ShowAsync(); }
+        finally { root.Changed -= Root_Changed; }
     }
 
     /* ==================== 种子地图 ==================== */
@@ -266,14 +301,14 @@ public sealed partial class ToolsPage : Page
             Header = "种子",
             PlaceholderText = "例如 -3525218295543650087",
         };
-        var ver = new ComboBox { Header = "版本", SelectedIndex = 0 };
+        var ver = new ComboBox { Header = "版本", SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var v in new[] { "1.20", "1.19", "1.18", "1.16" }) ver.Items.Add(v);
 
         var ask = new ContentDialog
         {
             XamlRoot = XamlRoot,
             Title = "种子地图",
-            Content = new StackPanel { Spacing = 12, MinWidth = 360, Children = { box, ver } },
+            Content = new StackPanel { Spacing = 12, MaxWidth = 400, Children = { box, ver } },
             PrimaryButtonText = "生成地图",
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Primary,
@@ -294,7 +329,7 @@ public sealed partial class ToolsPage : Page
 
         const int size = 512;
         const int scale = 4;      // 每像素 4 格 → 覆盖 2048×2048 格
-        const int view = 400;     // 弹窗里显示的边长
+        const int view = 400;     // 地图逻辑尺寸，实际视口随弹窗收缩
 
         var rgb = await SeedMap.RenderAsync(seed, version, size, scale);
         if (rgb is null)
@@ -316,6 +351,7 @@ public sealed partial class ToolsPage : Page
         }
 
         var hits = await SeedMap.FindStructuresAsync(seed, version) ?? new();
+        if (!IsLoaded || XamlRoot is not { } root) return;
 
         // ---- 地图 + 标点 ----
         var canvas = new Canvas { Width = view, Height = view };
@@ -377,16 +413,21 @@ public sealed partial class ToolsPage : Page
             canvas.Children.Add(label);
         }
 
-        // 视口比图小，这样才有得拖；缩放用滑块控制（WinUI 的滚轮缩放要触摸屏才好用）
+        // 布局表面提供缩放后的滚动范围，图像与标点始终使用同一套逻辑坐标。
+        var mapSurface = new Grid { Width = view, Height = view };
+        canvas.HorizontalAlignment = HorizontalAlignment.Left;
+        canvas.VerticalAlignment = VerticalAlignment.Top;
+        mapSurface.Children.Add(canvas);
         var scroll = new ScrollViewer
         {
-            Content = canvas,
+            Content = mapSurface,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollMode = ScrollMode.Enabled,
             VerticalScrollMode = ScrollMode.Enabled,
             Height = view,
-            Width = view,
+            MaxWidth = view,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
 
         var zoom = new Slider
@@ -395,7 +436,8 @@ public sealed partial class ToolsPage : Page
             Maximum = 4,
             Value = 1,
             StepFrequency = 0.25,
-            Width = view,
+            MaxWidth = view,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
 
         var zoomLabel = new TextBlock
@@ -414,8 +456,8 @@ public sealed partial class ToolsPage : Page
                 ScaleX = z,
                 ScaleY = z,
             };
-            canvas.Width = size * z;
-            canvas.Height = size * z;
+            mapSurface.Width = view * z;
+            mapSurface.Height = view * z;
             zoomLabel.Text = $"缩放 {z:F1}×";
         }
 
@@ -423,13 +465,14 @@ public sealed partial class ToolsPage : Page
         ApplyZoom(1);
 
         // ---- 右侧结构列表 ----
-        var list = new StackPanel { Spacing = 6, Width = 260 };
+        var list = new StackPanel { Spacing = 6 };
         list.Children.Add(new TextBlock
         {
             Text = $"种子 {seed} · {version}",
             FontSize = 12,
             FontFamily = FontService.BodyFont,
             Foreground = (Brush)Application.Current.Resources["SecondaryTextBrush"],
+            TextWrapping = TextWrapping.Wrap,
         });
 
         foreach (var hit in hits.OrderBy(h => h.Distance))
@@ -440,31 +483,72 @@ public sealed partial class ToolsPage : Page
                 FontSize = 11.5,
                 FontFamily = FontService.BodyFont,
                 LineHeight = 16,
+                TextWrapping = TextWrapping.Wrap,
             });
         }
 
-        var left = new StackPanel { Spacing = 8 };
+        var left = new StackPanel { Spacing = 8, MaxWidth = view };
         left.Children.Add(scroll);
         left.Children.Add(zoom);
         left.Children.Add(zoomLabel);
 
-        var body = new Grid { ColumnSpacing = 14 };
-        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var structures = new ScrollViewer
+        {
+            Content = list,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
+        var body = new Grid { ColumnSpacing = 14, RowSpacing = 14 };
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        Grid.SetColumn(left, 0);
-        Grid.SetColumn(list, 1);
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.Children.Add(left);
-        body.Children.Add(list);
+        body.Children.Add(structures);
+
+        var content = new ScrollViewer
+        {
+            Content = body,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+        };
 
         var result = new ContentDialog
         {
             XamlRoot = XamlRoot,
             Title = "种子地图",
-            Content = body,
+            Content = content,
             CloseButtonText = "关闭",
         };
+        result.Resources["ContentDialogMaxWidth"] = 800d;
+        void UpdateMapSize()
+        {
+            content.Width = Math.Max(0, Math.Min(720, root.Size.Width - 96));
+            content.MaxHeight = Math.Max(0, root.Size.Height - 220);
+            scroll.Height = Math.Max(0, Math.Min(view, root.Size.Height - 300));
+            UpdateMapColumns(body.ActualWidth > 0 ? body.ActualWidth : content.Width);
+        }
+        void UpdateMapColumns(double width)
+        {
+            bool narrow = width < 650;
+            body.ColumnDefinitions[1].Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+            body.ColumnSpacing = narrow ? 0 : 14;
+            Grid.SetColumn(structures, narrow ? 0 : 1);
+            Grid.SetRow(structures, narrow ? 1 : 0);
+            structures.MaxHeight = narrow ? 160 : scroll.Height;
+        }
+        void Root_Changed(XamlRoot sender, XamlRootChangedEventArgs args) => UpdateMapSize();
+        UpdateMapSize();
+        body.SizeChanged += (_, _) => UpdateMapColumns(body.ActualWidth);
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(zoom, "地图缩放");
         FontService.ApplyToDialog(result);
-        await result.ShowAsync();
+        root.Changed += Root_Changed;
+        try { await result.ShowAsync(); }
+        finally { root.Changed -= Root_Changed; }
 
         // 卡片只留一行，不要把坐标堆上去
         SeedCard.Status = $"种子 {seed} · {version} · 点「解析」看地图";
