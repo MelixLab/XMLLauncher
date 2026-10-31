@@ -1,18 +1,21 @@
 ﻿<?xml version="1.0" ?>
 <Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="LinxLauncher.Views.SettingsPage" Background="Transparent">
-    <Grid x:Name="PageLayout" Padding="32,28,20,16" SizeChanged="PageLayout_SizeChanged">
+    <Grid x:Name="PageLayout" SizeChanged="PageLayout_SizeChanged">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <StackPanel MaxWidth="1200" HorizontalAlignment="Stretch" Spacing="6" Margin="0,0,0,16">
+        <Grid x:Name="SettingsHeader" Style="{StaticResource PageContentStyle}" Padding="32,28,32,0" Margin="0,0,0,16">
+        <StackPanel Spacing="6">
             <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="设置"/>
             <TextBlock Style="{StaticResource PageSubtitleTextStyle}" Text="调整游戏环境，打造你的启动器。设置保存在本机。"/>
         </StackPanel>
-        <NavigationView x:Name="CategoryNavigation" Grid.Row="1" MaxWidth="1200" PaneDisplayMode="Top" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" IsPaneToggleButtonVisible="False" IsTitleBarAutoPaddingEnabled="False" SelectionChanged="Category_SelectionChanged" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+        </Grid>
+        <NavigationView x:Name="CategoryNavigation" Grid.Row="1" PaneDisplayMode="Top" IsBackButtonVisible="Collapsed" IsSettingsVisible="False" IsPaneToggleButtonVisible="False" IsTitleBarAutoPaddingEnabled="False" SelectionChanged="Category_SelectionChanged" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
             <NavigationView.Resources>
                 <SolidColorBrush x:Key="NavigationViewContentBackground" Color="Transparent"/>
                 <SolidColorBrush x:Key="NavigationViewContentGridBorderBrush" Color="Transparent"/>
+                <Thickness x:Key="TopNavigationViewTopNavGridMargin">32,0,32,0</Thickness>
             </NavigationView.Resources>
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="常规" Tag="0" Icon="Setting"/>

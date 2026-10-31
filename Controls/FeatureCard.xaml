@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    概览卡片，观感与 XIGUASecurity 的 SecurityCard 完全一致：
-    · 主题底色、统一圆角、无阴影；悬停时底色变浅灰（淡入 150ms）
-    · 悬停描边是一条 1 DIP 的径向渐变线，中心跟着鼠标走，
-      指针附近的卡片也能蹭到一点余光（见 FeatureCard.UpdateReveal）
+    首页、联机与工具箱共享的功能卡片：
+    · 表面和边缘的柔和追光共用指针位置，背景状态只绘制一次
+    · 原生导航按钮与内部操作各自接收输入，避免重复点击与整卡双重缩放
     · 图标 48×48，走 IconTemplate（主图形 + 状态徽章）
 -->
 <UserControl
@@ -19,21 +18,34 @@
     <Grid
         x:Name="Root"
         Background="{ThemeResource CardBackgroundBrush}"
-        CornerRadius="{x:Bind CornerRadius, Mode=OneWay}"
-        BorderBrush="{ThemeResource DividerBrush}" BorderThickness="1">
+        CornerRadius="{x:Bind CornerRadius, Mode=OneWay}">
 
         <Border CornerRadius="{x:Bind CornerRadius, Mode=OneWay}" IsHitTestVisible="False" x:Name="HoverFill" Background="{ThemeResource CardHoverBackgroundBrush}" Opacity="0">
             <Border.OpacityTransition>
                 <ScalarTransition Duration="0:0:0.15" />
             </Border.OpacityTransition>
         </Border>
+        <Border CornerRadius="{x:Bind CornerRadius, Mode=OneWay}" IsHitTestVisible="False"
+                x:Name="PressedFill" Background="{ThemeResource CardPressedBackgroundBrush}" Opacity="0" />
 
         <!-- 原生导航按钮与 Actions 是兄弟元素，避免嵌套按钮吞掉点击与焦点。 -->
         <Button x:Name="NavigationButton" Visibility="Collapsed" Click="Navigation_Click"
                 CornerRadius="{x:Bind CornerRadius, Mode=OneWay}"
                 Style="{StaticResource FeatureCardNavigationButtonStyle}"
                 AutomationProperties.Name="{x:Bind Header, Mode=OneWay}">
+            <Button.Resources>
+                <!-- 只借用原生按钮的输入与焦点；卡片表面统一由外层绘制。 -->
+                <SolidColorBrush x:Key="ButtonBackground" Color="Transparent" />
+                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="Transparent" />
+                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="Transparent" />
+                <SolidColorBrush x:Key="ButtonBackgroundDisabled" Color="Transparent" />
+            </Button.Resources>
         </Button>
+        <Border IsHitTestVisible="False" CornerRadius="{x:Bind CornerRadius, Mode=OneWay}"
+                x:Name="SurfaceGlow" Opacity="0" />
+        <!-- 描边与表面共享外轮廓；放在独立层，避免根容器边框使 Reveal 内缩。 -->
+        <Border IsHitTestVisible="False" CornerRadius="{x:Bind CornerRadius, Mode=OneWay}"
+                BorderBrush="{ThemeResource DividerBrush}" BorderThickness="1" />
         <Border IsHitTestVisible="False" CornerRadius="{x:Bind CornerRadius, Mode=OneWay}" x:Name="RevealStroke" BorderThickness="1" Opacity="0">
             <Border.OpacityTransition>
                 <ScalarTransition Duration="0:0:0.10" />
@@ -43,7 +55,7 @@
         <!--
             等宽面板按行同高；状态区吸收剩余空间，操作区始终贴齐底部。
         -->
-        <Grid Margin="20,16,20,16">
+        <Grid Margin="21,17,21,17">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />

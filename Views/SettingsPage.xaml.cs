@@ -48,7 +48,10 @@ public sealed partial class SettingsPage : Page
 
     private void PageLayout_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        PageLayout.Padding = e.NewSize.Width < 640 ? new Thickness(16, 20, 16, 12) : new Thickness(32, 28, 32, 16);
+        double side = e.NewSize.Width < 640 ? 16 : 32;
+        SettingsHeader.Padding = new Thickness(side, e.NewSize.Width < 640 ? 20 : 28, side, 0);
+        double inset = side + Math.Max(0, (e.NewSize.Width - 1200) / 2);
+        CategoryNavigation.Resources["TopNavigationViewTopNavGridMargin"] = new Thickness(inset, 0, inset, 0);
     }
 
 }

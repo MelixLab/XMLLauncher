@@ -76,9 +76,14 @@ public sealed partial class ModsPage : Page
 
     private void PageContent_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        PageContent.Padding = e.NewSize.Width < 720
-            ? new Thickness(16, 20, 16, 24)
-            : new Thickness(32, 28, 32, 24);
+        double side = e.NewSize.Width < 720 ? 16 : 32;
+        ModHeader.Margin = new Thickness(side, e.NewSize.Width < 720 ? 20 : 28, side, 0);
+        SearchRow.Margin = new Thickness(side, 20, side, 0);
+        FilterHost.Margin = new Thickness(side, 8, side, 0);
+        ResultBackground.Margin = new Thickness(side, 0, side, 0);
+        StatusText.Margin = new Thickness(side + 12, 12, side + 12, 8);
+        ResultList.Padding = new Thickness(side + 12, 0, side + 12, 12);
+        ResultFooter.Margin = new Thickness(side + 12, 10, side + 12, 12);
     }
 
     /// <summary>ListView 内部才有 ScrollViewer，翻到底部靠它判断。</summary>

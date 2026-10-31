@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text.Json;
 
@@ -32,6 +32,21 @@ public sealed class AppSettings
 
     /// <summary>内容层不透明度，0.15~1。越低越透，越能看见桌面的云母 / 亚克力。</summary>
     public double SurfaceOpacity { get; set; } = 0.5;
+
+    /// <summary>浅色卡片内部的鼠标灰色光晕；不影响边缘追光或深色主题。</summary>
+    public bool LightCardGlowEnabled { get; set; } = true;
+
+    /// <summary>功能卡片和加载器选择卡片使用圆角；其他内容卡片不受影响。</summary>
+    public bool RoundedCards { get; set; } = true;
+
+    /// <summary>统一所有组件的边角；开启时覆盖交互卡片独立设置。保留旧字段名兼容配置。</summary>
+    public bool GlobalCardCornersEnabled { get; set; }
+
+    /// <summary>全局边角选择，默认圆角。</summary>
+    public bool GlobalRoundedCards { get; set; } = true;
+
+    /// <summary>试用 WinUI 原生 TitleBar，默认关闭，使用旧紧凑标题栏。</summary>
+    public bool UseNewTitleBar { get; set; }
 
     /// <summary>亚克力通透程度（0–100），反向映射到 LuminosityOpacity。</summary>
     public double AcrylicTransparency { get; set; } = 70;

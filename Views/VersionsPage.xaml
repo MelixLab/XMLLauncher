@@ -7,27 +7,39 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:models="using:LinxLauncher.Models"
     xmlns:controls="using:LinxLauncher.Controls"
+    xmlns:services="using:LinxLauncher.Services"
     Background="Transparent"
     mc:Ignorable="d">
 
     <!-- 整页都能接 .jar：之前 AllowDrop 只挂在 Mod 面板上，
          而那个面板默认是 Collapsed，往页面别处拖一律没反应 -->
-    <Grid x:Name="PageLayout" Style="{StaticResource PageContentStyle}"
+    <Grid x:Name="PageLayout"
           SizeChanged="PageLayout_SizeChanged"
           AllowDrop="True"
           DragOver="Mods_DragOver"
           Drop="Mods_Drop">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 固定标题区位于 Frame 外，只有内容行参与子页面转场。 -->
+        <Grid x:Name="PageHeader" Style="{StaticResource PageContentStyle}" Padding="32,28,32,0">
+            <controls:PageBreadcrumb x:Name="VersionBreadcrumb" CurrentTitle="版本列表"
+                                     ParentClicked="Back_Click" />
+        </Grid>
 
         <!-- ================================================================
              视图一：版本列表（照「保护历史记录」：行内无底色，悬停才铺灰）
              ================================================================ -->
-        <Grid x:Name="ListViewHost">
+        <Grid x:Name="ListViewHost" Grid.Row="1" Margin="0,12,0,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <Grid Grid.Row="0" ColumnSpacing="24" RowSpacing="16" SizeChanged="ListHeader_SizeChanged">
+            <Grid x:Name="ListHeader" Grid.Row="0" Style="{StaticResource PageContentStyle}" Padding="32,0,32,0"
+                  ColumnSpacing="24" RowSpacing="16" SizeChanged="ListHeader_SizeChanged">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -37,9 +49,7 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <StackPanel x:Name="ListHeading">
-                    <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="版本库" />
                     <TextBlock
-                        Margin="0,11,0,0"
                         Style="{StaticResource PageSubtitleTextStyle}"
                         Text="挑一个版本，进去再选模组加载器。全部走国内镜像下载。"
                         TextWrapping="Wrap" />
@@ -77,11 +87,13 @@
             <Grid Grid.Row="1" Margin="0,20,0,0">
                 <ListView
                     x:Name="VersionList"
+                    Padding="32,0,32,24"
                     IsItemClickEnabled="True"
                     ItemClick="Version_ItemClick"
                     SelectionMode="None">
                     <ListView.ItemContainerStyle>
                         <Style TargetType="ListViewItem">
+                            <Setter Property="MaxWidth" Value="1136" />
                             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                             <Setter Property="Padding" Value="0" />
                             <Setter Property="Margin" Value="0" />
@@ -194,49 +206,28 @@
         <!-- ================================================================
              视图二：详情 —— 版本信息 + 模组加载器九宫格
              ================================================================ -->
-        <Grid x:Name="DetailHost" Visibility="Collapsed">
+        <Grid x:Name="DetailHost" Grid.Row="1" Margin="0,12,0,0" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- 返回 + 标题 -->
-            <StackPanel Grid.Row="0">
-                <Button
-                    x:Name="BackButton"
-                    AutomationProperties.Name="返回版本列表"
-                    Style="{StaticResource PageBackButtonStyle}"
-                    Click="Back_Click">
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <FontIcon
-                            FontFamily="{StaticResource IconFontFamily}"
-                            FontSize="14"
-                            VerticalAlignment="Center"
-                            Glyph="&#xE72B;" />
-                        <TextBlock
-                            VerticalAlignment="Center"
-                            Text="返回版本列表" />
-                    </StackPanel>
-                </Button>
-
-                <Grid Margin="0,14,0,0" ColumnSpacing="12">
+            <!-- 版本元数据随详情内容转场，面包屑固定在上方。 -->
+            <Grid x:Name="DetailMetadata" Grid.Row="0" Style="{StaticResource PageContentStyle}" Padding="32,0,32,0">
+                <Grid ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel>
                         <TextBlock
-                            x:Name="DetailId"
-                            Style="{StaticResource PageTitleTextStyle}"
-                            Text="—" TextWrapping="Wrap" />
-                        <TextBlock
                             x:Name="DetailMeta"
-                            Margin="0,9,0,0"
                             Style="{StaticResource PageSubtitleTextStyle}"
                             Text="" TextWrapping="Wrap" />
                     </StackPanel>
 
                     <Border
+                        services:CardAppearance.IsCard="True"
                         x:Name="InstalledBadge"
                         Grid.Column="1"
                         Padding="8,3"
@@ -251,13 +242,14 @@
                             Text="已安装" />
                     </Border>
                 </Grid>
-            </StackPanel>
+            </Grid>
 
             <ScrollViewer
                 x:Name="DetailScroll"
                 Grid.Row="1"
                 Margin="0,24,0,0"
                 Style="{StaticResource PageScrollStyle}">
+                <Grid x:Name="DetailContent" Style="{StaticResource PageContentStyle}" Padding="32,4,32,24">
                 <StackPanel>
 
                     <TextBlock
@@ -269,7 +261,7 @@
                         Text="原版只装游戏本体；装了加载器才能用模组。" />
 
                     <!-- 保留加载器选择卡，按详情区实际宽度换列。 -->
-                    <controls:AdaptiveWrapPanel ItemMinWidth="220" MaxColumns="3" Spacing="8">
+                    <controls:AdaptiveWrapPanel ItemMinWidth="220" MaxColumns="3" Spacing="8" ContentPadding="6,4,6,4">
 
                         <ToggleButton
                             x:Name="CardVanilla"
@@ -348,25 +340,31 @@
                         Margin="0,20,0,0"
                         Spacing="8"
                         Visibility="Collapsed">
-                        <TextBlock Style="{StaticResource CardTitleTextStyle}" Text="加载器版本" />
-                        <Grid ColumnSpacing="10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <ComboBox
-                                x:Name="LoaderVersionBox"
-                                MinHeight="32" MaxWidth="360" HorizontalAlignment="Stretch"
-                                AutomationProperties.Name="加载器版本"
-                                SelectionChanged="LoaderVersion_Changed" />
-                            <ProgressRing
-                                x:Name="LoaderRing"
-                                Grid.Column="1"
-                                Width="18"
-                                Height="18"
-                                VerticalAlignment="Center"
-                                Visibility="Collapsed" />
-                        </Grid>
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="加载器版本" />
+                        <Border Style="{StaticResource SettingsItemCardStyle}" Padding="20,16">
+                            <controls:SettingsRow Title="构建版本" Description="选择要安装的加载器版本。">
+                                <controls:SettingsRow.Editor>
+                                    <Grid ColumnSpacing="10" HorizontalAlignment="Right">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ComboBox
+                                            x:Name="LoaderVersionBox"
+                                            Grid.Column="1" MinHeight="32" MinWidth="180" MaxWidth="300" HorizontalAlignment="Right"
+                                            AutomationProperties.Name="加载器版本"
+                                            SelectionChanged="LoaderVersion_Changed" />
+                                        <ProgressRing
+                                            x:Name="LoaderRing"
+                                            Grid.Column="0"
+                                            Width="18"
+                                            Height="18"
+                                            VerticalAlignment="Center"
+                                            Visibility="Collapsed" />
+                                    </Grid>
+                                </controls:SettingsRow.Editor>
+                            </controls:SettingsRow>
+                        </Border>
                         <TextBlock
                             x:Name="LoaderHint"
                             Style="{StaticResource CaptionTextStyle}"
@@ -384,7 +382,7 @@
                         Text="启动设置"
                         Visibility="Collapsed" />
 
-                    <Border
+                    <Border services:CardAppearance.IsCard="True"
                         x:Name="InstancePanel"
                         Padding="20,16"
                         Background="{ThemeResource CardBackgroundBrush}"
@@ -475,7 +473,7 @@
                     <controls:AdaptiveWrapPanel x:Name="InstanceInfoPanel" ItemMinWidth="180"
                                                 MaxColumns="3" Spacing="8" Visibility="Collapsed">
 
-                        <Border
+                        <Border services:CardAppearance.IsCard="True"
                             Padding="16,14"
                             Background="{ThemeResource CardBackgroundBrush}"
                             BorderBrush="{ThemeResource DividerBrush}"
@@ -487,7 +485,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border
+                        <Border services:CardAppearance.IsCard="True"
                             Padding="16,14"
                             Background="{ThemeResource CardBackgroundBrush}"
                             BorderBrush="{ThemeResource DividerBrush}"
@@ -499,7 +497,7 @@
                             </StackPanel>
                         </Border>
 
-                        <Border
+                        <Border services:CardAppearance.IsCard="True"
                             Padding="16,14"
                             Background="{ThemeResource CardBackgroundBrush}"
                             BorderBrush="{ThemeResource DividerBrush}"
@@ -550,7 +548,7 @@
                         Text="Mod 管理"
                         Visibility="Collapsed" />
 
-                    <Border
+                    <Border services:CardAppearance.IsCard="True"
                         x:Name="ModPanel"
                         Padding="16,14"
                         AllowDrop="True"
@@ -651,7 +649,7 @@
                         Severity="Warning" />
 
                     <!-- 安装动作 -->
-                    <Border
+                    <Border services:CardAppearance.IsCard="True"
                         Margin="0,24,0,0"
                         Padding="20,18"
                         Background="{ThemeResource ThreatCardBackgroundBrush}"
@@ -683,21 +681,18 @@
                                 VerticalAlignment="Center"
                                 Spacing="8">
                                 <Button
-                                    Click="Back_Click"
-                                    Content="返回"
-                                    MinHeight="32"
-                                    MinWidth="88" />
-                                <Button
                                     x:Name="InstallButton"
+                                    services:InteractionMotion.IsEnabled="True"
                                     MinWidth="112"
                                     MinHeight="32"
                                     Click="Install_Click"
                                     Content="下载并安装"
-                                    Style="{StaticResource AccentButtonStyle}" />
+                                    Style="{StaticResource PrimaryActionButtonStyle}" />
                             </controls:AdaptiveWrapPanel>
                         </Grid>
                     </Border>
                 </StackPanel>
+                </Grid>
             </ScrollViewer>
         </Grid>
     </Grid>

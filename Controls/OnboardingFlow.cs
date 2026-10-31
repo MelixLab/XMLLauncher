@@ -484,20 +484,25 @@ public sealed class OnboardingFlow
         Foreground = Res("BrandBrush")
     };
 
-    private static Border Banner(string text) => new()
+    private static Border Banner(string text)
     {
-        Background = Res("BrandSoftBrush"),
-        CornerRadius = new CornerRadius(6),
-        Padding = new Thickness(12, 10, 12, 10),
-        Child = new TextBlock
+        var banner = new Border
         {
-            Text = text,
-            FontSize = 12.5,
-            LineHeight = 19,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = Res("PrimaryTextBrush")
-        }
-    };
+            Background = Res("BrandSoftBrush"),
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(12, 10, 12, 10),
+            Child = new TextBlock
+            {
+                Text = text,
+                FontSize = 12.5,
+                LineHeight = 19,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = Res("PrimaryTextBrush")
+            }
+        };
+        CardAppearance.SetIsCard(banner, true);
+        return banner;
+    }
 
     private static StackPanel Choice(string title, string description)
     {

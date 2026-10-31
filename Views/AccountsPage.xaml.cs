@@ -318,6 +318,7 @@ public sealed partial class AccountsPage : Page
             VerticalAlignment = VerticalAlignment.Top,
             Child = new Grid { Children = { initial, avatar } }
         };
+        CardAppearance.SetIsCard(avatarHost, true);
 
         var name = new TextBlock
         {
@@ -345,6 +346,7 @@ public sealed partial class AccountsPage : Page
             Background = ThemeService.Brush("BrandSoftBrush"),
             Child = kindText
         };
+        CardAppearance.SetIsCard(kindBadge, true);
 
         var uuid = new TextBlock
         {
@@ -436,6 +438,7 @@ public sealed partial class AccountsPage : Page
             VerticalAlignment = VerticalAlignment.Center,
             Child = new Grid { Children = { compactInitial, compactAvatar } }
         };
+        CardAppearance.SetIsCard(compactAvatarHost, true);
 
         var compactName = new TextBlock
         {
@@ -502,6 +505,8 @@ public sealed partial class AccountsPage : Page
             BorderThickness = new Thickness(1),
             Child = new Grid { Children = { expanded, compact } }
         };
+        CardAppearance.SetIsCard(root, true);
+        CardAppearance.SetIsCard(selector, true);
 
         var refs = new CardRefs
         {

@@ -11,13 +11,17 @@ namespace LinxLauncher.Views;
 public sealed partial class SettingsAppearancePage : Page
 {
     private bool _loading = true;
-    private bool _acrylicOptionsOpen;
     private bool? _previewIsDark;
     public SettingsAppearancePage()
     {
         InitializeComponent();
         LoadThemeSettings(AppState.Settings);
         FontSwitch.IsOn = AppState.Settings.UseNotoSans;
+        LightGlowSwitch.IsOn = AppState.Settings.LightCardGlowEnabled;
+        CardShapeBox.SelectedIndex = AppState.Settings.RoundedCards ? 0 : 1;
+        GlobalCardShapeSwitch.IsOn = AppState.Settings.GlobalCardCornersEnabled;
+        NewTitleBarSwitch.IsOn = AppState.Settings.UseNewTitleBar;
+        UpdateCardShapeEditors();
         TransparencySlider.Value = Math.Clamp(AppState.Settings.AcrylicTransparency, 0, 100);
         VividnessSlider.Value = Math.Clamp(AppState.Settings.AcrylicVividness, 0, 100);
         UpdateAcrylicLabels();
@@ -36,10 +40,7 @@ public sealed partial class SettingsAppearancePage : Page
 
     private void SetAcrylicOptionsOpen(bool open)
     {
-        AcrylicOptionsCard.IsEnabled = open;
-        if (_acrylicOptionsOpen == open) return;
-        _acrylicOptionsOpen = open;
-        AcrylicOptionsCard.IsExpanded = open;
+        MaterialCard.IsExpanded = open;
     }
 
     private void UpdateAcrylicLabels()
@@ -67,6 +68,42 @@ public sealed partial class SettingsAppearancePage : Page
         // 先换全局资源（管以后新建的控件），再把已有的刷一遍
         FontService.ApplyGlobal(FontSwitch.IsOn);
         FontService.RefreshAll();
+    }
+
+    private void LightGlow_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        AppState.Settings.LightCardGlowEnabled = LightGlowSwitch.IsOn;
+        ApplyTheme();
+    }
+
+    private void CardShape_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || CardShapeBox.SelectedIndex < 0 || AppState.Settings.GlobalCardCornersEnabled) return;
+        AppState.Settings.RoundedCards = CardShapeBox.SelectedIndex == 0;
+        ApplyTheme();
+    }
+
+    private void UpdateCardShapeEditors()
+    {
+        bool global = GlobalCardShapeSwitch.IsOn;
+        InteractionCardShapeRow.IsEnabled = !global;
+        InteractionCardShapeRow.Opacity = global ? 0.5 : 1;
+    }
+
+    private void GlobalCardShape_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        AppState.Settings.GlobalCardCornersEnabled = GlobalCardShapeSwitch.IsOn;
+        UpdateCardShapeEditors();
+        ApplyTheme();
+    }
+
+    private void NewTitleBar_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        AppState.Settings.UseNewTitleBar = NewTitleBarSwitch.IsOn;
+        ApplyTheme();
     }
 
     private static readonly (int Id, string Name, string Desc)[] Materials =
@@ -266,6 +303,7 @@ public sealed partial class SettingsAppearancePage : Page
             CornerRadius = new CornerRadius(4),
             Background = new SolidColorBrush(surfaceBase),
         };
+        CardAppearance.SetIsCard(root, true);
 
         // 预览不跟「内容层不透明度」走：滑到 100% 时四张卡会全变成一样的实色板，
         // 反而分不出材质差别。这里固定一档「能看出材质性格」的透度。
@@ -292,7 +330,7 @@ public sealed partial class SettingsAppearancePage : Page
             });
         }
 
-        root.Children.Add(new Border
+        var previewCard = new Border
         {
             Width = 52,
             Height = 20,
@@ -301,15 +339,19 @@ public sealed partial class SettingsAppearancePage : Page
             VerticalAlignment = VerticalAlignment.Bottom,
             CornerRadius = new CornerRadius(3),
             Background = new SolidColorBrush(ThemeService.WithAlpha(cardBase, card)),
-        });
+        };
+        CardAppearance.SetIsCard(previewCard, true);
+        root.Children.Add(previewCard);
 
-        return new Border
+        var preview = new Border
         {
             Child = root,
             CornerRadius = new CornerRadius(4),
             BorderThickness = new Thickness(1),
             BorderBrush = ThemeService.Brush("DividerBrush"),
         };
+        CardAppearance.SetIsCard(preview, true);
+        return preview;
     }
 
     private void BuildAccentSwatches()
@@ -332,6 +374,7 @@ public sealed partial class SettingsAppearancePage : Page
                 CornerRadius = new CornerRadius(15),
                 UseSystemFocusVisuals = true,
             };
+            CardAppearance.SetIsCard(button, true);
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, name + "主题色");
             ToolTipService.SetToolTip(button, name);
             button.Click += Accent_Click;
@@ -344,6 +387,7 @@ public sealed partial class SettingsAppearancePage : Page
                 BorderThickness = new Thickness(2),
                 BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
             };
+            CardAppearance.SetIsCard(ring, true);
 
             AccentHost.Children.Add(ring);
             _accentRings.Add(ring);

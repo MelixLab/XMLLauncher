@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LinxLauncher.Views.RelayPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -9,29 +9,36 @@
     Background="{ThemeResource PageLayerBackgroundBrush}"
     mc:Ignorable="d">
 
-    <Grid>
+    <Grid x:Name="ViewNavigationHost">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 固定面包屑不进入 Frame，创建房间和大厅只切换下面的内容。 -->
+        <Grid x:Name="RelayHeader" Style="{StaticResource PageContentStyle}" Padding="32,28,32,0" MaxWidth="1040">
+            <controls:PageBreadcrumb x:Name="RelayBreadcrumb" CurrentTitle="联机" ParentClicked="Back_Click" />
+        </Grid>
+
         <!-- ==================== 主视图：三张卡片 ==================== -->
-        <ScrollViewer x:Name="MainView" Style="{StaticResource PageScrollStyle}">
-            <Grid x:Name="MainContent" Style="{StaticResource PageContentStyle}" MaxWidth="1040">
+        <ScrollViewer x:Name="MainView" Grid.Row="1" Margin="0,12,0,0" Style="{StaticResource PageScrollStyle}">
+            <Grid x:Name="MainContent" Style="{StaticResource PageContentStyle}" Padding="32,4,32,24" MaxWidth="1040">
                 <StackPanel Spacing="0">
 
-                    <!-- 标题 -->
                     <StackPanel HorizontalAlignment="Left">
-                        <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="联机" />
                         <TextBlock
-                            Margin="0,11,0,0"
                             Style="{StaticResource PageSubtitleTextStyle}"
                             Text="点对点直连：服务器只帮你们交换地址，游戏数据不经过服务器。" />
                     </StackPanel>
 
                     <!-- 第一行：三张入口卡片，和首页一个样式 -->
-                    <controls:AdaptiveWrapPanel
+                    <controls:AdaptiveWrapPanel Background="Transparent"
                         x:Name="CardHost"
+                        ContentPadding="6,4,6,4"
                         Margin="0,28,0,0"
                         ItemMinWidth="232"
                         MaxColumns="3"
                         Spacing="8"
-                        PointerMoved="CardHost_PointerMoved"
                         PointerExited="CardHost_PointerExited">
 
                         <controls:FeatureCard
@@ -84,7 +91,7 @@
                     </controls:AdaptiveWrapPanel>
 
                     <!-- 网络状态（小字，不抢卡片位置） -->
-                    <controls:AdaptiveWrapPanel Margin="2,16,0,0" Spacing="12">
+                    <controls:AdaptiveWrapPanel Background="Transparent" Margin="2,16,0,0" Spacing="12">
                         <TextBlock x:Name="NatText" Style="{StaticResource CardStatusTextStyle}" Text="网络检测中…" TextWrapping="Wrap" VerticalAlignment="Center" />
                         <TextBlock x:Name="PublicAddrText" Style="{StaticResource CardStatusTextStyle}" Text="" TextWrapping="Wrap" VerticalAlignment="Center" />
                         <Button x:Name="RedetectButton" Click="Redetect_Click" Content="重新检测" MinHeight="32" FontSize="12" VerticalAlignment="Center" />
@@ -94,44 +101,54 @@
             </Grid>
         </ScrollViewer>
 
+        <!-- 创建房间与大厅共用原生页面导航和面包屑返回。 -->
+        <ScrollViewer x:Name="CreateRoomView" Grid.Row="1" Margin="0,12,0,0" Visibility="Collapsed" Style="{StaticResource PageScrollStyle}">
+            <Grid x:Name="CreateRoomContent" Style="{StaticResource PageContentStyle}" Padding="32,4,32,24" MaxWidth="1040">
+                <StackPanel Spacing="20">
+                    <TextBlock Style="{StaticResource PageSubtitleTextStyle}" TextWrapping="Wrap"
+                               Text="在游戏里「对局域网开放」，或手动填写本机服务端口。" />
+                    <Border Style="{StaticResource SettingsCardStyle}" MaxWidth="640" HorizontalAlignment="Left">
+                        <StackPanel Spacing="16">
+                            <TextBlock x:Name="CreateRoomTip" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="CreateAccountHint" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"
+                                       Text="创建房间需要先在左下角登录 XML 账号。" Visibility="Collapsed" />
+                            <TextBox x:Name="HostWorldName" Header="世界名称（可留空）" MaxLength="32"
+                                     PlaceholderText="例如：和朋友开荒" />
+                            <TextBox x:Name="HostPortBox" Header="要被映射的端口" MaxLength="5" Width="170"
+                                     HorizontalAlignment="Left" PlaceholderText="例如 25565" />
+                            <PasswordBox x:Name="HostPasswordBox" Header="房间密码（可留空）" MaxLength="16"
+                                         PlaceholderText="留空则谁都能进" />
+                            <TextBlock x:Name="CreateRoomStatus" Style="{StaticResource CaptionTextStyle}" TextWrapping="Wrap"
+                                       AutomationProperties.LiveSetting="Polite" Visibility="Collapsed" />
+                            <Button x:Name="CreateRoomButton" Content="创建房间" Click="CreateRoom_Click"
+                                    HorizontalAlignment="Left" Style="{StaticResource PrimaryActionButtonStyle}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
         <!-- ==================== 大厅视图：点「公开房间」后整页切过来 ==================== -->
-        <ScrollViewer x:Name="LobbyView" Visibility="Collapsed" Style="{StaticResource PageScrollStyle}">
-            <Grid x:Name="LobbyContent" Style="{StaticResource PageContentStyle}" MaxWidth="1040">
+        <ScrollViewer x:Name="LobbyView" Grid.Row="1" Margin="0,12,0,0" Visibility="Collapsed" Style="{StaticResource PageScrollStyle}">
+            <Grid x:Name="LobbyContent" Style="{StaticResource PageContentStyle}" Padding="32,4,32,24" MaxWidth="1040">
                 <StackPanel Spacing="0">
 
-                    <!-- 返回操作复用原生按钮的悬停、按下与键盘焦点反馈。 -->
-                    <Button
-                        x:Name="BackButton"
-                        Click="Back_Click"
-                        AutomationProperties.Name="返回联机"
-                        Style="{StaticResource PageBackButtonStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                            <FontIcon Glyph="&#xE72B;" FontFamily="{StaticResource IconFontFamily}" FontSize="14" VerticalAlignment="Center" />
-                            <TextBlock Text="返回联机" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Button>
-
-                    <!-- 标题行 -->
-                    <controls:AdaptiveWrapPanel Margin="0,12,0,0" Spacing="14">
-                        <TextBlock
-                            x:Name="LobbyTitle"
-                            Style="{StaticResource PageTitleTextStyle}"
-                            Text="联机大厅"
-                            VerticalAlignment="Center" />
+                    <Grid ColumnSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="LobbyHint" Style="{StaticResource PageSubtitleTextStyle}"
+                                   TextWrapping="Wrap" VerticalAlignment="Center"
+                                   Text="公开的世界会显示在这里，点「加入」连接房间。" />
                         <Button
                             x:Name="LobbyRefreshButton"
+                            Grid.Column="1"
                             Click="RefreshLobby_Click"
                             Content="刷新"
                             MinHeight="32"
                             VerticalAlignment="Center" />
-                    </controls:AdaptiveWrapPanel>
-
-                    <TextBlock
-                        x:Name="LobbyHint"
-                        Margin="0,8,0,0"
-                        Style="{StaticResource PageSubtitleTextStyle}"
-                        TextWrapping="Wrap"
-                        Text="公开的世界会显示在这里，点「加入」连接房间。" />
+                    </Grid>
 
                     <StackPanel x:Name="LobbyState" Margin="0,32,0,16" Spacing="12" HorizontalAlignment="Center" MaxWidth="520">
                         <ProgressRing x:Name="LobbyLoadingRing" Width="32" Height="32" IsActive="False" Visibility="Collapsed" AutomationProperties.Name="读取大厅" />
@@ -143,13 +160,13 @@
                     </StackPanel>
 
                     <!-- 房间卡片在 C# 里 new（XamlCompiler 对 DataTemplate 有坑） -->
-                    <controls:AdaptiveWrapPanel
+                    <controls:AdaptiveWrapPanel Background="Transparent"
                         x:Name="LobbyList"
+                        ContentPadding="6,4,6,4"
                         Margin="0,22,0,0"
                         ItemMinWidth="300"
                         MaxColumns="3"
                         Spacing="8"
-                        PointerMoved="LobbyCards_PointerMoved"
                         PointerExited="LobbyCards_PointerExited" />
                 </StackPanel>
             </Grid>

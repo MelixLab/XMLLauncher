@@ -24,6 +24,13 @@ public sealed partial class AdaptiveWrapPanel : Panel
     public double ItemMinWidth { get => (double)GetValue(ItemMinWidthProperty); set => SetValue(ItemMinWidthProperty, value); }
     public int MaxColumns { get => (int)GetValue(MaxColumnsProperty); set => SetValue(MaxColumnsProperty, value); }
 
+    public static readonly DependencyProperty ContentPaddingProperty = DependencyProperty.Register(
+        nameof(ContentPadding), typeof(Thickness), typeof(AdaptiveWrapPanel),
+        new PropertyMetadata(new Thickness(0), (sender, _) => ((AdaptiveWrapPanel)sender).InvalidateMeasure()));
+
+    /// <summary>为交互卡片缩放留出空间；普通按钮行保持默认无内边距。</summary>
+    public Thickness ContentPadding { get => (Thickness)GetValue(ContentPaddingProperty); set => SetValue(ContentPaddingProperty, value); }
+
     private double Gap => double.IsFinite(Spacing) ? Math.Max(0, Spacing) : 0;
 
     private (int Columns, double Width) GetColumns(double width)
@@ -38,9 +45,10 @@ public sealed partial class AdaptiveWrapPanel : Panel
 
     private Size LayoutCards(double width, bool arrange)
     {
-        var (columns, itemWidth) = GetColumns(width);
+        var padding = ContentPadding;
+        var (columns, itemWidth) = GetColumns(Math.Max(0, width - padding.Left - padding.Right));
         var visible = Children.Where(child => child.Visibility != Visibility.Collapsed).ToList();
-        double y = 0;
+        double y = padding.Top;
         for (int start = 0; start < visible.Count; start += columns)
         {
             int count = Math.Min(columns, visible.Count - start);
@@ -53,11 +61,11 @@ public sealed partial class AdaptiveWrapPanel : Panel
             }
             if (arrange)
                 for (int column = 0; column < count; column++)
-                    visible[start + column].Arrange(new Rect(column * (itemWidth + Gap), y, itemWidth, height));
+                    visible[start + column].Arrange(new Rect(padding.Left + column * (itemWidth + Gap), y, itemWidth, height));
             y += height;
             if (start + count < visible.Count) y += Gap;
         }
-        return new Size(visible.Count == 0 ? 0 : columns * itemWidth + (columns - 1) * Gap, y);
+        return new Size(visible.Count == 0 ? 0 : columns * itemWidth + (columns - 1) * Gap + padding.Left + padding.Right, y + padding.Bottom);
     }
 
     protected override Size MeasureOverride(Size availableSize)

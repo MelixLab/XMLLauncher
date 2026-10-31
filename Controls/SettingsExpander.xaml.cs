@@ -12,19 +12,23 @@ using Windows.UI.ViewManagement;
 
 namespace LinxLauncher.Controls;
 
-/// <summary>设置卡片的展开区域，复用于导入、Java、材质细调和高级启动参数。</summary>
-/// <remarks>沿用外观页的高度/透明度动画；标题使用原生 ToggleButton 处理键盘操作。</remarks>
+/// <summary>设置卡片的展开区域，复用于导入、Java、材质、全局边角和高级启动参数。</summary>
+/// <remarks>共用高度/透明度动画；可由标题按钮展开，也可由标题内的开关或选择控件展开。</remarks>
 [ContentProperty(Name = nameof(Details))]
 public sealed partial class SettingsExpander : UserControl
 {
     public static readonly DependencyProperty HeaderProperty = DependencyProperty.Register(
-        nameof(Header), typeof(object), typeof(SettingsExpander), new PropertyMetadata(null));
+        nameof(Header), typeof(object), typeof(SettingsExpander), new PropertyMetadata(null, OnHeaderChanged));
+    public static readonly DependencyProperty IsHeaderToggleVisibleProperty = DependencyProperty.Register(
+        nameof(IsHeaderToggleVisible), typeof(bool), typeof(SettingsExpander), new PropertyMetadata(true, OnHeaderChanged));
     public static readonly DependencyProperty DetailsProperty = DependencyProperty.Register(
         nameof(Details), typeof(object), typeof(SettingsExpander), new PropertyMetadata(null));
     public static readonly DependencyProperty IsExpandedProperty = DependencyProperty.Register(
         nameof(IsExpanded), typeof(bool), typeof(SettingsExpander), new PropertyMetadata(false, OnExpandedChanged));
 
     public object? Header { get => GetValue(HeaderProperty); set => SetValue(HeaderProperty, value); }
+    /// <summary>关闭后直接呈现 Header，由其中的开关或选择控件设置 IsExpanded。</summary>
+    public bool IsHeaderToggleVisible { get => (bool)GetValue(IsHeaderToggleVisibleProperty); set => SetValue(IsHeaderToggleVisibleProperty, value); }
     public object? Details { get => GetValue(DetailsProperty); set => SetValue(DetailsProperty, value); }
     public bool IsExpanded { get => (bool)GetValue(IsExpandedProperty); set => SetValue(IsExpandedProperty, value); }
 
@@ -34,6 +38,7 @@ public sealed partial class SettingsExpander : UserControl
     {
 
         InitializeComponent();
+        UpdateHeader();
 
         // 必须在 InitializeComponent 之后：之前 HeaderToggle 还是 null。
         // ToggleButton 的 Content 会自己生成一个 TextBlock，
@@ -48,6 +53,21 @@ public sealed partial class SettingsExpander : UserControl
     }
 
     protected override AutomationPeer OnCreateAutomationPeer() => new SettingsExpanderAutomationPeer(this);
+
+    private static void OnHeaderChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
+        => ((SettingsExpander)sender).UpdateHeader();
+
+    private void UpdateHeader()
+    {
+        if (HeaderToggle is null || HeaderPresenter is null) return;
+        // 先释放旧宿主；同一个 Header 只能有一个父元素。
+        HeaderToggle.Content = null;
+        HeaderPresenter.Content = null;
+        HeaderToggle.Visibility = IsHeaderToggleVisible ? Visibility.Visible : Visibility.Collapsed;
+        StaticHeader.Visibility = IsHeaderToggleVisible ? Visibility.Collapsed : Visibility.Visible;
+        if (IsHeaderToggleVisible) HeaderToggle.Content = Header;
+        else HeaderPresenter.Content = Header;
+    }
 
     private static void OnExpandedChanged(DependencyObject sender, DependencyPropertyChangedEventArgs args)
     {
@@ -143,6 +163,8 @@ public sealed partial class SettingsExpander : UserControl
 
     private void RevealExpandedContent()
     {
+        // 选择或开关触发的内嵌展开保持原滚动位置，避免操作控件移出视口。
+        if (!IsHeaderToggleVisible) return;
         // 等自然高度和 ScrollViewer 的可滚动范围完成更新，避免展开前的范围截断滚动。
         DispatcherQueue.TryEnqueue(() =>
         {

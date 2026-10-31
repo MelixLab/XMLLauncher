@@ -3,6 +3,7 @@
     x:Class="LinxLauncher.Views.SkinsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:services="using:LinxLauncher.Services"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     Background="{ThemeResource PageLayerBackgroundBrush}"
@@ -93,7 +94,7 @@
                 </Grid.RowDefinitions>
 
                 <!--  预览卡  -->
-                <Border
+                <Border services:CardAppearance.IsCard="True"
                     x:Name="PreviewCard"
                     Grid.Column="0"
                     Padding="20"
@@ -115,6 +116,7 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <Border
+                                services:CardAppearance.IsCard="True"
                                 x:Name="AvatarFrame"
                                 Width="64"
                                 Height="64"
@@ -164,7 +166,7 @@
                         <Rectangle Grid.Row="1" Height="1" Fill="{ThemeResource DividerBrush}" />
 
                         <!-- 3D 模型填满两张卡片对齐后剩余的预览空间 -->
-                        <Border Grid.Row="2"
+                        <Border services:CardAppearance.IsCard="True" Grid.Row="2"
                             Background="{ThemeResource CardHoverBackgroundBrush}"
                             CornerRadius="8">
                             <Grid
@@ -205,7 +207,7 @@
                 </Border>
 
                 <!--  设置卡  -->
-                <Border
+                <Border services:CardAppearance.IsCard="True"
                     x:Name="EditingCard"
                     Grid.Column="1"
                     Padding="20"

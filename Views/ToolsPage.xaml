@@ -15,8 +15,8 @@
                     Style="{StaticResource PageSubtitleTextStyle}"
                     Text="内存整理、模组汉化、种子地图。" />
 
-                <controls:AdaptiveWrapPanel Margin="0,28,0,0" ItemMinWidth="300" MaxColumns="2" Spacing="8"
-                                            PointerMoved="ToolCards_PointerMoved" PointerExited="ToolCards_PointerExited">
+                <controls:AdaptiveWrapPanel x:Name="ToolCardsHost" Background="Transparent" Margin="0,28,0,0" ItemMinWidth="300" MaxColumns="2" Spacing="8" ContentPadding="6,4,6,4"
+                                            PointerExited="ToolCards_PointerExited">
 
                     <!-- 内存整理 -->
                     <controls:FeatureCard

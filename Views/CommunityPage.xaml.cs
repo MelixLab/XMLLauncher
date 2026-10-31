@@ -166,14 +166,18 @@ public sealed partial class CommunityPage : Page
         {
             // 分类名称属于页面结构；接口暂不可用时仍保留，不猜测服务端的筛选键。
             foreach (var label in DefaultTagLabels)
-                TagRow.Children.Add(new ToggleButton
+            {
+                var button = new ToggleButton
                 {
                     Content = label,
                     IsEnabled = false,
                     Padding = new Thickness(12, 4, 12, 4),
                     MinHeight = 30,
                     CornerRadius = new CornerRadius(15),
-                });
+                };
+                CardAppearance.SetIsCard(button, true);
+                TagRow.Children.Add(button);
+            }
         }
     }
 
@@ -189,6 +193,7 @@ public sealed partial class CommunityPage : Page
             MinHeight = 30,
             CornerRadius = new CornerRadius(15),
         };
+        CardAppearance.SetIsCard(button, true);
         button.Click += Tag_Click;
         _tagButtons.Add(button);
         TagRow.Children.Add(button);
@@ -463,14 +468,16 @@ public sealed partial class CommunityPage : Page
         metaRow.Children.Add(new TextBlock { Text = "#" + post.TagLabel, FontSize = 12, Foreground = Res("LinkTextBrush"), VerticalAlignment = VerticalAlignment.Center });
         if (post.Status != 0)
         {
-            metaRow.Children.Add(new Border
+            var status = new Border
             {
                 Background = post.StatusBackground,
                 CornerRadius = new CornerRadius(3),
                 Padding = new Thickness(5, 1, 5, 1),
                 VerticalAlignment = VerticalAlignment.Center,
                 Child = new TextBlock { Text = post.StatusLabel, FontSize = 10.5, Foreground = post.StatusForeground },
-            });
+            };
+            CardAppearance.SetIsCard(status, true);
+            metaRow.Children.Add(status);
         }
         root.Children.Add(metaRow);
 

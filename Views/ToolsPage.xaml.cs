@@ -24,6 +24,7 @@ public sealed partial class ToolsPage : Page
     public ToolsPage()
     {
         InitializeComponent();
+        ToolCardsHost.AddHandler(UIElement.PointerMovedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(ToolCards_PointerMoved), true);
         SizeChanged += (_, _) => UpdateContentPadding();
         Loaded += (_, _) =>
         {

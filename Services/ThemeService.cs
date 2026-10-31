@@ -40,6 +40,9 @@ public enum ThemeMaterial
 /// </summary>
 public static class ThemeService
 {
+    /// <summary>主题或卡片外观设置已应用；已加载的共享控件即时刷新。</summary>
+    public static event Action? AppearanceChanged;
+
     private const int DwmwaUseImmersiveDarkMode = 20;
 
     [DllImport("dwmapi.dll", SetLastError = true)]
@@ -141,6 +144,13 @@ public static class ThemeService
                 ThemeMode.Dark => ElementTheme.Dark,
                 _ => ElementTheme.Default,
             };
+            bool cornersChanged = GlobalCorners.ApplyResources(_navShell);
+            if (cornersChanged && _root.IsLoaded)
+            {
+                // CornerRadius 是值类型；在同一帧重算 ThemeResource，不重建或改写模板。
+                bool wantsDark = want == ElementTheme.Dark || want == ElementTheme.Default && _root.ActualTheme == ElementTheme.Dark;
+                _root.RequestedTheme = wantsDark ? ElementTheme.Light : ElementTheme.Dark;
+            }
             if (_root.RequestedTheme != want) _root.RequestedTheme = want;
 
             bool dark = choice switch
@@ -159,6 +169,7 @@ public static class ThemeService
             ApplyPalette(s, EffectiveMaterial);
             RefreshLiveBrushes();
             ApplyTitleBar(dark);
+            AppearanceChanged?.Invoke();
         }
         catch (Exception ex)
         {
@@ -394,8 +405,8 @@ public static class ThemeService
         new("WindowBackgroundBrush", Alpha.Solid, "#FFFFFF", "#000000"),
         new("PageLayerBackgroundBrush", Alpha.Surface, "#FDFDFD", "#000000"),
         new("CardBackgroundBrush", Alpha.Card, "#FFFFFF", "#1C1C1C"),
-        new("CardHoverBackgroundBrush", Alpha.Card, "#F2F2F2", "#262626"),
-        new("CardPressedBackgroundBrush", Alpha.Card, "#EFEFEF", "#303030"),
+        new("CardHoverBackgroundBrush", Alpha.Card, "#EBEBEB", "#363636"),
+        new("CardPressedBackgroundBrush", Alpha.Card, "#D0D0D0", "#404040"),
         new("NavSelectionBackgroundBrush", Alpha.Card, "#F6F6F6", "#262626"),
         new("ThreatCardBackgroundBrush", Alpha.Card, "#F2F2F2", "#1C1C1C"),
         new("ThreatCardHoverBackgroundBrush", Alpha.Card, "#EAEAEA", "#262626"),
@@ -459,6 +470,8 @@ public static class ThemeService
             var link = dark ? Mix(brand, Colors.White, 0.25) : Mix(brand, Colors.Black, 0.30);
 
             SetBrush(slot.Dict, "BrandBrush", brand);
+            SetBrush(slot.Dict, "BrandHoverBrush", dark ? Mix(brand, Colors.White, 0.08) : Mix(brand, Colors.Black, 0.05));
+            SetBrush(slot.Dict, "BrandPressedBrush", Mix(brand, Colors.Black, 0.16));
             SetBrush(slot.Dict, "BrandSoftBrush", WithAlpha(soft, on ? card : 1));
             SetBrush(slot.Dict, "OnBrandTextBrush", onBrand);
             SetBrush(slot.Dict, "NavSelectionIndicatorBrush", brand);

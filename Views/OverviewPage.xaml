@@ -10,9 +10,9 @@
     mc:Ignorable="d">
 
     <ScrollViewer Style="{StaticResource PageScrollStyle}">
-        <Grid x:Name="CardHost" Style="{StaticResource PageContentStyle}" MaxWidth="1104"
+        <Grid x:Name="CardHost" Background="Transparent" Style="{StaticResource PageContentStyle}" MaxWidth="1104"
               SizeChanged="CardHost_SizeChanged"
-              PointerExited="CardHost_PointerExited" PointerMoved="CardHost_PointerMoved">
+              PointerExited="CardHost_PointerExited">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
@@ -22,8 +22,8 @@
                 <TextBlock Style="{StaticResource PageSubtitleTextStyle}"
                            Text="了解本机的 Minecraft 版本、模组加载器与下载情况，并进行必要操作。" />
             </StackPanel>
-            <controls:AdaptiveWrapPanel Grid.Row="1" Margin="0,28,0,0"
-                                        ItemMinWidth="232" MaxColumns="3" Spacing="8">
+            <controls:AdaptiveWrapPanel Background="Transparent" Grid.Row="1" Margin="0,28,0,0"
+                                        ItemMinWidth="232" MaxColumns="3" Spacing="8" ContentPadding="6,4,6,4">
                 <controls:FeatureCard
                     x:Name="VersionCard"
                     IconTemplate="{StaticResource IconCardGame}"

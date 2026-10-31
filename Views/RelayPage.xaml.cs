@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,8 +14,7 @@ using Microsoft.UI.Xaml.Navigation;
 namespace LinxLauncher.Views;
 
 /// <summary>
-/// 联机页：三张入口卡片（和首页同一套样式），点按钮进二级对话框做事。
-/// 开房 / 加入使用对话框，大厅使用可自适应的房间卡片视图。
+/// 联机页：创建房间与大厅使用原生子页面导航，加入房间保留输入对话框。
 /// </summary>
 public sealed partial class RelayPage : Page
 {
@@ -27,10 +26,15 @@ public sealed partial class RelayPage : Page
     private bool _busy;
     private CancellationTokenSource? _lobbyCts;
     private bool _detectingNat;
+    private readonly ViewTransition _viewTransition;
 
     public RelayPage()
     {
         InitializeComponent();
+        CardHost.AddHandler(UIElement.PointerMovedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(CardHost_PointerMoved), true);
+        LobbyList.AddHandler(UIElement.PointerMovedEvent, new Microsoft.UI.Xaml.Input.PointerEventHandler(LobbyCards_PointerMoved), true);
+        _viewTransition = new ViewTransition(this, ViewNavigationHost, MainView, LobbyView, CreateRoomView);
+        Unloaded += (_, _) => _viewTransition.Stop();
         NavigationCacheMode = NavigationCacheMode.Required;
         SizeChanged += (_, _) => UpdateContentPadding();
     }
@@ -164,7 +168,7 @@ public sealed partial class RelayPage : Page
 
         _tick ??= CreateTick();
         _tick.Start();
-        if (LobbyView.Visibility == Visibility.Visible) _ = LoadLobbyAsync();
+        if (_viewTransition.IsShowing(LobbyView)) _ = LoadLobbyAsync();
 
         // 自动化测试入口：设了 XML_TEST_JOIN=<房间号> 就直接加入，不用点界面
         var autoJoin = Environment.GetEnvironmentVariable("XML_TEST_JOIN");
@@ -176,14 +180,16 @@ public sealed partial class RelayPage : Page
     {
         base.OnNavigatedFrom(e);
         _tick?.Stop();
+        _viewTransition.Stop();
         CancelLobbyRequest();
+        HostPasswordBox.Password = string.Empty;
     }
 
     private void UpdateContentPadding()
     {
-        var padding = ActualWidth < 720 ? new Thickness(16, 20, 16, 24) : new Thickness(32, 28, 32, 24);
-        MainContent.Padding = padding;
-        LobbyContent.Padding = padding;
+        double side = ActualWidth < 720 ? 16 : 32;
+        RelayHeader.Padding = new Thickness(side, ActualWidth < 720 ? 20 : 28, side, 0);
+        MainContent.Padding = LobbyContent.Padding = CreateRoomContent.Padding = new Thickness(side, 4, side, 24);
     }
 
     private void CancelLobbyRequest()
@@ -292,81 +298,80 @@ public sealed partial class RelayPage : Page
             return;
         }
 
+        var detected = MultiplayerService.DetectLanPort();
+        HostWorldName.Text = string.Empty;
+        HostPortBox.Text = detected > 0 ? detected.ToString() : string.Empty;
+        HostPasswordBox.Password = string.Empty;
+        CreateRoomStatus.Visibility = Visibility.Collapsed;
+        CreateAccountHint.Visibility = LinxAccountService.IsLoggedIn ? Visibility.Collapsed : Visibility.Visible;
+        CreateRoomTip.Text = detected > 0
+            ? $"{_nat.Describe()} · 已自动检测到局域网端口 {detected}，不是这个可以直接改"
+            : $"{_nat.Describe()} · 没检测到游戏端口：先在游戏里「对局域网开放」，或者手动填一个";
+        RelayBreadcrumb.ParentTitle = "联机";
+        RelayBreadcrumb.CurrentTitle = "创建房间";
+        _viewTransition.Show(CreateRoomView, forward: true, RelayBreadcrumb.FocusParent);
+        DispatcherQueue.TryEnqueue(() => FontService.Apply(CreateRoomView));
+    }
+
+    private async void CreateRoom_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _host is not null) return;
         if (!LinxAccountService.IsLoggedIn)
         {
+            CreateAccountHint.Visibility = Visibility.Visible;
             Toast("先在左下角登录 XML 账号，联机要用它认人。");
             return;
         }
-
-        var detected = MultiplayerService.DetectLanPort();
-
-        var world = new TextBox { Header = "世界名称（可留空）", MaxLength = 32, PlaceholderText = "例如：和朋友开荒" };
-        var pass = new PasswordBox { Header = "房间密码（可留空）", MaxLength = 16, PlaceholderText = "留空则谁都能进" };
-
-        // 端口可以手改：不一定非要映射 MC，自己开的别的服务（面板、私服）也能挂上来
-        var portBox = new TextBox
+        CreateAccountHint.Visibility = Visibility.Collapsed;
+        if (!int.TryParse(HostPortBox.Text.Trim(), out var lanPort) || lanPort <= 0 || lanPort > 65535)
         {
-            Header = "要被映射的端口",
-            MaxLength = 5,
-            PlaceholderText = "例如 25565",
-            Text = detected > 0 ? detected.ToString() : "",
-            Width = 170,
-            HorizontalAlignment = HorizontalAlignment.Left,
-        };
-
-        var tip = new TextBlock
-        {
-            Text = detected > 0
-                ? $"{_nat.Describe()} · 已自动检测到局域网端口 {detected}，不是这个可以直接改"
-                : $"{_nat.Describe()} · 没检测到游戏端口：先在游戏里「对局域网开放」，或者手动填一个",
-            FontSize = 12.5,
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = ThemeService.Brush("SecondaryTextBrush")
-        };
-
-        var dialog = new ContentDialog
-        {
-            XamlRoot = XamlRoot,
-            Title = "开启新世界",
-            Content = new StackPanel { Spacing = 12, MaxWidth = 400, Children = { tip, world, portBox, pass } },
-            PrimaryButtonText = "开房间",
-            CloseButtonText = "取消",
-            DefaultButton = ContentDialogButton.Primary
-        };
-        FontService.ApplyToDialog(dialog);
-
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
-
-        if (!int.TryParse(portBox.Text.Trim(), out var lanPort) || lanPort <= 0 || lanPort > 65535)
-        {
-            Toast("端口要填 1-65535 之间的数字。");
+            CreateRoomStatus.Text = "端口要填 1-65535 之间的数字。";
+            CreateRoomStatus.Visibility = Visibility.Visible;
+            HostPortBox.Focus(FocusState.Programmatic);
+            HostPortBox.SelectAll();
             return;
         }
 
+        string world = HostWorldName.Text.Trim();
+        string password = HostPasswordBox.Password;
         _busy = true;
-        HostCard.Status = "正在开房…";
         HostButton.IsEnabled = false;
+        CreateRoomButton.IsEnabled = false;
+        HostWorldName.IsEnabled = HostPortBox.IsEnabled = HostPasswordBox.IsEnabled = false;
+
+        void PutStatus(string message)
+        {
+            HostCard.Status = message;
+            CreateRoomStatus.Text = message;
+            CreateRoomStatus.Visibility = Visibility.Visible;
+        }
 
         try
         {
-            if (!await EnsureLinkReadyAsync(msg => HostCard.Status = msg)) return;
-
-            HostCard.Status = "正在开房…";
-
-            _host = await P2P.HostAsync(world.Text.Trim(), lanPort, pass.Password, CancellationToken.None);
+            PutStatus("正在开房…");
+            if (!await EnsureLinkReadyAsync(PutStatus))
+            {
+                PutStatus("尚未创建房间，可准备好联机组件后重试。");
+                return;
+            }
+            PutStatus("正在开房…");
+            _host = await P2P.HostAsync(world, lanPort, password, CancellationToken.None);
             _hostPort = lanPort;
             RefreshHostCard();
+            HostPasswordBox.Password = string.Empty;
+            if (IsLoaded && _viewTransition.IsShowing(CreateRoomView)) ShowMain();
             Toast($"房间已开：{_host.Code}");
         }
         catch (Exception ex)
         {
-            HostCard.Status = ex.Message;
-            HostButton.IsEnabled = true;
+            PutStatus(ex.Message);
         }
         finally
         {
             _busy = false;
             HostButton.IsEnabled = true;
+            CreateRoomButton.IsEnabled = true;
+            HostWorldName.IsEnabled = HostPortBox.IsEnabled = HostPasswordBox.IsEnabled = true;
         }
     }
 
@@ -412,24 +417,25 @@ public sealed partial class RelayPage : Page
     /// <summary>切到大厅视图（整页切换，不是弹窗）。</summary>
     private void ShowLobby()
     {
-        MainView.Visibility = Visibility.Collapsed;
-        LobbyView.Visibility = Visibility.Visible;
+        RelayBreadcrumb.ParentTitle = "联机";
+        RelayBreadcrumb.CurrentTitle = "联机大厅";
+        _viewTransition.Show(LobbyView, forward: true, RelayBreadcrumb.FocusParent);
 
         // 直接点名设字体：Style 里是 StaticResource，遍历扫不到 Collapsed 时就会漏
         LobbyHint.FontFamily = FontService.BodyFont;
-        BackButton.FontFamily = FontService.BodyFont;
-        LobbyTitle.FontFamily = FontService.DisplayFont;
 
         DispatcherQueue.TryEnqueue(() => FontService.Apply(LobbyView));
-        BackButton.Focus(FocusState.Programmatic);
     }
 
     private void ShowMain()
     {
         CancelLobbyRequest();
-        LobbyView.Visibility = Visibility.Collapsed;
-        MainView.Visibility = Visibility.Visible;
-        BrowseButton.Focus(FocusState.Programmatic);
+        bool wasCreating = _viewTransition.IsShowing(CreateRoomView);
+        HostPasswordBox.Password = string.Empty;
+        RelayBreadcrumb.ParentTitle = string.Empty;
+        RelayBreadcrumb.CurrentTitle = "联机";
+        _viewTransition.Show(MainView, forward: false,
+            () => (wasCreating ? HostButton : BrowseButton).Focus(FocusState.Programmatic));
     }
 
     private void Back_Click(object sender, RoutedEventArgs e) => ShowMain();
@@ -732,7 +738,7 @@ public sealed partial class RelayPage : Page
             {
                 statusText.Text = msg;
                 JoinCard.Status = msg;
-                if (LobbyView.Visibility == Visibility.Visible) LobbyHint.Text = msg;
+                if (_viewTransition.IsShowing(LobbyView)) LobbyHint.Text = msg;
             });
         }
 

@@ -78,11 +78,13 @@ public sealed partial class MainWindow : Window
     {
         ApplyWindowMinimumSize();
         SyncTitleBarHeight();
+        QueueTitleBarLayout();
     }
 
     private void Window_Changed(AppWindow sender, AppWindowChangedEventArgs args)
     {
         if (args.DidPositionChange || args.DidPresenterChange) ApplyWindowMinimumSize();
+        if (args.DidSizeChange || args.DidPresenterChange || args.DidPositionChange) QueueTitleBarLayout();
     }
 
     /// <summary>
@@ -128,16 +130,61 @@ public sealed partial class MainWindow : Window
     /// TitleBarStrip 就是拖拽区，按钮由系统按 AppWindowTitleBar 的配色画在它右边。
     /// 很老的系统不支持定制标题栏时直接放弃，退回系统标题栏。
     /// </summary>
+    private bool? _newTitleBarActive;
+    private bool _titleBarLayoutQueued;
+
+    private void TitleBarLayout_SizeChanged(object sender, SizeChangedEventArgs e) => QueueTitleBarLayout();
+
+    private void QueueTitleBarLayout()
+    {
+        if (_titleBarLayoutQueued || _newTitleBarActive != true || !RootGrid.IsLoaded) return;
+        _titleBarLayoutQueued = true;
+        if (!DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
+        {
+            try
+            {
+                if (_newTitleBarActive != true || !RootGrid.IsLoaded || RootGrid.XamlRoot is null) return;
+                SyncTitleBarHeight();
+                RootGrid.UpdateLayout();
+                double available = TitleBarSearchHost.ActualWidth;
+                if (available <= 0 || RootGrid.ActualWidth <= 0) return;
+
+                // Canvas 的定位不参与内容期望宽度，避免旧窗口尺寸留下的外边距挤掉原生标题。
+                double width = Math.Min(300, Math.Max(0, available - 16));
+                double origin = TitleBarSearchHost.TransformToVisual(RootGrid).TransformPoint(new Windows.Foundation.Point()).X;
+                double left = Math.Clamp((RootGrid.ActualWidth - width) / 2 - origin, 0, available - width);
+                TitleBarSearchBox.Width = width;
+                Canvas.SetLeft(TitleBarSearchBox, left);
+                TitleBarSearchHost.UpdateLayout();
+                NativeTitleBar.RecomputeDragRegions();
+            }
+            finally { _titleBarLayoutQueued = false; }
+        })) _titleBarLayoutQueued = false;
+    }
+
     private void SetupTitleBar()
     {
         try
         {
-            if (!AppWindowTitleBar.IsCustomizationSupported()) return;
+            if (!AppWindowTitleBar.IsCustomizationSupported())
+            {
+                TitleBarStrip.Visibility = NativeTitleBar.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            bool useNew = AppState.Settings.UseNewTitleBar;
+            if (_newTitleBarActive == useNew) return;
+            _newTitleBarActive = useNew;
 
             ExtendsContentIntoTitleBar = true;
-            SetTitleBar(TitleBarStrip);
+            SetTitleBar(null);
+            NativeTitleBar.Visibility = useNew ? Visibility.Visible : Visibility.Collapsed;
+            TitleBarStrip.Visibility = useNew ? Visibility.Collapsed : Visibility.Visible;
+            AppWindow.TitleBar.PreferredHeightOption = useNew ? TitleBarHeightOption.Tall : TitleBarHeightOption.Standard;
+            SetTitleBar(useNew ? NativeTitleBar : TitleBarStrip);
             AppWindow.TitleBar.IconShowOptions = IconShowOptions.HideIconAndSystemMenu;
             SyncTitleBarHeight();
+            QueueTitleBarLayout();
         }
         catch (Exception ex)
         {
@@ -152,6 +199,15 @@ public sealed partial class MainWindow : Window
         {
             double scale = Content?.XamlRoot?.RasterizationScale ?? 1.0;
             if (scale <= 0.1) scale = 1.0;
+
+            if (_newTitleBarActive == true)
+            {
+                // 原生窗口右侧保留三个系统按钮的位置，按实际 DPI 换算每个按钮的宽度。
+                double width = AppWindow.TitleBar.RightInset / (3 * scale);
+                if (width >= 24 && width <= 96) TitleBarAccountButton.Width = width;
+                TitleBarAccountButton.Height = NativeTitleBar.Height;
+                return;
+            }
 
             double height = AppWindow.TitleBar.Height / scale;
             if (height >= 16 && height <= 96) TitleBarStrip.Height = height;
@@ -176,17 +232,20 @@ public sealed partial class MainWindow : Window
         // 标题栏：内容延伸到标题栏，材质才铺得到最顶上。
         // 以前用系统标题栏，它由系统单独画一条实色，云母 / 亚克力下会和窗口之间出现一道缝。
         SetupTitleBar();
+        ThemeService.AppearanceChanged += SetupTitleBar;
         ApplyWindowMinimumSize();
         RootGrid.Loaded += (_, _) =>
         {
             _sizeRoot = RootGrid.XamlRoot;
             _sizeRoot.Changed += SizeRoot_Changed;
             ApplyWindowMinimumSize();
+            QueueTitleBarLayout();
         };
         AppWindow.Changed += Window_Changed;
         Closed += (_, _) =>
         {
             AppWindow.Changed -= Window_Changed;
+            ThemeService.AppearanceChanged -= SetupTitleBar;
             if (_sizeRoot is not null) _sizeRoot.Changed -= SizeRoot_Changed;
         };
         // 尺寸必须等窗口真正激活后再设，否则会被 WinUI 的默认 1024×768 覆盖掉。
@@ -283,7 +342,7 @@ public sealed partial class MainWindow : Window
             try
             {
                 NavigationTransitionInfo transition = new Windows.UI.ViewManagement.UISettings().AnimationsEnabled
-                    ? new DrillInNavigationTransitionInfo()
+                    ? new EntranceNavigationTransitionInfo()
                     : new SuppressNavigationTransitionInfo();
                 ok = ContentFrame.Navigate(target, parameter, transition);
             }
@@ -1331,6 +1390,7 @@ public sealed partial class MainWindow : Window
                 BorderBrush = divider,
                 Child = row
             };
+            CardAppearance.SetIsCard(card, true);
 
             card.Tapped += (_, _) => SelectMode(tag);
             dots[tag] = (card, core);

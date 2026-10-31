@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -12,7 +12,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Navigation;
 using LinxLauncher.Models;
 using LinxLauncher.Services;
@@ -52,14 +51,12 @@ public sealed partial class VersionsPage : Page
     private CancellationTokenSource? _loaderCts;
     private int _manifestRequest;
     private int _loaderRequest;
-    private Storyboard? _viewTransition;
-    private Storyboard? _loaderBounce;
-    private FrameworkElement? _bouncingCard;
-    private int _viewGeneration;
+    private readonly ViewTransition _viewTransition;
 
     public VersionsPage()
     {
         InitializeComponent();
+        _viewTransition = new ViewTransition(this, PageLayout, ListViewHost, DetailHost);
         Unloaded += (_, _) => DeactivatePage();
     }
 
@@ -112,9 +109,11 @@ public sealed partial class VersionsPage : Page
 
     private void PageLayout_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        PageLayout.Padding = e.NewSize.Width < 720
-            ? new Thickness(16, 20, 16, 24)
-            : new Thickness(32, 28, 32, 24);
+        double side = e.NewSize.Width < 720 ? 16 : 32;
+        PageHeader.Padding = new Thickness(side, e.NewSize.Width < 720 ? 20 : 28, side, 0);
+        ListHeader.Padding = DetailMetadata.Padding = new Thickness(side, 0, side, 0);
+        DetailContent.Padding = new Thickness(side, 4, side, 24);
+        VersionList.Padding = new Thickness(side, 0, side, 24);
     }
 
     private void ListHeader_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -271,7 +270,8 @@ public sealed partial class VersionsPage : Page
         UiList.Clear(LoaderVersionBox);
         LoaderVersionPanel.Visibility = Visibility.Collapsed;
         DetailScroll.ChangeView(null, 0, null, true);
-        DetailId.Text = version.Id;
+        VersionBreadcrumb.ParentTitle = "版本列表";
+        VersionBreadcrumb.CurrentTitle = version.Id;
         DetailMeta.Text = $"{version.TypeLabel} · {version.ReleaseTime:yyyy 年 M 月 d 日}";
 
         var localInstance = AppState.Installed.FirstOrDefault(v => v.Id == version.Id);
@@ -297,90 +297,17 @@ public sealed partial class VersionsPage : Page
         LoadInstance(version.Id);
         UpdateSummary();
         _showingDetail = true;
-        SwapView(ListViewHost, DetailHost, () => BackButton.Focus(FocusState.Programmatic));
+        SwapView(DetailHost, VersionBreadcrumb.FocusParent);
         DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {
             if (_active && _showingDetail) FontService.RefreshAll();
         });
     }
 
-    private void StopViewTransition()
-    {
-        StopLoaderBounce();
-        ++_viewGeneration;
-        var previous = _viewTransition;
-        _viewTransition = null;
-        previous?.Stop();
-        foreach (var host in new[] { ListViewHost, DetailHost })
-        {
-            host.Opacity = 1;
-            host.RenderTransform = null;
-        }
-    }
+    private void StopViewTransition() => _viewTransition.Stop();
 
-    /// <summary>轻量切换；动画关闭、离页和快速返回都直接归位，不留下透明遮层。</summary>
-    private void SwapView(Grid from, Grid to, Action focus)
-    {
-        StopViewTransition();
-        int generation = _viewGeneration;
-        from.Visibility = Visibility.Collapsed;
-        to.Visibility = Visibility.Visible;
-        void FocusTarget()
-        {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                if (_active && generation == _viewGeneration) focus();
-            });
-        }
-        if (!IsLoaded || !new UISettings().AnimationsEnabled)
-        {
-            FocusTarget();
-            return;
-        }
-        try
-        {
-            var move = new TranslateTransform { Y = 10 };
-            to.RenderTransform = move;
-            to.Opacity = 0;
-            var transition = new Storyboard();
-            var fade = new DoubleAnimation
-            {
-                From = 0, To = 1,
-                Duration = new Duration(TimeSpan.FromMilliseconds(180))
-            };
-            Storyboard.SetTarget(fade, to);
-            Storyboard.SetTargetProperty(fade, "Opacity");
-            transition.Children.Add(fade);
-            var slide = new DoubleAnimation
-            {
-                From = 10, To = 0,
-                Duration = new Duration(TimeSpan.FromMilliseconds(200)),
-                EnableDependentAnimation = true,
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            Storyboard.SetTarget(slide, move);
-            Storyboard.SetTargetProperty(slide, "Y");
-            transition.Children.Add(slide);
-            transition.Completed += (_, _) =>
-            {
-                if (!ReferenceEquals(_viewTransition, transition)) return;
-                _viewTransition = null;
-                transition.Stop();
-                to.Opacity = 1;
-                to.RenderTransform = null;
-                FocusTarget();
-            };
-            _viewTransition = transition;
-            transition.Begin();
-        }
-        catch (Exception ex)
-        {
-            Log.Error("VersionTransition", ex);
-            StopViewTransition();
-            to.Opacity = 1;
-            if (_active) focus();
-        }
-    }
+    private void SwapView(Grid to, Action focus) =>
+        _viewTransition.Show(to, forward: to == DetailHost, focus);
 
     private void ShowList(bool restoreFocus = true)
     {
@@ -388,13 +315,13 @@ public sealed partial class VersionsPage : Page
         _selected = null;
         bool wasDetail = _showingDetail;
         _showingDetail = false;
+        VersionBreadcrumb.ParentTitle = string.Empty;
+        VersionBreadcrumb.CurrentTitle = "版本列表";
         if (wasDetail && restoreFocus)
-            SwapView(DetailHost, ListViewHost, RestoreListFocus);
+            SwapView(ListViewHost, RestoreListFocus);
         else
         {
-            StopViewTransition();
-            DetailHost.Visibility = Visibility.Collapsed;
-            ListViewHost.Visibility = Visibility.Visible;
+            _viewTransition.Reset(ListViewHost);
         }
     }
 
@@ -423,49 +350,6 @@ public sealed partial class VersionsPage : Page
             b.IsChecked = b == card;
         }
 
-    }
-
-    private void StopLoaderBounce()
-    {
-        var previous = _loaderBounce;
-        _loaderBounce = null;
-        previous?.Stop();
-        if (_bouncingCard is not null) _bouncingCard.RenderTransform = null;
-        _bouncingCard = null;
-    }
-
-    /// <summary>点卡片的回弹：0.955 → 1.018 → 1，只动 transform，不触发重排。</summary>
-    private void Bounce(FrameworkElement card)
-    {
-        StopLoaderBounce();
-        if (!_active || !_showingDetail || !new UISettings().AnimationsEnabled) return;
-        var scale = new ScaleTransform
-        {
-            CenterX = card.ActualWidth / 2,
-            CenterY = card.ActualHeight / 2,
-        };
-        card.RenderTransform = scale;
-
-        var sb = new Storyboard();
-        foreach (var prop in new[] { "ScaleX", "ScaleY" })
-        {
-            var anim = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(280) };
-            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.Zero), Value = 0.955 });
-            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(140)), Value = 1.018 });
-            anim.KeyFrames.Add(new EasingDoubleKeyFrame { KeyTime = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(280)), Value = 1.0 });
-
-            Storyboard.SetTarget(anim, scale);
-            Storyboard.SetTargetProperty(anim, prop);
-            sb.Children.Add(anim);
-        }
-
-        _loaderBounce = sb;
-        _bouncingCard = card;
-        sb.Completed += (_, _) =>
-        {
-            if (ReferenceEquals(_loaderBounce, sb)) StopLoaderBounce();
-        };
-        sb.Begin();
     }
 
     // ================= 实例设置 =================
@@ -933,7 +817,6 @@ public sealed partial class VersionsPage : Page
         SelectLoaderCard(card);
 
         if (!IsLoaded || _selected is null) return;
-        Bounce(card);
 
         _loader = tag switch
         {

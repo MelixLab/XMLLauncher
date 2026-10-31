@@ -19,6 +19,7 @@ public sealed partial class OverviewPage : Page
     public OverviewPage()
     {
         InitializeComponent();
+        CardHost.AddHandler(UIElement.PointerMovedEvent, new PointerEventHandler(CardHost_PointerMoved), true);
         _cards = new[] { VersionCard, LoaderCard, SpeedCard, InstalledCard, JavaCard, TaskCard };
     }
 

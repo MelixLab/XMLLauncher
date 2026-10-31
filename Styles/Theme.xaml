@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <!--
     XIGUASecurity · 主题资源
     配色 / 字号 全部取自 XIGUASecurity（XIGUASecurity）实际截图取样，
@@ -29,8 +29,8 @@
             <!-- 开屏底色：跟着安全中心走纯白（不是页面那层 #FDFDFD） -->
             <SolidColorBrush x:Key="SplashBackgroundBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#F2F2F2" />
-            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="#EFEFEF" />
+            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#EBEBEB" />
+            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="#D0D0D0" />
             <SolidColorBrush x:Key="DividerBrush" Color="#E5E5E5" />
             <SolidColorBrush x:Key="NavSelectionBackgroundBrush" Color="#F6F6F6" />
             <SolidColorBrush x:Key="NavSelectionIndicatorBrush" Color="#00A88E" />
@@ -107,6 +107,19 @@
             <SolidColorBrush x:Key="SettingsDirectoryAccentBrush" Color="#316598" />
             <SolidColorBrush x:Key="SettingsJavaBackgroundBrush" Color="#EFF6F2" />
             <SolidColorBrush x:Key="SettingsJavaAccentBrush" Color="#367451" />
+            <!-- 原生强调按钮与焦点资源直接引用应用主题画笔，运行中切色也同步。 -->
+            <SolidColorBrush x:Key="BrandHoverBrush" Color="#00A88E" />
+            <SolidColorBrush x:Key="BrandPressedBrush" Color="#00A88E" />
+            <StaticResource x:Key="AccentFillColorDefaultBrush" ResourceKey="BrandBrush" />
+            <StaticResource x:Key="AccentFillColorSecondaryBrush" ResourceKey="BrandHoverBrush" />
+            <StaticResource x:Key="AccentFillColorTertiaryBrush" ResourceKey="BrandPressedBrush" />
+            <StaticResource x:Key="TextOnAccentFillColorPrimaryBrush" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="BrandBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="BrandHoverBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="BrandPressedBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="OnBrandTextBrush" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Light">
@@ -125,8 +138,8 @@
             <!-- 开屏底色：跟着安全中心走纯白（不是页面那层 #FDFDFD） -->
             <SolidColorBrush x:Key="SplashBackgroundBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF" />
-            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#F2F2F2" />
-            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="#EFEFEF" />
+            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#EBEBEB" />
+            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="#D0D0D0" />
             <SolidColorBrush x:Key="DividerBrush" Color="#E5E5E5" />
             <SolidColorBrush x:Key="NavSelectionBackgroundBrush" Color="#F6F6F6" />
             <SolidColorBrush x:Key="NavSelectionIndicatorBrush" Color="#00A88E" />
@@ -200,6 +213,19 @@
             <SolidColorBrush x:Key="SettingsDirectoryAccentBrush" Color="#316598" />
             <SolidColorBrush x:Key="SettingsJavaBackgroundBrush" Color="#EFF6F2" />
             <SolidColorBrush x:Key="SettingsJavaAccentBrush" Color="#367451" />
+            <!-- 原生强调按钮与焦点资源直接引用应用主题画笔，运行中切色也同步。 -->
+            <SolidColorBrush x:Key="BrandHoverBrush" Color="#00A88E" />
+            <SolidColorBrush x:Key="BrandPressedBrush" Color="#00A88E" />
+            <StaticResource x:Key="AccentFillColorDefaultBrush" ResourceKey="BrandBrush" />
+            <StaticResource x:Key="AccentFillColorSecondaryBrush" ResourceKey="BrandHoverBrush" />
+            <StaticResource x:Key="AccentFillColorTertiaryBrush" ResourceKey="BrandPressedBrush" />
+            <StaticResource x:Key="TextOnAccentFillColorPrimaryBrush" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="BrandBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="BrandHoverBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="BrandPressedBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="OnBrandTextBrush" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Dark">
@@ -235,8 +261,8 @@
 
             <!-- 卡片：靠明度递增分层，不再依赖底色差 -->
             <SolidColorBrush x:Key="CardBackgroundBrush" Color="#1C1C1C" />
-            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#262626" />
-            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="#303030" />
+            <SolidColorBrush x:Key="CardHoverBackgroundBrush" Color="#363636" />
+            <SolidColorBrush x:Key="CardPressedBackgroundBrush" Color="#404040" />
             <SolidColorBrush x:Key="DividerBrush" Color="#2E2E2E" />
             <SolidColorBrush x:Key="NavSelectionBackgroundBrush" Color="#262626" />
             <SolidColorBrush x:Key="NavSelectionIndicatorBrush" Color="#35D4BA" />
@@ -301,6 +327,19 @@
             <SolidColorBrush x:Key="SettingsDirectoryAccentBrush" Color="#90B7DA" />
             <SolidColorBrush x:Key="SettingsJavaBackgroundBrush" Color="#192720" />
             <SolidColorBrush x:Key="SettingsJavaAccentBrush" Color="#8AC4A1" />
+            <!-- 原生强调按钮与焦点资源直接引用应用主题画笔，运行中切色也同步。 -->
+            <SolidColorBrush x:Key="BrandHoverBrush" Color="#35D4BA" />
+            <SolidColorBrush x:Key="BrandPressedBrush" Color="#35D4BA" />
+            <StaticResource x:Key="AccentFillColorDefaultBrush" ResourceKey="BrandBrush" />
+            <StaticResource x:Key="AccentFillColorSecondaryBrush" ResourceKey="BrandHoverBrush" />
+            <StaticResource x:Key="AccentFillColorTertiaryBrush" ResourceKey="BrandPressedBrush" />
+            <StaticResource x:Key="TextOnAccentFillColorPrimaryBrush" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="BrandBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="BrandHoverBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="BrandPressedBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="OnBrandTextBrush" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="HighContrast">
@@ -308,7 +347,7 @@
             <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="BrandBrush" Color="{ThemeResource SystemColorHighlightColor}" />
             <SolidColorBrush x:Key="BrandSoftBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
-            <SolidColorBrush x:Key="OnBrandTextBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="OnBrandTextBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
             <SolidColorBrush x:Key="PageLayerBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="PageLayerBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="SplashBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
@@ -365,6 +404,19 @@
             <SolidColorBrush x:Key="SettingsDirectoryAccentBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
             <SolidColorBrush x:Key="SettingsJavaBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
             <SolidColorBrush x:Key="SettingsJavaAccentBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+            <!-- 原生强调按钮与焦点资源直接引用应用主题画笔，运行中切色也同步。 -->
+            <SolidColorBrush x:Key="BrandHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <SolidColorBrush x:Key="BrandPressedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+            <StaticResource x:Key="AccentFillColorDefaultBrush" ResourceKey="BrandBrush" />
+            <StaticResource x:Key="AccentFillColorSecondaryBrush" ResourceKey="BrandHoverBrush" />
+            <StaticResource x:Key="AccentFillColorTertiaryBrush" ResourceKey="BrandPressedBrush" />
+            <StaticResource x:Key="TextOnAccentFillColorPrimaryBrush" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonBackground" ResourceKey="BrandBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPointerOver" ResourceKey="BrandHoverBrush" />
+            <StaticResource x:Key="AccentButtonBackgroundPressed" ResourceKey="BrandPressedBrush" />
+            <StaticResource x:Key="AccentButtonForeground" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPointerOver" ResourceKey="OnBrandTextBrush" />
+            <StaticResource x:Key="AccentButtonForegroundPressed" ResourceKey="OnBrandTextBrush" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
