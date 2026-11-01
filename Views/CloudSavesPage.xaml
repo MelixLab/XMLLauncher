@@ -1,0 +1,99 @@
+﻿<Page
+    x:Class="LinxLauncher.Views.CloudSavesPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:LinxLauncher.Controls">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Padding="40,40,56,32" MaxWidth="1400" HorizontalAlignment="Stretch">
+
+            <Grid HorizontalAlignment="Stretch" ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Spacing="6">
+                    <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="云存档" />
+                    <TextBlock
+                        x:Name="CloudSubtitle"
+                        Style="{StaticResource PageSubtitleTextStyle}"
+                        Text="把世界备份到服务器，换台机器也能接着玩。" />
+                </StackPanel>
+
+                <!-- 两个同步按钮：一个往上推，一个往下拉 -->
+                <StackPanel
+                    Grid.Column="1"
+                    VerticalAlignment="Top"
+                    Margin="0,6,0,0"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <Button
+                        x:Name="SyncCheckButton"
+                        Click="SyncCheck_Click"
+                        Content="检查同步" />
+
+                    <Button
+                        x:Name="SyncDownButton"
+                        Click="SyncDown_Click"
+                        Content="从云端同步" />
+
+                    <Button
+                        x:Name="UploadButton"
+                        Click="Upload_Click"
+                        Content="上传到云端"
+                        Style="{StaticResource AccentButtonStyle}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- 配额：一行进度条 + 剩余，够了 -->
+            <StackPanel Margin="0,22,0,0" Spacing="8">
+                <ProgressBar
+                    x:Name="QuotaBar"
+                    Height="4"
+                    Minimum="0"
+                    Maximum="100"
+                    Value="0" />
+
+                <TextBlock
+                    x:Name="QuotaText"
+                    TextTrimming="CharacterEllipsis"
+                    Style="{StaticResource CaptionTextStyle}" />
+            </StackPanel>
+
+            <!-- 上传进度：只在传的时候出现 -->
+            <StackPanel
+                x:Name="UploadProgressPanel"
+                Margin="0,16,0,0"
+                Spacing="6"
+                Visibility="Collapsed">
+                <ProgressBar
+                    x:Name="UploadBar"
+                    Height="4"
+                    Minimum="0"
+                    Maximum="100"
+                    Value="0" />
+                <TextBlock
+                    x:Name="UploadText"
+                    Style="{StaticResource CaptionTextStyle}" />
+            </StackPanel>
+
+            <!-- 列表 -->
+            <TextBlock
+                x:Name="ListTitle"
+                Margin="0,24,0,8"
+                Style="{StaticResource SectionTitleTextStyle}"
+                Text="云端存档" />
+
+            <StackPanel x:Name="SaveList" Spacing="8" />
+
+            <TextBlock
+                x:Name="EmptyHint"
+                Margin="0,8,0,0"
+                Style="{StaticResource BodyTextStyle}"
+                Text="还没有上传过存档。"
+                Visibility="Collapsed" />
+
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -17,6 +17,18 @@ public sealed class AppSettings
     public string? ExtraGameArgs { get; set; }
     public int GameWidth { get; set; } = 925;
     public int GameHeight { get; set; } = 520;
+
+    /// <summary>
+    /// 每个世界上次成功上传时，云端那条记录的 updated_at（Unix 秒）。
+    /// 之后云端变了（别人传的 / 换机器传的）就能发现。
+    /// </summary>
+    public Dictionary<string, long> CloudSyncMarks { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 每个世界上次成功上传时，本地文件的最新修改时间（Unix 秒）。
+    /// 之后本地改过就能发现。
+    /// </summary>
+    public Dictionary<string, long> LocalSyncMarks { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool Fullscreen { get; set; }
 
     /// <summary>标题是否使用 Noto Sans（参考 XIGUASecurity 的字体选项）。默认开启。</summary>

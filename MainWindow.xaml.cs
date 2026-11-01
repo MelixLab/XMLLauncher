@@ -327,6 +327,7 @@ public sealed partial class MainWindow : Window
             "relay" => typeof(RelayPage),
             "community" => typeof(CommunityPage),
             "tools" => typeof(ToolsPage),
+            "cloud" => typeof(CloudSavesPage),
             "accounts" => typeof(AccountsPage),
             "skins" => typeof(SkinsPage),
             "settings" => typeof(SettingsPage),

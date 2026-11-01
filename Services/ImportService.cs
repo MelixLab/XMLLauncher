@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -122,6 +122,7 @@ public static class ImportService
 
         if (importSaves)
         {
+            // 1) 全局存档
             var src = Path.Combine(sourceDir, "saves");
             if (Directory.Exists(src))
             {
@@ -138,6 +139,37 @@ public static class ImportService
                     progress?.Report($"复制存档 {name}…");
                     await CopyDirectoryAsync(dir, Path.Combine(Paths.GameDir, "saves", name), ct);
                     result.Saves++;
+                }
+            }
+
+            // 2) 版本隔离目录里的存档（PCL2 / HMCL 开了隔离时存档在 versions/<id>/saves）
+            //    这些以前完全没导入，云存档页自然也看不到。
+            var srcVersions = Path.Combine(sourceDir, "versions");
+            if (Directory.Exists(srcVersions))
+            {
+                foreach (var verDir in Directory.GetDirectories(srcVersions))
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var verSaves = Path.Combine(verDir, "saves");
+                    if (!Directory.Exists(verSaves)) continue;
+
+                    var verId = Path.GetFileName(verDir);
+                    var targetRoot = Path.Combine(Paths.VersionDir(verId), "saves");
+
+                    foreach (var dir in Directory.GetDirectories(verSaves))
+                    {
+                        var name = Path.GetFileName(dir);
+                        if (Directory.Exists(Path.Combine(targetRoot, name)))
+                        {
+                            result.Skipped.Add($"存档 {verId}/{name}");
+                            continue;
+                        }
+
+                        progress?.Report($"复制存档 {verId}/{name}…");
+                        await CopyDirectoryAsync(dir, Path.Combine(targetRoot, name), ct);
+                        result.Saves++;
+                    }
                 }
             }
         }
