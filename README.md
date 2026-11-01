@@ -56,6 +56,20 @@ dotnet publish -c Release -r win-x64 -p:SelfContained=true -o out
 dotnet publish -c Release -r win-x64 -p:PublishAot=true -p:SelfContained=true -o out
 ```
 
+### GitHub Actions 构建与发布检查
+
+推送到 `main`、向 `main` 提交 PR，或在 Actions 页面手动运行 `Build`，
+都会在 Windows 环境中执行以下检查：
+
+- Debug / x64 编译检查
+- Release / win-x64 自包含 Native AOT 发布检查
+- 发布目录中的主程序、关键资源文件及 AOT 产物检查
+
+CI 使用 .NET 10，并从模板生成带占位服务器地址的
+`Services/LocalSecrets.cs`，无需配置仓库 Secrets。
+
+此流程仅用于验证项目能否完成编译和 AOT 发布。
+
 ### 配置服务器地址
 
 公告、更新检查、账号与联机都指向同一台自建服务器。真实地址不进仓库：

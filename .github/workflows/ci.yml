@@ -1,0 +1,86 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Debug / x64
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Prepare placeholder server configuration
+        run: Copy-Item -LiteralPath Services/LocalSecrets.example.cs.txt -Destination Services/LocalSecrets.cs
+
+      - name: Restore dependencies
+        run: dotnet restore LinxLauncher.WinUI.csproj -p:Platform=x64
+
+      - name: Build
+        run: dotnet build LinxLauncher.WinUI.csproj -c Debug -p:Platform=x64 --no-restore
+
+  publish:
+    name: Release AOT / x64
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Prepare placeholder server configuration
+        run: Copy-Item -LiteralPath Services/LocalSecrets.example.cs.txt -Destination Services/LocalSecrets.cs
+
+      - name: Publish Native AOT
+        run: dotnet publish LinxLauncher.WinUI.csproj -c Release -r win-x64 -p:Platform=x64 -p:PublishAot=true -p:SelfContained=true -o artifacts/publish/win-x64
+
+      - name: Verify publish output
+        run: |
+          $publishDirectory = 'artifacts/publish/win-x64'
+          $requiredFiles = @(
+            'LinxLauncher.WinUI.exe'
+            'Assets/AppIcon.ico'
+            'Assets/Blocks/vanilla.png'
+            'Assets/native/cubiomes_v3.dll'
+          )
+          foreach ($file in $requiredFiles) {
+            $path = Join-Path $publishDirectory $file
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "Missing publish output: $file"
+            }
+          }
+          if (Test-Path -LiteralPath (Join-Path $publishDirectory 'coreclr.dll')) {
+            throw 'Native AOT output unexpectedly contains coreclr.dll.'
+          }
