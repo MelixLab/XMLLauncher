@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,10 +37,14 @@ public sealed class UpdateInfo
 public static class RemoteService
 {
     /// <summary>
-    /// 当前客户端版本。以前是写在代码里的常量，每次发版都得改源码；
-    /// 现在直接读程序集版本（打包脚本 pack.ps1 -Version 1.2.0 注入），发版不会再漏改。
+    /// 更新协议使用程序集的三段数字版本；来源为项目 VersionPrefix 或构建时的 -p:Version。
     /// </summary>
     public static string ClientVersion { get; } = ReadClientVersion();
+
+    /// <summary>界面保留预发布后缀，不展示 SDK 自动附加的完整 Git 哈希。</summary>
+    public static string DisplayVersion { get; } =
+        typeof(RemoteService).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion.Split('+')[0] ?? ClientVersion;
 
     private static string ReadClientVersion()
     {

@@ -56,6 +56,23 @@ dotnet publish -c Release -r win-x64 -p:SelfContained=true -o out
 dotnet publish -c Release -r win-x64 -p:PublishAot=true -p:SelfContained=true -o out
 ```
 
+### 版本号
+
+默认版本定义在 `LinxLauncher.WinUI.csproj` 的 `VersionPrefix` 中。
+“设置 → 高级”的版本、更新检查、请求标识及游戏启动器版本均读取本次构建的程序集信息。
+界面保留预发布后缀；更新检查继续使用三段数字版本，以兼容现有服务端协议。
+
+发版时可显式指定版本，无需修改各处源码，例如：
+
+```powershell
+dotnet publish LinxLauncher.WinUI.csproj -c Release -r win-x64 -p:PublishAot=true -p:SelfContained=true -p:Version=1.2.0 -o out
+```
+
+这里的 `1.2.0` 仅为命令示例，不表示已经发布该版本。
+原代码注释提及的单文件打包脚本 `pack.ps1` 未包含在仓库中；
+当前 CI 负责构建与发布目录检查，不包含制作单文件外壳或上传 GitHub Release 的步骤。
+`Package.appxmanifest` 的版本属于 MSIX 包身份，当前非打包应用的版本不从此处读取。
+
 ### GitHub Actions 构建与发布检查
 
 推送到 `main`、向 `main` 提交 PR，或在 Actions 页面手动运行 `Build`，

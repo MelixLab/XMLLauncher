@@ -34,6 +34,9 @@ public sealed class AppSettings
     /// <summary>标题是否使用 Noto Sans（参考 XIGUASecurity 的字体选项）。默认开启。</summary>
     public bool UseNotoSans { get; set; } = true;
 
+    /// <summary>反转皮肤预览的水平和垂直拖动方向；默认保留原有操作。</summary>
+    public bool SkinPreviewInvertDrag { get; set; }
+
     // ---------------- 主题（设置页「主题」区块） ----------------
 
     /// <summary>深浅模式："System" / "Light" / "Dark"。</summary>

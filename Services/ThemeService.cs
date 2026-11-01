@@ -7,6 +7,7 @@ using Microsoft.UI;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
 using WinRT.Interop;
@@ -100,6 +101,23 @@ public static class ThemeService
     public static bool IsDark { get; private set; }
 
     // ================= 对外入口 =================
+
+    /// <summary>弹出层显式使用原生样式和应用主题；只在打开期间监听主题变化。</summary>
+    public static void ApplyToDialog(ContentDialog dialog)
+    {
+        // WinUI #8476：仅依赖隐式样式会丢失打开动画，需在 ShowAsync 前显式指定原生样式。
+        dialog.Style ??= (Style)Application.Current.Resources["DefaultContentDialogStyle"];
+
+        void RefreshTheme() => dialog.RequestedTheme = IsDark ? ElementTheme.Dark : ElementTheme.Light;
+        RefreshTheme();
+        dialog.Opened += (_, _) =>
+        {
+            AppearanceChanged -= RefreshTheme;
+            AppearanceChanged += RefreshTheme;
+            RefreshTheme();
+        };
+        dialog.Closed += (_, _) => AppearanceChanged -= RefreshTheme;
+    }
 
     /// <summary>启动时调一次：把窗口、根元素、侧边栏交给主题引擎。</summary>
     public static void Initialize(Window window, FrameworkElement root, FrameworkElement navShell)
@@ -482,7 +500,7 @@ public static class ThemeService
             SetBrush(slot.Dict, "ToggleSwitchFillOnPointerOver", dark ? Mix(brand, Colors.White, 0.18) : Mix(brand, Colors.Black, 0.10));
             SetBrush(slot.Dict, "ToggleSwitchFillOnPressed", dark ? Mix(brand, Colors.White, 0.10) : Mix(brand, Colors.Black, 0.18));
 
-            // 系统控件（按钮、进度条、复选框）的强调色跟着一起走
+            // 系统控件（按钮、进度条、复选框、输入框）的强调色跟着一起走
             if (!slot.Ours)
             {
                 SetBrushKeepAlpha(slot.Dict, "AccentFillColorDefaultBrush", brand);
@@ -492,6 +510,14 @@ public static class ThemeService
                 SetBrushKeepAlpha(slot.Dict, "SystemControlBackgroundAccentBrush", brand);
                 SetBrushKeepAlpha(slot.Dict, "AccentTextFillColorPrimaryBrush", link);
                 SetBrushKeepAlpha(slot.Dict, "TextOnAccentFillColorPrimaryBrush", onBrand);
+                SetBrushKeepAlpha(slot.Dict, "AccentFillColorSelectedTextBackgroundBrush", brand);
+
+                // 输入框聚焦边框是渐变画刷：首个色标画底部强调线，其余色标保留原生边框。
+                if (TryGet(slot.Dict, "TextControlBorderBrushFocused", out var focusedBorder)
+                    && focusedBorder is LinearGradientBrush gradient && gradient.GradientStops.Count > 0)
+                {
+                    gradient.GradientStops[0].Color = brand;
+                }
             }
         }
 

@@ -6,6 +6,8 @@
 
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>LinxLauncher</RootNamespace>
+    <!-- 默认版本与当前发布基线一致；发版时可用 -p:Version=... 覆盖。 -->
+    <VersionPrefix>1.1.5</VersionPrefix>
     <!-- exe 的版本资源：通知、文件属性、任务栏都读这里的名字 -->
     <Product>XML Minecraft Launcher</Product>
     <AssemblyTitle>XML Minecraft Launcher</AssemblyTitle>
@@ -14,6 +16,10 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x86;x64;ARM64</Platforms>
+    <!-- VS 的构建进程位数可能与目标平台不同，优先使用项目选定的平台。 -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'x64'">win-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'x86'">win-x86</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Platform)' == 'ARM64'">win-arm64</RuntimeIdentifier>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-$([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString().ToLowerInvariant())</RuntimeIdentifier>
     <PublishProfile Condition="Exists('Properties\PublishProfiles\win-$(Platform).pubxml')">win-$(Platform).pubxml</PublishProfile>
     <UseWinUI>true</UseWinUI>

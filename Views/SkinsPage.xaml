@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LinxLauncher.Views.SkinsPage"
-    NavigationCacheMode="Enabled"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:services="using:LinxLauncher.Services"
@@ -11,34 +10,17 @@
     mc:Ignorable="d">
 
     <ScrollViewer Style="{StaticResource PageScrollStyle}">
-        <Grid x:Name="PageContent" Style="{StaticResource PageContentStyle}" SizeChanged="PageContent_SizeChanged">
+        <Grid x:Name="PageContent" Style="{StaticResource PageContentStyle}" Padding="32,4,32,24" SizeChanged="PageContent_SizeChanged">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!--  标题  -->
-            <StackPanel
+            <TextBlock
                 Grid.Row="0"
-                MaxWidth="620"
-                HorizontalAlignment="Left">
-                <Button
-                    Margin="0,0,0,10"
-                    Click="Back_Click"
-                    AutomationProperties.Name="返回账户"
-                    Style="{StaticResource PageBackButtonStyle}">
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <FontIcon FontFamily="{StaticResource IconFontFamily}" FontSize="14" VerticalAlignment="Center" Glyph="&#xE72B;" />
-                        <TextBlock Text="返回账户" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="皮肤" />
-                <TextBlock
-                    Margin="0,11,0,0"
-                    Style="{StaticResource PageSubtitleTextStyle}"
-                    Text="选择账户，导入、同步或上传皮肤。拖动角色可旋转查看。" />
-            </StackPanel>
+                Style="{StaticResource PageSubtitleTextStyle}"
+                Text="选择账户，导入、同步或上传皮肤。拖动角色可旋转查看。" />
 
             <!--  账户选择：单独一行，不跟标题抢位置  -->
             <Grid
@@ -193,7 +175,7 @@
                                     FontSize="12"
                                     Foreground="{ThemeResource SecondaryTextBrush}"
                                     IsHitTestVisible="False"
-                                    Text="按住拖动可以转一圈"
+                                    Text="按住拖动即可旋转"
                                     TextWrapping="Wrap" />
                             </Grid>
                         </Border>
@@ -219,11 +201,11 @@
                     CornerRadius="8">
                     <StackPanel Spacing="16">
                         <StackPanel Spacing="6">
-                            <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="换皮肤" />
+                            <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="更换皮肤" />
                             <TextBlock
                                 FontSize="13"
                                 Foreground="{ThemeResource SecondaryTextBrush}"
-                                Text="支持 64×64（现代）和 64×32（旧版）的 PNG。其他尺寸会被判定为不是皮肤。"
+                                Text="支持 64×64（现代）和 64×32（旧版）的 PNG 格式图片。"
                                 TextWrapping="Wrap" />
                         </StackPanel>
 
@@ -232,7 +214,7 @@
                                 x:Name="ImportButton"
                                 HorizontalAlignment="Left"
                                 Click="Import_Click"
-                                Content="导入皮肤…"
+                                Content="导入皮肤"
                                 Style="{StaticResource AccentButtonStyle}" />
 
                             <Button
@@ -240,24 +222,21 @@
                                 HorizontalAlignment="Left"
                                 Click="Sync_Click"
                                 Content="从正版角色档案同步"
-                                Style="{StaticResource DefaultButtonStyle}"
-                                MinWidth="180" />
+                                Style="{StaticResource DefaultButtonStyle}"/>
 
                             <Button
                                 x:Name="UploadButton"
                                 HorizontalAlignment="Left"
                                 Click="Upload_Click"
                                 Content="上传成我的正版皮肤"
-                                Style="{StaticResource DefaultButtonStyle}"
-                                MinWidth="180" />
+                                Style="{StaticResource DefaultButtonStyle}"/>
 
                             <Button
                                 x:Name="ClearButton"
                                 HorizontalAlignment="Left"
                                 Click="Clear_Click"
                                 Content="恢复默认皮肤"
-                                Style="{StaticResource DefaultButtonStyle}"
-                                MinWidth="180" />
+                                Style="{StaticResource DefaultButtonStyle}"/>
                         </StackPanel>
 
                         <Rectangle Height="1" Fill="{ThemeResource DividerBrush}" />
@@ -276,6 +255,24 @@
                                 <x:String>Classic · 经典</x:String>
                                 <x:String>Slim · 细手臂</x:String>
                             </RadioButtons>
+                        </StackPanel>
+
+                        <Rectangle Height="1" Fill="{ThemeResource DividerBrush}" />
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Text="预览操作" />
+                            <ToggleSwitch
+                                x:Name="InvertDragSwitch"
+                                Header="反转拖动方向"
+                                OffContent="默认方向"
+                                OnContent="反向"
+                                AutomationProperties.Name="反转皮肤预览拖动方向"
+                                Toggled="InvertDragSwitch_Toggled" />
+                            <TextBlock
+                                FontSize="13"
+                                Foreground="{ThemeResource SecondaryTextBrush}"
+                                Text="开启此设置会反转左右和上下拖动的旋转方向。"
+                                TextWrapping="Wrap" />
                         </StackPanel>
 
                         <Rectangle Height="1" Fill="{ThemeResource DividerBrush}" />

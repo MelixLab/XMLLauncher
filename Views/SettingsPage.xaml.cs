@@ -2,6 +2,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Animation;
+using Microsoft.UI.Xaml.Navigation;
 using Windows.UI.ViewManagement;
 
 namespace LinxLauncher.Views;
@@ -15,8 +16,24 @@ public sealed partial class SettingsPage : Page
     public SettingsPage()
     {
         InitializeComponent();
-        CategoryNavigation.SelectedItem = CategoryNavigation.MenuItems[0];
+        CategoryFrame.ContentTransitions = new TransitionCollection();
         Loaded += (_, _) => FontService.RefreshAll();
+        Unloaded += (_, _) => CategoryFrame.ContentTransitions.Clear();
+    }
+
+    protected override void OnNavigatedTo(NavigationEventArgs e)
+    {
+        base.OnNavigatedTo(e);
+        _selectedIndex = -1;
+        CategoryNavigation.SelectedItem = CategoryNavigation.MenuItems[0];
+        // 已选中常规时不会触发 SelectionChanged，仍需清除上一轮子页转场。
+        if (_selectedIndex < 0) NavigateCategory(0);
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        CategoryFrame.ContentTransitions.Clear();
+        base.OnNavigatedFrom(e);
     }
 
     private void Category_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -24,7 +41,15 @@ public sealed partial class SettingsPage : Page
         if (args.SelectedItem is not NavigationViewItem item ||
             !int.TryParse(item.Tag?.ToString(), out int index) || index == _selectedIndex) return;
 
-        NavigationTransitionInfo transition = _selectedIndex < 0 || !new UISettings().AnimationsEnabled
+        NavigateCategory(index);
+    }
+
+    private void NavigateCategory(int index)
+    {
+        bool animate = _selectedIndex >= 0 && new UISettings().AnimationsEnabled;
+        CategoryFrame.ContentTransitions.Clear();
+        if (animate) CategoryFrame.ContentTransitions.Add(new NavigationThemeTransition());
+        NavigationTransitionInfo transition = !animate
             ? new SuppressNavigationTransitionInfo()
             : new SlideNavigationTransitionInfo
             {

@@ -18,5 +18,6 @@ public sealed partial class LaunchProgressDialog : ContentDialog
         DefaultButton = ContentDialogButton.Primary;
 
         Steps.Job = job;
+        FontService.ApplyToDialog(this);
     }
 }

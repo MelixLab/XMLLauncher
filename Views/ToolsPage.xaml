@@ -6,17 +6,18 @@
     xmlns:controls="using:LinxLauncher.Controls">
 
     <ScrollViewer Style="{StaticResource PageScrollStyle}">
-        <Grid x:Name="PageContent" Style="{StaticResource PageContentStyle}" MaxWidth="1040">
+        <Grid x:Name="PageContent" Style="{StaticResource PageContentStyle}" MaxWidth="1104">
             <StackPanel>
 
-                <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="工具箱" />
-                <TextBlock
-                    x:Name="ToolsSubtitle"
-                    Margin="0,6,0,0"
-                    Style="{StaticResource PageSubtitleTextStyle}"
-                    Text="内存整理、模组汉化、种子地图。" />
+                <StackPanel Spacing="10">
+                    <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="工具箱" />
+                    <TextBlock
+                        x:Name="ToolsSubtitle"
+                        Style="{StaticResource PageSubtitleTextStyle}"
+                        Text="内存整理、模组汉化、种子地图。" />
+                </StackPanel>
 
-                <controls:AdaptiveWrapPanel x:Name="ToolCardsHost" Background="Transparent" Margin="0,28,0,0" ItemMinWidth="300" MaxColumns="2" Spacing="8" ContentPadding="6,4,6,4"
+                <controls:AdaptiveWrapPanel x:Name="ToolCardsHost" Background="Transparent" Margin="0,28,0,0" ItemMinWidth="232" MaxColumns="3" Spacing="8" ContentPadding="6,4,6,4"
                                             PointerExited="ToolCards_PointerExited">
 
                     <!-- 内存整理 -->

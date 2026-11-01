@@ -153,6 +153,7 @@ public sealed partial class RelayPage : Page
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        ShowMain(restoreFocus: false);
 
         // 字体要等布局生成完再扫，直接在 OnNavigatedTo 里扫会漏掉整棵子树
         DispatcherQueue.TryEnqueue(() => FontService.Apply(this));
@@ -168,7 +169,6 @@ public sealed partial class RelayPage : Page
 
         _tick ??= CreateTick();
         _tick.Start();
-        if (_viewTransition.IsShowing(LobbyView)) _ = LoadLobbyAsync();
 
         // 自动化测试入口：设了 XML_TEST_JOIN=<房间号> 就直接加入，不用点界面
         var autoJoin = Environment.GetEnvironmentVariable("XML_TEST_JOIN");
@@ -427,15 +427,18 @@ public sealed partial class RelayPage : Page
         DispatcherQueue.TryEnqueue(() => FontService.Apply(LobbyView));
     }
 
-    private void ShowMain()
+    private void ShowMain(bool restoreFocus = true)
     {
         CancelLobbyRequest();
         bool wasCreating = _viewTransition.IsShowing(CreateRoomView);
         HostPasswordBox.Password = string.Empty;
         RelayBreadcrumb.ParentTitle = string.Empty;
         RelayBreadcrumb.CurrentTitle = "联机";
-        _viewTransition.Show(MainView, forward: false,
-            () => (wasCreating ? HostButton : BrowseButton).Focus(FocusState.Programmatic));
+        if (restoreFocus)
+            _viewTransition.Show(MainView, forward: false,
+                () => (wasCreating ? HostButton : BrowseButton).Focus(FocusState.Programmatic));
+        else
+            _viewTransition.Reset(MainView);
     }
 
     private void Back_Click(object sender, RoutedEventArgs e) => ShowMain();

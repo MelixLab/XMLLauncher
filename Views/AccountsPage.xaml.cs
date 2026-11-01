@@ -43,6 +43,7 @@ public sealed partial class AccountsPage : Page
         public required TextBlock Skin { get; init; }
         public required Border KindBadge { get; init; }
         public required AdaptiveWrapPanel Actions { get; init; }
+        public required Button SkinButton { get; init; }
         public required Button RefreshToken { get; init; }
         public required Image Avatar { get; init; }
         public required TextBlock Initial { get; init; }
@@ -60,7 +61,10 @@ public sealed partial class AccountsPage : Page
     private readonly Dictionary<string, CardRefs> _cards = new();
     private readonly List<string> _order = new();
     private readonly UISettings _uiSettings = new();
+    private readonly ViewTransition _viewTransition;
     private Storyboard? _deckAnimation;
+    private SkinsPage? _skinPage;
+    private string? _returnAccountId;
 
     private void PageScroller_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -72,12 +76,17 @@ public sealed partial class AccountsPage : Page
     private double DeckWidth => Math.Max(0,
         Math.Min(PageScroller.ActualWidth, PageContent.MaxWidth) - PageContent.Padding.Left - PageContent.Padding.Right);
 
-    private void PageContent_SizeChanged(object sender, SizeChangedEventArgs e)
-        => PageContent.Padding = new Thickness(e.NewSize.Width < 720 ? 16 : 32, 28, e.NewSize.Width < 720 ? 16 : 32, 24);
+    private void ViewNavigationHost_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        double side = e.NewSize.Width < 720 ? 16 : 32;
+        AccountHeader.Padding = new Thickness(side, e.NewSize.Width < 720 ? 20 : 28, side, 0);
+        PageContent.Padding = new Thickness(side, 4, side, 24);
+    }
 
     public AccountsPage()
     {
         InitializeComponent();
+        _viewTransition = new ViewTransition(this, ViewNavigationHost, PageScroller, SkinView);
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
@@ -118,7 +127,56 @@ public sealed partial class AccountsPage : Page
     protected override void OnNavigatedTo(NavigationEventArgs e)
     {
         base.OnNavigatedTo(e);
+        ShowAccounts(restoreFocus: false);
         Refresh();
+        if (e.Parameter is string accountId) ShowSkin(accountId, animate: false);
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        _viewTransition.Stop();
+        _skinPage?.StopPreview();
+        StopDeckAnimation();
+        base.OnNavigatedFrom(e);
+    }
+
+    internal void ShowSkin(string? accountId, bool animate = true)
+    {
+        if (_skinPage is null)
+        {
+            _skinPage = new SkinsPage();
+            SkinView.Children.Add(_skinPage);
+        }
+        _returnAccountId = string.IsNullOrWhiteSpace(accountId) ? AccountService.Current?.Id : accountId;
+        _skinPage.ShowAccount(_returnAccountId);
+        StopDeckAnimation();
+        AccountBreadcrumb.ParentTitle = "账户";
+        AccountBreadcrumb.CurrentTitle = "皮肤";
+        if (animate)
+            _viewTransition.Show(SkinView, forward: true, AccountBreadcrumb.FocusParent);
+        else
+            _viewTransition.Reset(SkinView);
+    }
+
+    internal void ShowAccounts(bool restoreFocus = true)
+    {
+        _skinPage?.StopPreview();
+        AccountBreadcrumb.ParentTitle = string.Empty;
+        AccountBreadcrumb.CurrentTitle = "账户";
+        if (restoreFocus)
+            _viewTransition.Show(PageScroller, forward: false, RestoreAccountFocus);
+        else
+            _viewTransition.Reset(PageScroller);
+    }
+
+    private void Back_Click(object sender, RoutedEventArgs e) => ShowAccounts();
+
+    private void RestoreAccountFocus()
+    {
+        if (_returnAccountId is not null && _cards.TryGetValue(_returnAccountId, out var card))
+            (card.Actions.Visibility == Visibility.Visible ? card.SkinButton : card.Selector).Focus(FocusState.Programmatic);
+        else
+            AddOfflineButton.Focus(FocusState.Programmatic);
     }
 
     // ================= 刷新 =================
@@ -381,7 +439,7 @@ public sealed partial class AccountsPage : Page
         };
 
         var skinButton = SmallButton("皮肤");
-        skinButton.Click += (_, _) => MainWindow.Instance?.NavigateTo("skins", account.Id);
+        skinButton.Click += (_, _) => ShowSkin(account.Id);
 
         var refreshButton = SmallButton("续期");
         refreshButton.Click += async (_, _) => await RefreshTokenAsync(account.Id);
@@ -519,6 +577,7 @@ public sealed partial class AccountsPage : Page
             Skin = skin,
             KindBadge = kindBadge,
             Actions = actions,
+            SkinButton = skinButton,
             RefreshToken = refreshButton,
             Avatar = avatar,
             Initial = initial,

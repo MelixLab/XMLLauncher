@@ -338,7 +338,7 @@ public sealed partial class MainWindow : Window
             "tools" => typeof(ToolsPage),
             "cloud" => typeof(CloudSavesPage),
             "accounts" => typeof(AccountsPage),
-            "skins" => typeof(SkinsPage),
+            "skins" => typeof(AccountsPage),
             "settings" => typeof(SettingsPage),
             _ => null
         };
@@ -354,10 +354,15 @@ public sealed partial class MainWindow : Window
                 NavigationTransitionInfo transition = new Windows.UI.ViewManagement.UISettings().AnimationsEnabled
                     ? new EntranceNavigationTransitionInfo()
                     : new SuppressNavigationTransitionInfo();
-                ok = ContentFrame.Navigate(target, parameter, transition);
+                ok = ContentFrame.Navigate(target, tag == "skins" ? parameter as string ?? string.Empty : parameter, transition);
             }
             catch (Exception ex) { Log.Fatal("Navigate", ex); return; }
             Log.Info($"导航结果 {ok} → {ContentFrame.CurrentSourcePageType} / {ContentFrame.Content?.GetType().Name}");
+        }
+        else if (ContentFrame.Content is AccountsPage accounts)
+        {
+            if (tag == "skins") accounts.ShowSkin(parameter as string);
+            else if (tag == "accounts") accounts.ShowAccounts();
         }
 
         SelectNavItem(tag);

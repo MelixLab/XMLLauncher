@@ -10,68 +10,80 @@
     Background="Transparent"
     mc:Ignorable="d">
 
-    <ScrollViewer x:Name="PageScroller" Style="{StaticResource PageScrollStyle}" SizeChanged="PageScroller_SizeChanged">
-        <Grid x:Name="PageContent" Style="{StaticResource PageContentStyle}" HorizontalAlignment="Center" SizeChanged="PageContent_SizeChanged">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+    <Grid x:Name="ViewNavigationHost" SizeChanged="ViewNavigationHost_SizeChanged">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-            <!--  标题 + 操作  -->
-            <Grid x:Name="PageHeader" Grid.Row="0" ColumnSpacing="24" RowSpacing="16" SizeChanged="PageHeader_SizeChanged">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
+        <Grid x:Name="AccountHeader" Style="{StaticResource PageContentStyle}" Padding="32,28,32,0">
+            <controls:PageBreadcrumb x:Name="AccountBreadcrumb" CurrentTitle="账户" ParentClicked="Back_Click" />
+        </Grid>
+
+        <ScrollViewer x:Name="PageScroller" Grid.Row="1" Margin="0,12,0,0"
+                      Style="{StaticResource PageScrollStyle}" SizeChanged="PageScroller_SizeChanged">
+            <Grid x:Name="PageContent" Style="{StaticResource PageContentStyle}" Padding="32,4,32,24" HorizontalAlignment="Center">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <StackPanel>
-                    <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="账户" />
-                    <TextBlock
-                        Margin="0,11,0,0"
-                        Style="{StaticResource PageSubtitleTextStyle}"
-                        Text="一摞账户卡，最上面那张就是进游戏用的身份。点下面任一张，它就抽上来展开。" />
-                </StackPanel>
 
-                <controls:AdaptiveWrapPanel
-                    x:Name="HeaderActions"
-                    Grid.Column="1"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Top"
-                    Spacing="8">
-                    <Button
-                        x:Name="AddOfflineButton"
-                        Click="AddOffline_Click"
-                        Content="添加离线账户" />
-                    <Button
-                        x:Name="MsLoginButton"
-                        Click="MsLogin_Click"
-                        Content="登录 Microsoft 账号"
-                        Style="{StaticResource AccentButtonStyle}" />
-                </controls:AdaptiveWrapPanel>
+                <!--  标题 + 操作  -->
+                <Grid x:Name="PageHeader" Grid.Row="0" ColumnSpacing="24" RowSpacing="16" SizeChanged="PageHeader_SizeChanged">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <StackPanel>
+                        <TextBlock
+                            Style="{StaticResource PageSubtitleTextStyle}"
+                            Text="一摞账户卡，最上面那张就是进游戏用的身份。点下面任一张，它就抽上来展开。" />
+                    </StackPanel>
+
+                    <controls:AdaptiveWrapPanel
+                        x:Name="HeaderActions"
+                        Grid.Column="1"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Spacing="8">
+                        <Button
+                            x:Name="AddOfflineButton"
+                            Click="AddOffline_Click"
+                            Content="添加离线账户" />
+                        <Button
+                            x:Name="MsLoginButton"
+                            Click="MsLogin_Click"
+                            Content="登录 Microsoft 账号"
+                            Style="{StaticResource AccentButtonStyle}" />
+                    </controls:AdaptiveWrapPanel>
+                </Grid>
+
+                <!--  账户数  -->
+                <TextBlock
+                    x:Name="CountText"
+                    Grid.Row="1"
+                    Margin="0,32,0,0"
+                    FontSize="14"
+                    Foreground="{ThemeResource SecondaryTextBrush}"
+                    Text="" />
+
+                <!--  卡包：当前卡完整展开，其余压成信息条叠在下面  -->
+                <Canvas
+                    x:Name="DeckHost"
+                    Grid.Row="2"
+                    Height="140"
+                    Margin="0,14,0,0"
+                    HorizontalAlignment="Stretch"
+                    SizeChanged="DeckHost_SizeChanged" />
+
             </Grid>
+        </ScrollViewer>
 
-            <!--  账户数  -->
-            <TextBlock
-                x:Name="CountText"
-                Grid.Row="1"
-                Margin="0,32,0,0"
-                FontSize="14"
-                Foreground="{ThemeResource SecondaryTextBrush}"
-                Text="" />
-
-            <!--  卡包：当前卡完整展开，其余压成信息条叠在下面  -->
-            <Canvas
-                x:Name="DeckHost"
-                Grid.Row="2"
-                Height="140"
-                Margin="0,14,0,0"
-                HorizontalAlignment="Stretch"
-                SizeChanged="DeckHost_SizeChanged" />
-
-        </Grid>
-    </ScrollViewer>
+        <Grid x:Name="SkinView" Grid.Row="1" Margin="0,12,0,0" Visibility="Collapsed" />
+    </Grid>
 </Page>

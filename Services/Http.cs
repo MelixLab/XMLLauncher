@@ -122,7 +122,7 @@ public static class Http
         {
             Timeout = TimeSpan.FromMinutes(15)
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("XMLLauncher/1.0 (+WinUI)");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd($"XMLLauncher/{RemoteService.ClientVersion} (+WinUI)");
         client.DefaultRequestHeaders.Accept.ParseAdd("*/*");
         return client;
     }

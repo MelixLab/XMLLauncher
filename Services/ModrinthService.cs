@@ -62,7 +62,7 @@ public static class ModrinthService
             // Modrinth 要求带一个能识别身份的 UA
             if (!Http.Client.DefaultRequestHeaders.UserAgent.Any())
             {
-                Http.Client.DefaultRequestHeaders.UserAgent.ParseAdd("XMLLauncher/1.0 (Minecraft launcher)");
+                Http.Client.DefaultRequestHeaders.UserAgent.ParseAdd($"XMLLauncher/{RemoteService.ClientVersion} (Minecraft launcher)");
             }
             return Http.Client;
         }

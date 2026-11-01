@@ -9,7 +9,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Microsoft.UI.Xaml.Navigation;
 using Windows.Storage.Pickers;
 
 namespace LinxLauncher.Views;
@@ -37,7 +36,7 @@ public sealed partial class SkinsPage : Page
     private long _lastRenderTick;
 
     private void PageContent_SizeChanged(object sender, SizeChangedEventArgs e)
-        => PageContent.Padding = new Thickness(e.NewSize.Width < 720 ? 16 : 32, 28, e.NewSize.Width < 720 ? 16 : 32, 24);
+        => PageContent.Padding = new Thickness(e.NewSize.Width < 720 ? 16 : 32, 4, e.NewSize.Width < 720 ? 16 : 32, 24);
 
     private void AccountRow_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -68,22 +67,24 @@ public sealed partial class SkinsPage : Page
         Loaded += (_, _) =>
         {
             _previewActive = true;
+            _loading = true;
+            InvertDragSwitch.IsOn = AppState.Settings.SkinPreviewInvertDrag;
+            _loading = false;
             if (_accountId is null) _accountId = AccountService.Current?.Id;
             BuildPicker();
             Refresh();
         };
     }
 
-    protected override void OnNavigatedTo(NavigationEventArgs e)
+    internal void ShowAccount(string? accountId)
     {
-        base.OnNavigatedTo(e);
-        _accountId = e.Parameter as string ?? AccountService.Current?.Id;
-    }
-
-    protected override void OnNavigatedFrom(NavigationEventArgs e)
-    {
-        StopPreview();
-        base.OnNavigatedFrom(e);
+        _accountId = accountId ?? AccountService.Current?.Id;
+        if (IsLoaded)
+        {
+            _previewActive = true;
+            BuildPicker();
+            Refresh();
+        }
     }
 
     // ================= 账户选择 =================
@@ -119,8 +120,6 @@ public sealed partial class SkinsPage : Page
         }
         _loading = false;
     }
-
-    private void Back_Click(object sender, RoutedEventArgs e) => MainWindow.Instance?.NavigateTo("accounts");
 
     private void AccountPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -363,6 +362,13 @@ public sealed partial class SkinsPage : Page
         if (IsViewing(acc)) Refresh();
     }
 
+    private void InvertDragSwitch_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        AppState.Settings.SkinPreviewInvertDrag = InvertDragSwitch.IsOn;
+        SettingsService.Save();
+    }
+
     private void AfterSkinChanged(GameAccount acc)
     {
         if (acc.Id == AccountService.Current?.Id)
@@ -373,7 +379,7 @@ public sealed partial class SkinsPage : Page
 
     // ================= 3D 预览 =================
 
-    private void StopPreview()
+    internal void StopPreview()
     {
         _previewActive = false;
         ResetPreview();
@@ -403,7 +409,9 @@ public sealed partial class SkinsPage : Page
     {
         if (!_previewActive || _skinPixels is null || _dragPointerId is not null) return;
         var point = e.GetCurrentPoint(SkinModelHost);
-        if (!point.Properties.IsLeftButtonPressed || !SkinModelHost.CapturePointer(e.Pointer)) return;
+        bool pressed = e.Pointer.PointerDeviceType == Microsoft.UI.Input.PointerDeviceType.Mouse
+            ? point.Properties.IsLeftButtonPressed : point.IsInContact;
+        if (!pressed || !SkinModelHost.CapturePointer(e.Pointer)) return;
         _dragPointerId = e.Pointer.PointerId;
         _dragX = point.Position.X;
         _dragY = point.Position.Y;
@@ -415,8 +423,9 @@ public sealed partial class SkinsPage : Page
     {
         if (_dragPointerId != e.Pointer.PointerId) return;
         var point = e.GetCurrentPoint(SkinModelHost);
-        _yaw = (_yaw + (point.Position.X - _dragX) * 0.6) % 360;
-        _pitch = Math.Clamp(_pitch + (point.Position.Y - _dragY) * 0.35, -35, 35);
+        double direction = AppState.Settings.SkinPreviewInvertDrag ? -1 : 1;
+        _yaw = (_yaw + (point.Position.X - _dragX) * 0.6 * direction) % 360;
+        _pitch = Math.Clamp(_pitch + (point.Position.Y - _dragY) * 0.35 * direction, -35, 35);
         _dragX = point.Position.X;
         _dragY = point.Position.Y;
         RequestFrame();

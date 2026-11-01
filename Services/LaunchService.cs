@@ -143,7 +143,7 @@ public sealed class LaunchService
             .Replace("${assets_index_name}", assetsIndexName)
             .Replace("${natives_directory}", nativesDir)
             .Replace("${launcher_name}", "XMLLauncher")
-            .Replace("${launcher_version}", "1.0.0")
+            .Replace("${launcher_version}", RemoteService.DisplayVersion)
             .Replace("${classpath}", classpath)
             .Replace("${classpath_separator}", ";")
             .Replace("${library_directory}", Paths.LibrariesDir)
@@ -182,7 +182,7 @@ public sealed class LaunchService
         {
             jvm.Add($"-Djava.library.path={nativesDir}");
             jvm.Add("-Dminecraft.launcher.brand=XMLLauncher");
-            jvm.Add("-Dminecraft.launcher.version=1.0.0");
+            jvm.Add($"-Dminecraft.launcher.version={RemoteService.DisplayVersion}");
             jvm.Add("-cp");
             jvm.Add(classpath);
         }

@@ -1,294 +1,367 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.Storage.Streams;
 
 namespace LinxLauncher.Services;
 
-/// <summary>
-/// 把 64×64 的 MC 皮肤贴图渲染成可旋转的 3D 小人。
-///
-/// 纯软件渲染：6 个立方体（头/身/左右臂/左右腿），每个 6 个面，
-/// 按 Y 轴旋转后做正交投影，用画家算法从远到近铺像素。
-/// 不依赖 Win2D 或任何 3D 库。
-/// </summary>
+/// <summary>Minecraft 皮肤的软件渲染：共享贴图布局、双层模型、逐像素深度与透明度。</summary>
 public static class SkinRenderer3D
 {
-    /// <summary>皮肤像素（64×64 RGBA）。</summary>
+    /// <summary>未预乘的 BGRA 皮肤像素；加载时统一为现代布局。</summary>
     public sealed class SkinImage
     {
         public byte[] Pixels { get; init; } = Array.Empty<byte>();
         public int Width { get; init; } = 64;
         public int Height { get; init; } = 64;
+        public string Model { get; init; } = "classic";
+        public bool IsSlim => string.Equals(Model, "slim", StringComparison.OrdinalIgnoreCase);
     }
 
-    /* ---------------- 部件定义 ---------------- */
+    private readonly record struct Part(
+        int Width, int Height, int Depth, double X, double Y, bool IsHead,
+        int U, int V, int OuterU, int OuterV);
+    private readonly record struct Point3(double X, double Y, double Z);
+    private readonly record struct Vertex(double X, double Y, double Z, double U, double V);
+    private readonly record struct Face(int A, int B, int C, int D, int U, int V, int Width, int Height, bool FlipV = false);
+    private readonly record struct Fragment(double Depth, int TextureOffset, int Next);
 
-    private readonly record struct Box(
-        string Name,
-        float W, float H, float D,
-        float OffsetX, float OffsetY, float OffsetZ,
-        int U, int V);
+    private static readonly Part[] ClassicParts = CreateParts(false);
+    private static readonly Part[] SlimParts = CreateParts(true);
 
-    // 标准 64×64 皮肤布局：UV 原点 + 每个面的长宽
-    private static readonly Box[] Parts =
+    private static Part[] CreateParts(bool slim)
     {
-        // 头：8×8×8，UV (0,0)
-        new("head",  8, 8, 8,   0, -6, 0,   0, 0),
-        // 身体：8×12×4，UV (16,16)
-        new("body",  8, 12, 4,  0,  6, 0,  16, 16),
-        // 右臂：4×12×4，UV (40,16)
-        new("rarm",  4, 12, 4, -6,  6, 0,  40, 16),
-        // 左臂：4×12×4，UV (32,48)
-        new("larm",  4, 12, 4,  6,  6, 0,  32, 48),
-        // 右腿：4×12×4，UV (0,16)
-        new("rleg",  4, 12, 4, -2, 18, 0,   0, 16),
-        // 左腿：4×12×4，UV (16,48)
-        new("lleg",  4, 12, 4,  2, 18, 0,  16, 48),
-    };
+        int armWidth = slim ? 3 : 4;
+        double armX = 4 + armWidth / 2.0;
+        // Y 向下，颈部为 0；头顶 -8、脚底 24，整体中心位于 Y=8。
+        return
+        [
+            new(8, 8, 8, 0, -4, true, 0, 0, 32, 0),
+            new(8, 12, 4, 0, 6, false, 16, 16, 16, 32),
+            new(armWidth, 12, 4, -armX, 6, false, 40, 16, 40, 32),
+            new(armWidth, 12, 4, armX, 6, false, 32, 48, 48, 48),
+            new(4, 12, 4, -2, 18, false, 0, 16, 0, 32),
+            new(4, 12, 4, 2, 18, false, 16, 48, 0, 48),
+        ];
+    }
 
-    /* ---------------- 公开接口 ---------------- */
+    /// <summary>转换旧版肢体、恢复基础层不透明度，供头像、2D 和 3D 预览共同使用。</summary>
+    public static SkinImage CreateSkinImage(byte[] pixels, int width, int height, string model = "classic")
+    {
+        ValidateTexture(pixels, width, height);
+        var normalized = new byte[64 * 64 * 4];
+        pixels.AsSpan(0, width * height * 4).CopyTo(normalized);
+        if (height == 32)
+        {
+            // 旧版右半区全不透明时，它是背景色而非帽子；保留实际带透明区域的帽子。
+            bool opaque = true;
+            for (int y = 0; y < 32 && opaque; y++)
+                for (int x = 32; x < 64; x++)
+                    if (normalized[(y * 64 + x) * 4 + 3] < 128) { opaque = false; break; }
+            if (opaque)
+                for (int y = 0; y < 16; y++)
+                    for (int x = 32; x < 64; x++) normalized[(y * 64 + x) * 4 + 3] = 0;
 
-    /// <summary>渲染一帧，返回 BGRA 像素（宽 w，高 h）。</summary>
+            MirrorLimb(normalized, 0, 16, 16, 48);
+            MirrorLimb(normalized, 40, 16, 32, 48);
+        }
+
+        MakeOpaque(normalized, 0, 0, 32, 16);
+        MakeOpaque(normalized, 0, 16, 64, 16);
+        MakeOpaque(normalized, 16, 48, 32, 16);
+        return new SkinImage
+        {
+            Pixels = normalized,
+            Model = height != 32 && string.Equals(model, "slim", StringComparison.OrdinalIgnoreCase) ? "slim" : "classic",
+        };
+    }
+
+    private static void ValidateTexture(byte[] pixels, int width, int height)
+    {
+        ArgumentNullException.ThrowIfNull(pixels);
+        if (width != 64 || height is not (32 or 64) || pixels.Length < width * height * 4)
+            throw new ArgumentException("皮肤必须是完整的 64×64 或 64×32 BGRA 像素。");
+    }
+
+    private static SkinImage Prepare(SkinImage skin)
+    {
+        ArgumentNullException.ThrowIfNull(skin);
+        ValidateTexture(skin.Pixels, skin.Width, skin.Height);
+        return skin.Height == 32 ? CreateSkinImage(skin.Pixels, skin.Width, skin.Height, skin.Model) : skin;
+    }
+
+    private static void MakeOpaque(byte[] pixels, int x, int y, int width, int height)
+    {
+        for (int row = y; row < y + height; row++)
+            for (int column = x; column < x + width; column++) pixels[(row * 64 + column) * 4 + 3] = 255;
+    }
+
+    private static void MirrorLimb(byte[] pixels, int sourceU, int sourceV, int targetU, int targetV)
+    {
+        CopyMirrored(pixels, sourceU + 4, sourceV, targetU + 4, targetV, 4, 4);
+        CopyMirrored(pixels, sourceU + 8, sourceV, targetU + 8, targetV, 4, 4);
+        CopyMirrored(pixels, sourceU + 8, sourceV + 4, targetU, targetV + 4, 4, 12);
+        CopyMirrored(pixels, sourceU + 4, sourceV + 4, targetU + 4, targetV + 4, 4, 12);
+        CopyMirrored(pixels, sourceU, sourceV + 4, targetU + 8, targetV + 4, 4, 12);
+        CopyMirrored(pixels, sourceU + 12, sourceV + 4, targetU + 12, targetV + 4, 4, 12);
+    }
+
+    private static void CopyMirrored(byte[] pixels, int sx, int sy, int dx, int dy, int width, int height)
+    {
+        for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+                pixels.AsSpan(((sy + y) * 64 + sx + width - 1 - x) * 4, 4)
+                    .CopyTo(pixels.AsSpan(((dy + y) * 64 + dx + x) * 4, 4));
+    }
+
+    /// <summary>渲染一帧，返回可直接写入 WriteableBitmap 的预乘 BGRA 像素。</summary>
     public static byte[] Render(SkinImage skin, int w, int h, double yawDegrees,
-                               double pitchDegrees = 0, double headYawDegrees = 0)
+        double pitchDegrees = 0, double headYawDegrees = 0)
     {
-        var bgra = new byte[w * h * 4];
-        var depth = new float[w * h];
-        for (var i = 0; i < depth.Length; i++) depth[i] = float.NegativeInfinity;
+        skin = Prepare(skin);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(w);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(h);
+        if (!double.IsFinite(yawDegrees) || !double.IsFinite(pitchDegrees) || !double.IsFinite(headYawDegrees))
+            throw new ArgumentOutOfRangeException(nameof(yawDegrees), "旋转角度必须是有限数值。");
 
-        // 皮肤是 64 宽、32 或 64 高；统一按 64 处理
-        var sw = skin.Width;
-        var sh = skin.Height;
-
-        var yaw = yawDegrees * Math.PI / 180.0;
-        var pitch = pitchDegrees * Math.PI / 180.0;
-
-        // 模型整体缩放到画面里：24 高 ≈ 画面高度的 78%
-        var scale = h * 0.78 / 32.0;
-        var cx = w / 2.0;
-        var cy = h / 2.0;
-
-        // 收集所有面，按深度排序后再画（画家算法）
-        var faces = new List<(double depth, int[] xs, int[] ys, (byte b, byte g, byte r, byte a) uv0, (double u, double v)[] uvs)>();
-
-        foreach (var part in Parts)
+        var frame = new Frame(skin.Pixels, w, h);
+        double scale = Math.Min(h * 0.84 / 34, w * 0.86 / 18);
+        double yaw = yawDegrees * Math.PI / 180;
+        double pitch = pitchDegrees * Math.PI / 180;
+        double headYaw = headYawDegrees * Math.PI / 180;
+        foreach (var part in skin.IsSlim ? SlimParts : ClassicParts)
         {
-            // 头部额外转 headYaw：身体不动，头跟着鼠标偏
-            var partYaw = part.Name == "head" ? yaw + headYawDegrees : yaw;
-            CollectFaces(part, skin, sw, sh, partYaw, pitch, faces, scale, cx, cy);
+            RenderBox(frame, part, false, yaw, pitch, headYaw, scale);
+            RenderBox(frame, part, true, yaw, pitch, headYaw, scale);
         }
-
-        faces.Sort((a, b) => a.depth.CompareTo(b.depth));
-
-        foreach (var f in faces)
-        {
-            FillQuad(bgra, depth, w, h, f.xs, f.ys, f.uv0, f.uvs, skin, sw, sh);
-        }
-
-        return bgra;
+        frame.CompositeTransparent();
+        return frame.Pixels;
     }
 
     public static async Task<WriteableBitmap> RenderAsync(SkinImage skin, int w, int h, double yaw,
-                                                          double pitch = 0, double headYaw = 0)
+        double pitch = 0, double headYaw = 0)
     {
         var pixels = Render(skin, w, h, yaw, pitch, headYaw);
-        var bmp = new WriteableBitmap(w, h);
-        using (var stream = bmp.PixelBuffer.AsStream())
-        {
-            await stream.WriteAsync(pixels);
-        }
-        bmp.Invalidate();
-        return bmp;
+        var bitmap = new WriteableBitmap(w, h);
+        using (var stream = bitmap.PixelBuffer.AsStream()) await stream.WriteAsync(pixels);
+        bitmap.Invalidate();
+        return bitmap;
     }
 
-    /* ---------------- 立方体面 ---------------- */
-
-    private static void CollectFaces(
-        Box box, SkinImage skin, int sw, int sh,
-        double yaw, double pitch,
-        List<(double, int[], int[], (byte, byte, byte, byte), (double, double)[])> faces,
-        double scale, double cx, double cy)
+    /// <summary>正面或背面 2D 全身预览，与 3D 共用六个部件的基础层及外层 UV。</summary>
+    public static byte[] RenderBody(SkinImage skin, bool back, int scale, out int width, out int height)
     {
-        var hw = box.W / 2f;
-        var hh = box.H / 2f;
-        var hd = box.D / 2f;
-
-        // 8 个顶点：局部坐标先加上部件偏移，再统一绕模型中心旋转。
-        // Y 向下为正，和皮肤贴图的 V 方向一致。
-        var ox = box.OffsetX;
-        var oy = box.OffsetY - 12;   // 模型中心大致在腰部
-        var oz = box.OffsetZ;
-
-        // 头部绕脖子转（而不是绕腰部），不然视角一转头就飞出去了
-        if (box.Name == "head")
-            oy += box.H / 2f;
-
-        var c = new (double x, double y, double z)[]
+        skin = Prepare(skin);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scale);
+        int unitWidth = skin.IsSlim ? 14 : 16;
+        width = checked(unitWidth * scale);
+        height = checked(32 * scale);
+        var pixels = new byte[checked(width * height * 4)];
+        foreach (var part in skin.IsSlim ? SlimParts : ClassicParts)
         {
-            (-hw + ox, -hh + oy, -hd + oz), ( hw + ox, -hh + oy, -hd + oz),
-            ( hw + ox, -hh + oy,  hd + oz), (-hw + ox, -hh + oy,  hd + oz),
-            (-hw + ox,  hh + oy, -hd + oz), ( hw + ox,  hh + oy, -hd + oz),
-            ( hw + ox,  hh + oy,  hd + oz), (-hw + ox,  hh + oy,  hd + oz),
-        };
+            int x = (int)(unitWidth / 2.0 + (back ? -part.X : part.X) - part.Width / 2.0) * scale;
+            int y = (int)(part.Y - part.Height / 2.0 + 8) * scale;
+            int uOffset = back ? 2 * part.Depth + part.Width : part.Depth;
+            Blit(skin.Pixels, part.U + uOffset, part.V + part.Depth, part.Width, part.Height,
+                pixels, width, x, y, scale, false);
+            Blit(skin.Pixels, part.OuterU + uOffset, part.OuterV + part.Depth, part.Width, part.Height,
+                pixels, width, x, y, scale, true);
+        }
+        return pixels;
+    }
 
-        // UV 布局（标准 64×64）
-        var (u0, v0) = (box.U, box.V);
-        var w = (int)box.W;
-        var hh2 = (int)box.H;
-        var dd = (int)box.D;
-
-        // 每个面：[4 个顶点索引]，贴图矩形 (x,y,w,h)
-        // y 向下为正：顶点 0-3 在上（y=-hh），4-7 在下（y=+hh）。
-        // 索引顺序必须和各自 UV 矩形的朝向一致，否则脸会朝下、颜色错位。
-        var defs = new (int[] idx, int u, int v, int fw, int fh)[]
-        {
-            (new[] { 0, 1, 2, 3 }, u0 + dd,       v0,            w,  dd),    // 顶
-            (new[] { 4, 5, 6, 7 }, u0 + dd + w,   v0 + dd + hh2, w,  dd),    // 底
-            (new[] { 3, 2, 6, 7 }, u0 + dd,       v0 + dd,       w,  hh2),   // 前（+z）
-            (new[] { 1, 0, 4, 5 }, u0 + dd + w,   v0 + dd,       w,  hh2),   // 后（-z）
-            (new[] { 0, 3, 7, 4 }, u0,            v0 + dd,       dd, hh2),   // 左（-x）
-            (new[] { 2, 1, 5, 6 }, u0 + dd + w,   v0 + dd,       dd, hh2),   // 右（+x）
-        };
-
-        foreach (var (idx, u, v, fw, fh) in defs)
-        {
-            var pts = new (double x, double y, double z)[4];
-            var depthSum = 0.0;
-
-            for (var i = 0; i < 4; i++)
+    /// <summary>头像预览，返回预乘 BGRA 像素。</summary>
+    public static byte[] RenderAvatar(SkinImage skin, int size)
+    {
+        skin = Prepare(skin);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
+        var pixels = new byte[checked(size * size * 4)];
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
             {
-                var p = c[idx[i]];
-                var (rx, ry, rz) = Rotate(p.x, p.y, p.z, yaw, pitch);
-                if (box.Name == "head")
+                int source = ((8 + y * 8 / size) * 64 + 8 + x * 8 / size) * 4;
+                int target = (y * size + x) * 4;
+                Blend(pixels, target, skin.Pixels, source, 255);
+                Blend(pixels, target, skin.Pixels, source + 32 * 4, skin.Pixels[source + 32 * 4 + 3]);
+            }
+        return pixels;
+    }
+
+    private static void Blit(byte[] source, int u, int v, int width, int height,
+        byte[] target, int targetWidth, int x, int y, int scale, bool outer)
+    {
+        for (int py = 0; py < height * scale; py++)
+            for (int px = 0; px < width * scale; px++)
+            {
+                int si = ((v + py / scale) * 64 + u + px / scale) * 4;
+                int di = ((y + py) * targetWidth + x + px) * 4;
+                Blend(target, di, source, si, outer ? source[si + 3] : (byte)255);
+            }
+    }
+
+    private static void RenderBox(Frame frame, Part part, bool outer, double yaw, double pitch, double headYaw, double scale)
+    {
+        double inflation = outer ? (part.IsHead ? 0.5 : 0.25) : 0;
+        double hw = part.Width / 2.0 + inflation;
+        double hh = part.Height / 2.0 + inflation;
+        double hd = part.Depth / 2.0 + inflation;
+        double cosY = Math.Cos(yaw), sinY = Math.Sin(yaw);
+        double cosP = Math.Cos(pitch), sinP = Math.Sin(pitch);
+        double cosH = Math.Cos(headYaw), sinH = Math.Sin(headYaw);
+        Span<Point3> points = stackalloc Point3[8];
+        for (int index = 0; index < points.Length; index++)
+        {
+            double x = (index is 1 or 2 or 5 or 6 ? hw : -hw) + part.X;
+            double y = (index < 4 ? -hh : hh) + part.Y - 8;
+            double z = index is 2 or 3 or 6 or 7 ? hd : -hd;
+            if (part.IsHead)
+                (x, z) = (x * cosH - z * sinH, x * sinH + z * cosH);
+            double rx = x * cosY - z * sinY;
+            double rz = x * sinY + z * cosY;
+            points[index] = new Point3(frame.Width / 2.0 + rx * scale,
+                frame.Height / 2.0 + (y * cosP - rz * sinP) * scale, y * sinP + rz * cosP);
+        }
+
+        int u = outer ? part.OuterU : part.U;
+        int v = outer ? part.OuterV : part.V;
+        int w = part.Width, h = part.Height, d = part.Depth;
+        Span<Face> faces = stackalloc Face[]
+        {
+            new(0, 1, 2, 3, u + d, v, w, d),
+            new(7, 6, 5, 4, u + d + w, v, w, d, true),
+            new(3, 2, 6, 7, u + d, v + d, w, h),
+            new(1, 0, 4, 5, u + 2 * d + w, v + d, w, h),
+            new(0, 3, 7, 4, u, v + d, d, h),
+            new(2, 1, 5, 6, u + d + w, v + d, d, h),
+        };
+        foreach (var face in faces)
+        {
+            int top = face.FlipV ? face.V + face.Height : face.V;
+            int bottom = face.FlipV ? face.V : face.V + face.Height;
+            var a = WithUv(points[face.A], face.U, top);
+            var b = WithUv(points[face.B], face.U + face.Width, top);
+            var c = WithUv(points[face.C], face.U + face.Width, bottom);
+            var e = WithUv(points[face.D], face.U, bottom);
+            // 基础层只画朝向观察者的面；外层保留双面，正确显示衣服边缘与内侧。
+            if (!outer && Edge(a, b, c.X, c.Y) <= 1e-9) continue;
+            frame.FillTriangle(a, b, c, face, outer);
+            frame.FillTriangle(a, c, e, face, outer);
+        }
+    }
+
+    private static Vertex WithUv(Point3 point, double u, double v) => new(point.X, point.Y, point.Z, u, v);
+    private static double Edge(Vertex a, Vertex b, double x, double y) => (b.X - a.X) * (y - a.Y) - (b.Y - a.Y) * (x - a.X);
+    private static bool IsTopLeft(Vertex a, Vertex b) => b.Y < a.Y || b.Y == a.Y && b.X > a.X;
+    private static bool Inside(double edge, bool topLeft) => edge > 1e-9 || Math.Abs(edge) <= 1e-9 && topLeft;
+
+    private static void Blend(byte[] target, int di, byte[] source, int si, byte alpha)
+    {
+        if (alpha == 0) return;
+        int inverse = 255 - alpha;
+        target[di] = (byte)((source[si] * alpha + target[di] * inverse + 127) / 255);
+        target[di + 1] = (byte)((source[si + 1] * alpha + target[di + 1] * inverse + 127) / 255);
+        target[di + 2] = (byte)((source[si + 2] * alpha + target[di + 2] * inverse + 127) / 255);
+        target[di + 3] = (byte)(alpha + (target[di + 3] * inverse + 127) / 255);
+    }
+
+    private sealed class Frame
+    {
+        private readonly byte[] _texture;
+        private readonly float[] _depth;
+        private int[]? _fragmentHeads;
+        private List<Fragment>? _fragments;
+        public byte[] Pixels { get; }
+        public int Width { get; }
+        public int Height { get; }
+
+        public Frame(byte[] texture, int width, int height)
+        {
+            Width = width;
+            Height = height;
+            _texture = texture;
+            Pixels = new byte[checked(width * height * 4)];
+            _depth = new float[checked(width * height)];
+            Array.Fill(_depth, float.NegativeInfinity);
+        }
+
+        public void FillTriangle(Vertex a, Vertex b, Vertex c, Face face, bool outer)
+        {
+            double area = Edge(a, b, c.X, c.Y);
+            if (Math.Abs(area) < 1e-9) return;
+            if (area < 0) { (b, c) = (c, b); area = -area; }
+            int minX = Math.Max(0, (int)Math.Ceiling(Math.Min(a.X, Math.Min(b.X, c.X)) - 0.5));
+            int maxX = Math.Min(Width - 1, (int)Math.Floor(Math.Max(a.X, Math.Max(b.X, c.X)) - 0.5));
+            int minY = Math.Max(0, (int)Math.Ceiling(Math.Min(a.Y, Math.Min(b.Y, c.Y)) - 0.5));
+            int maxY = Math.Min(Height - 1, (int)Math.Floor(Math.Max(a.Y, Math.Max(b.Y, c.Y)) - 0.5));
+            bool topLeftA = IsTopLeft(b, c), topLeftB = IsTopLeft(c, a), topLeftC = IsTopLeft(a, b);
+            double inverseArea = 1 / area;
+            for (int y = minY; y <= maxY; y++)
+            {
+                double ea = Edge(b, c, minX + 0.5, y + 0.5);
+                double eb = Edge(c, a, minX + 0.5, y + 0.5);
+                double ec = Edge(a, b, minX + 0.5, y + 0.5);
+                for (int x = minX; x <= maxX; x++, ea -= c.Y - b.Y, eb -= a.Y - c.Y, ec -= b.Y - a.Y)
                 {
-                    // 绕脖子转完之后，再把头部整体挪回头该在的位置
-                    var (hx, hy, hz) = Rotate(0, 0, 0, yaw, pitch);
-                    ry -= 0;
+                    // 共享边仅归属一个三角形，避免半透明外层的对角线被重复混合。
+                    if (!Inside(ea, topLeftA) || !Inside(eb, topLeftB) || !Inside(ec, topLeftC)) continue;
+                    double wa = ea * inverseArea, wb = eb * inverseArea, wc = ec * inverseArea;
+                    double depth = wa * a.Z + wb * b.Z + wc * c.Z;
+                    int pixel = y * Width + x;
+                    if (depth <= _depth[pixel] + 1e-5) continue;
+                    int u = Math.Clamp((int)Math.Floor(wa * a.U + wb * b.U + wc * c.U), face.U, face.U + face.Width - 1);
+                    int v = Math.Clamp((int)Math.Floor(wa * a.V + wb * b.V + wc * c.V), face.V, face.V + face.Height - 1);
+                    int source = (v * 64 + u) * 4;
+                    byte alpha = outer ? _texture[source + 3] : (byte)255;
+                    if (alpha == 0) continue;
+                    if (alpha == 255)
+                    {
+                        _depth[pixel] = (float)depth;
+                        Buffer.BlockCopy(_texture, source, Pixels, pixel * 4, 3);
+                        Pixels[pixel * 4 + 3] = 255;
+                    }
+                    else AddTransparent(pixel, depth, source);
                 }
-                pts[i] = (rx, ry, rz);
-                depthSum += rz;
             }
-
-            // 不做背面剔除：立方体只有 6 个面，全画一遍
-            // 靠深度排序决定遮挡关系，比绕序判断稳（绕序方向容易写反）
-
-
-            var xs = new int[4];
-            var ys = new int[4];
-            for (var i = 0; i < 4; i++)
-            {
-                xs[i] = (int)Math.Round(cx + pts[i].x * scale);
-                ys[i] = (int)Math.Round(cy + pts[i].y * scale);
-            }
-
-            var uv0 = (skin.Pixels.Length > 0 ? (byte)0 : (byte)0, (byte)0, (byte)0, (byte)255);
-            var uvs = new (double, double)[]
-            {
-                (u, v),
-                (u + fw, v),
-                (u + fw, v + fh),
-                (u, v + fh),
-            };
-
-            faces.Add((depthSum / 4, xs, ys, uv0, uvs));
         }
-    }
 
-    private static (double x, double y, double z) Rotate(double x, double y, double z, double yaw, double pitch)
-    {
-        // 绕 Y 轴
-        var cy = Math.Cos(yaw);
-        var sy = Math.Sin(yaw);
-        var x1 = x * cy - z * sy;
-        var z1 = x * sy + z * cy;
-
-        // 绕 X 轴
-        var cp = Math.Cos(pitch);
-        var sp = Math.Sin(pitch);
-        var y1 = y * cp - z1 * sp;
-        var z2 = y * sp + z1 * cp;
-
-        return (x1, y1, z2);
-    }
-
-    /* ---------------- 像素填充 ---------------- */
-
-    private static void FillQuad(
-        byte[] bgra, float[] depth, int w, int h,
-        int[] xs, int[] ys,
-        (byte b, byte g, byte r, byte a) _,
-        (double u, double v)[] uvs,
-        SkinImage skin, int sw, int sh)
-    {
-        // 四边形拆成两个三角形，各自做重心插值。
-        // 之前两个三角形共用前三个顶点的重心坐标，第二个三角形算出来的 UV
-        // 会跑到 [0,1] 外面，整片被丢掉，画面上就只剩三角形边线。
-        FillTriangle(bgra, w, h, xs[0], ys[0], xs[1], ys[1], xs[2], ys[2],
-                     uvs[0], uvs[1], uvs[2], skin, sw, sh);
-
-        FillTriangle(bgra, w, h, xs[0], ys[0], xs[2], ys[2], xs[3], ys[3],
-                     uvs[0], uvs[2], uvs[3], skin, sw, sh);
-    }
-
-    private static void FillTriangle(
-        byte[] bgra, int w, int h,
-        int x1, int y1, int x2, int y2, int x3, int y3,
-        (double u, double v) uv1, (double u, double v) uv2, (double u, double v) uv3,
-        SkinImage skin, int sw, int sh)
-    {
-        // 有符号面积，正负都可以，用符号统一归一化
-        var area = (double)(x2 - x1) * (y3 - y1) - (double)(x3 - x1) * (y2 - y1);
-        if (Math.Abs(area) < 1e-6) return;
-
-        // 正面积按 0-1-2 的顺序，负面积就全部取反，效果一样
-        if (area < 0)
+        private void AddTransparent(int pixel, double depth, int source)
         {
-            (x2, x3) = (x3, x2);
-            (y2, y3) = (y3, y2);
-            (uv2, uv3) = (uv3, uv2);
-            area = -area;
+            if (_fragmentHeads is null)
+            {
+                _fragmentHeads = new int[_depth.Length];
+                Array.Fill(_fragmentHeads, -1);
+                _fragments = new List<Fragment>();
+            }
+            var fragments = _fragments!;
+            int head = _fragmentHeads[pixel];
+            int index = fragments.Count;
+            if (head < 0 || depth < fragments[head].Depth)
+            {
+                fragments.Add(new Fragment(depth, source, head));
+                _fragmentHeads[pixel] = index;
+                return;
+            }
+            int previous = head;
+            while (fragments[previous].Next >= 0 && fragments[fragments[previous].Next].Depth <= depth)
+                previous = fragments[previous].Next;
+            var old = fragments[previous];
+            fragments.Add(new Fragment(depth, source, old.Next));
+            fragments[previous] = old with { Next = index };
         }
 
-        var minX = Math.Max(0, Math.Min(x1, Math.Min(x2, x3)));
-        var maxX = Math.Min(w - 1, Math.Max(x1, Math.Max(x2, x3)));
-        var minY = Math.Max(0, Math.Min(y1, Math.Min(y2, y3)));
-        var maxY = Math.Min(h - 1, Math.Max(y1, Math.Max(y2, y3)));
-
-        for (var py = minY; py <= maxY; py++)
+        public void CompositeTransparent()
         {
-            for (var px = minX; px <= maxX; px++)
-            {
-                // 用像素中心做采样，避免整块偏移半个像素
-                var fx = px + 0.5;
-                var fy = py + 0.5;
-
-                var w1 = ((double)(x3 - x2) * (fy - y2) - (double)(y3 - y2) * (fx - x2)) / area;
-                var w2 = ((double)(x1 - x3) * (fy - y3) - (double)(y1 - y3) * (fx - x3)) / area;
-                var w3 = 1 - w1 - w2;
-
-                if (w1 < -0.001 || w2 < -0.001 || w3 < -0.001) continue;
-
-                var su = w1 * uv1.u + w2 * uv2.u + w3 * uv3.u;
-                var sv = w1 * uv1.v + w2 * uv2.v + w3 * uv3.v;
-
-                var sx = (int)su;
-                var sy = (int)sv;
-                if (sx < 0 || sy < 0 || sx >= sw || sy >= sh) continue;
-
-                var si = (sy * sw + sx) * 4;
-                if (si + 3 >= skin.Pixels.Length) continue;
-                if (skin.Pixels[si + 3] == 0) continue;   // 透明像素跳过
-
-                var di = (py * w + px) * 4;
-                bgra[di + 0] = skin.Pixels[si + 0];
-                bgra[di + 1] = skin.Pixels[si + 1];
-                bgra[di + 2] = skin.Pixels[si + 2];
-                bgra[di + 3] = 255;
-            }
+            if (_fragmentHeads is null) return;
+            // 不透明面全部完成后，再按每个像素的实际深度由远到近合成；不能依赖整面的平均深度。
+            var fragments = _fragments!;
+            for (int pixel = 0; pixel < _fragmentHeads.Length; pixel++)
+                for (int index = _fragmentHeads[pixel]; index >= 0; index = fragments[index].Next)
+                {
+                    var fragment = fragments[index];
+                    if (fragment.Depth > _depth[pixel] + 1e-5)
+                        Blend(Pixels, pixel * 4, _texture, fragment.TextureOffset, _texture[fragment.TextureOffset + 3]);
+                }
         }
     }
-
 }

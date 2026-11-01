@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -214,11 +214,8 @@ public static class SkinService
 
         try
         {
-            var (pixels, w, h) = await LoadSkinAsync(path);
-            var dst = new byte[size * size * 4];
-
-            Blit(pixels, w, h, 8, 8, 8, 8, dst, size, size, 0, 0, size, size);      // 头
-            Blit(pixels, w, h, 40, 8, 8, 8, dst, size, size, 0, 0, size, size);     // 帽子层
+            var skin = await LoadSkinAsync(path, model);
+            var dst = SkinRenderer3D.RenderAvatar(skin, size);
 
             var image = await ToImageAsync(dst, size, size);
             Cache[key] = image;
@@ -240,52 +237,13 @@ public static class SkinService
         var path = ResolveSkin(skinPath, model);
         if (path.Length == 0) return null;
 
-        var slim = string.Equals(model, "slim", StringComparison.OrdinalIgnoreCase);
         var key = $"b|{path}|{model}|{back}|{scale}|{Stamp(path)}";
         if (Cache.TryGetValue(key, out var cached)) return cached;
 
         try
         {
-            var (pixels, w, h) = await LoadSkinAsync(path);
-
-            var armW = slim ? 3 : 4;
-            var unitW = armW + 8 + armW;      // 4+8+4 = 16
-            var unitH = 8 + 12 + 12;          // 32
-
-            var dst = new byte[unitW * scale * unitH * scale * 4];
-            var dw = unitW * scale;
-            var dh = unitH * scale;
-
-            int RightArmX = 0;
-            int BodyX = armW;
-            int LeftArmX = armW + 8;
-
-            if (!back)
-            {
-                Blit(pixels, w, h, 8, 8, 8, 8, dst, dw, dh, BodyX * scale, 0, 8 * scale, 8 * scale);          // 头
-                Blit(pixels, w, h, 40, 8, 8, 8, dst, dw, dh, BodyX * scale, 0, 8 * scale, 8 * scale);         // 帽子
-
-                Blit(pixels, w, h, 20, 20, 8, 12, dst, dw, dh, BodyX * scale, 8 * scale, 8 * scale, 12 * scale);   // 身体
-
-                Blit(pixels, w, h, 44, 20, armW, 12, dst, dw, dh, RightArmX * scale, 8 * scale, armW * scale, 12 * scale);
-                Blit(pixels, w, h, 36, 52, armW, 12, dst, dw, dh, LeftArmX * scale, 8 * scale, armW * scale, 12 * scale);
-
-                Blit(pixels, w, h, 4, 20, 4, 12, dst, dw, dh, BodyX * scale, 20 * scale, 4 * scale, 12 * scale);
-                Blit(pixels, w, h, 20, 52, 4, 12, dst, dw, dh, (BodyX + 4) * scale, 20 * scale, 4 * scale, 12 * scale);
-            }
-            else
-            {
-                Blit(pixels, w, h, 24, 8, 8, 8, dst, dw, dh, BodyX * scale, 0, 8 * scale, 8 * scale);          // 后脑
-                Blit(pixels, w, h, 56, 8, 8, 8, dst, dw, dh, BodyX * scale, 0, 8 * scale, 8 * scale);          // 帽子背面
-
-                Blit(pixels, w, h, 32, 20, 8, 12, dst, dw, dh, BodyX * scale, 8 * scale, 8 * scale, 12 * scale);
-
-                Blit(pixels, w, h, 48, 20, armW, 12, dst, dw, dh, RightArmX * scale, 8 * scale, armW * scale, 12 * scale);
-                Blit(pixels, w, h, 40, 52, armW, 12, dst, dw, dh, LeftArmX * scale, 8 * scale, armW * scale, 12 * scale);
-
-                Blit(pixels, w, h, 8, 20, 4, 12, dst, dw, dh, BodyX * scale, 20 * scale, 4 * scale, 12 * scale);
-                Blit(pixels, w, h, 24, 52, 4, 12, dst, dw, dh, (BodyX + 4) * scale, 20 * scale, 4 * scale, 12 * scale);
-            }
+            var skin = await LoadSkinAsync(path, model);
+            var dst = SkinRenderer3D.RenderBody(skin, back, scale, out int dw, out int dh);
 
             var image = await ToImageAsync(dst, dw, dh);
             Cache[key] = image;
@@ -318,7 +276,7 @@ public static class SkinService
         try { return File.GetLastWriteTimeUtc(path).Ticks; } catch { return 0; }
     }
 
-    /// <summary>给 3D 渲染用：拿到未缩放的原始皮肤像素。</summary>
+    /// <summary>给 3D 渲染用：读取规范化后的皮肤和实际模型。</summary>
     public static async Task<SkinRenderer3D.SkinImage?> LoadSkinImageAsync(string? skinPath, string model)
     {
         var path = ResolveSkin(skinPath, model);
@@ -326,8 +284,7 @@ public static class SkinService
 
         try
         {
-            var (pixels, w, h) = await LoadSkinAsync(path);
-            return new SkinRenderer3D.SkinImage { Pixels = pixels, Width = w, Height = h };
+            return await LoadSkinAsync(path, model);
         }
         catch (Exception ex)
         {
@@ -336,7 +293,7 @@ public static class SkinService
         }
     }
 
-    private static async Task<(byte[] pixels, int w, int h)> LoadSkinAsync(string path)
+    private static async Task<SkinRenderer3D.SkinImage> LoadSkinAsync(string path, string model)
     {
         var file = await StorageFile.GetFileFromPathAsync(path);
         using var stream = await file.OpenAsync(FileAccessMode.Read);
@@ -349,77 +306,16 @@ public static class SkinService
             ExifOrientationMode.IgnoreExifOrientation,
             ColorManagementMode.DoNotColorManage);
 
-        return (data.DetachPixelData(), (int)decoder.PixelWidth, (int)decoder.PixelHeight);
+        return SkinRenderer3D.CreateSkinImage(
+            data.DetachPixelData(), (int)decoder.PixelWidth, (int)decoder.PixelHeight, model);
     }
 
-    /// <summary>把源图的一块矩形缩放贴到目标图上（最近邻，Minecraft 的像素味）。</summary>
-    private static void Blit(
-        byte[] src, int sw, int sh, int sx, int sy, int srcW, int srcH,
-        byte[] dst, int dw, int dh, int dx, int dy, int destW, int destH)
+    private static async Task<ImageSource> ToImageAsync(byte[] premultipliedBgra, int w, int h)
     {
-        if (destW <= 0 || destH <= 0 || sw <= 0 || sh <= 0) return;
-
-        for (var y = 0; y < destH; y++)
-        {
-            var ty = dy + y;
-            if (ty < 0 || ty >= dh) continue;
-
-            var syy = sy + (int)((long)y * srcH / destH);
-            syy = Math.Clamp(syy, 0, sh - 1);
-
-            for (var x = 0; x < destW; x++)
-            {
-                var tx = dx + x;
-                if (tx < 0 || tx >= dw) continue;
-
-                var sxx = sx + (int)((long)x * srcW / destW);
-                sxx = Math.Clamp(sxx, 0, sw - 1);
-
-                var si = (syy * sw + sxx) * 4;
-                var di = (ty * dw + tx) * 4;
-
-                byte a = src[si + 3];
-                if (a == 0) continue;
-
-                if (a == 255)
-                {
-                    dst[di] = src[si];
-                    dst[di + 1] = src[si + 1];
-                    dst[di + 2] = src[si + 2];
-                    dst[di + 3] = 255;
-                    continue;
-                }
-
-                // 半透明像素按 alpha 叠加到已有内容上（帽子层就是靠这个）
-                var sa = a / 255f;
-                var da = dst[di + 3] / 255f;
-                var oa = sa + da * (1 - sa);
-                if (oa <= 0) continue;
-
-                dst[di] = (byte)((src[si] * sa + dst[di] * da * (1 - sa)) / oa);
-                dst[di + 1] = (byte)((src[si + 1] * sa + dst[di + 1] * da * (1 - sa)) / oa);
-                dst[di + 2] = (byte)((src[si + 2] * sa + dst[di + 2] * da * (1 - sa)) / oa);
-                dst[di + 3] = (byte)(oa * 255);
-            }
-        }
-    }
-
-    private static async Task<ImageSource> ToImageAsync(byte[] straightBgra, int w, int h)
-    {
-        // SoftwareBitmap 用「预乘 alpha」，Straight 的像素要先乘一遍，否则帽子边缘会发黑
-        for (var i = 0; i < straightBgra.Length; i += 4)
-        {
-            var a = straightBgra[i + 3];
-            if (a == 255) continue;
-            straightBgra[i] = (byte)(straightBgra[i] * a / 255);
-            straightBgra[i + 1] = (byte)(straightBgra[i + 1] * a / 255);
-            straightBgra[i + 2] = (byte)(straightBgra[i + 2] * a / 255);
-        }
-
         var bitmap = new SoftwareBitmap(BitmapPixelFormat.Bgra8, w, h, BitmapAlphaMode.Premultiplied);
         using (var writer = new DataWriter())
         {
-            writer.WriteBytes(straightBgra);
+            writer.WriteBytes(premultipliedBgra);
             bitmap.CopyFromBuffer(writer.DetachBuffer());
         }
 

@@ -217,7 +217,6 @@ public sealed class OnboardingFlow
         panel.Children.Add(status);
 
         var dialog = Dialog("再登录一个 XML 账号", panel, close: "先跳过");
-        FontService.ApplyToDialog(dialog);
 
         async Task DoAuthAsync(bool register)
         {

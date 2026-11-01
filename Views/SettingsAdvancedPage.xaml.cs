@@ -23,8 +23,7 @@ public sealed partial class SettingsAdvancedPage : Page
         _savedGameArgs = NormalizeArgs(s.ExtraGameArgs);
         _loading = false;
         UpdateSaveButtons();
-        var version = typeof(App).Assembly.GetName().Version;
-        AboutText.Text = $"XML Minecraft Launcher {version?.ToString(3) ?? "1.0.0"} · WinUI 3\n配置目录：{Paths.AppData}";
+        AboutText.Text = $"XML Minecraft Launcher {RemoteService.DisplayVersion} · WinUI 3\n配置目录：{Paths.AppData}";
     }
 
     private static string NormalizeArgs(string? text) => text?.Trim() ?? "";

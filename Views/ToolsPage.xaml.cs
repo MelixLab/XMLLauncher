@@ -38,12 +38,12 @@ public sealed partial class ToolsPage : Page
         };
     }
 
-    private void UpdateContentPadding() => PageContent.Padding = ActualWidth < 720
+    private void UpdateContentPadding() => PageContent.Padding = ActualWidth < 640
         ? new Thickness(16, 20, 16, 24) : new Thickness(32, 28, 32, 24);
 
     private void ToolCards_PointerMoved(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        foreach (var card in new[] { MemCard, TranslateCard, SeedCard, CacheCard })
+        foreach (var card in ToolCardsHost.Children.OfType<Controls.FeatureCard>())
         {
             var point = e.GetCurrentPoint(card).Position;
             card.UpdateReveal(point.X, point.Y);
@@ -52,7 +52,7 @@ public sealed partial class ToolsPage : Page
 
     private void ToolCards_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
     {
-        foreach (var card in new[] { MemCard, TranslateCard, SeedCard, CacheCard }) card.ResetReveal();
+        foreach (var card in ToolCardsHost.Children.OfType<Controls.FeatureCard>()) card.ResetReveal();
     }
 
     private static void Toast(string msg) => MainWindow.Instance?.Toast(msg);
@@ -604,8 +604,7 @@ public sealed partial class ToolsPage : Page
 
     private void RefreshLink()
     {
-        LinkCard.Status = "粘贴任意 http(s) 地址，交给内置下载引擎（单文件分块并发）\n" +
-                           $"当前线程数 {AppState.Settings.DownloadThreads}";
+        LinkCard.Status = "粘贴任意 http(s) 地址，交给内置下载引擎（单文件分块并发）";
     }
 
     private async void LinkDownload_Click(object sender, RoutedEventArgs e)
@@ -631,14 +630,10 @@ public sealed partial class ToolsPage : Page
         };
 
         var threadsBox = new ComboBox { Header = "线程数", MinWidth = 140 };
-        foreach (var n in new[] { 4, 8, 16, 32 }) threadsBox.Items.Add(n + " 线程");
-        threadsBox.SelectedIndex = AppState.Settings.DownloadThreads switch
-        {
-            <= 4 => 0,
-            <= 8 => 1,
-            <= 16 => 2,
-            _ => 3,
-        };
+        int currentThreads = Math.Clamp(AppState.Settings.DownloadThreads, 1, 32);
+        var threadOptions = new[] { 4, 8, 16, 32, currentThreads }.Distinct().OrderBy(n => n).ToArray();
+        foreach (var n in threadOptions) threadsBox.Items.Add(n + " 线程");
+        threadsBox.SelectedIndex = Array.IndexOf(threadOptions, currentThreads);
 
         var dialog = new ContentDialog
         {
@@ -674,7 +669,7 @@ public sealed partial class ToolsPage : Page
             return;
         }
 
-        int threads = threadsBox.SelectedIndex switch { 0 => 4, 1 => 8, 2 => 16, _ => 32 };
+        int threads = threadOptions[threadsBox.SelectedIndex];
 
         AppState.Settings.DownloadThreads = threads;
         SettingsService.Save();

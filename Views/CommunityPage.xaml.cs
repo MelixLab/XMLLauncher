@@ -710,6 +710,7 @@ public sealed partial class CommunityPage : Page
             CloseButtonText = "取消",
             DefaultButton = ContentDialogButton.Close,
         };
+        FontService.ApplyToDialog(confirm);
         if (await confirm.ShowAsync() != ContentDialogResult.Primary) return;
 
         try

@@ -54,6 +54,30 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="开发者" Style="{StaticResource SettingsGroupHeadingStyle}"/>
+                    <Border Style="{StaticResource SettingsItemCardStyle}">
+                        <StackPanel Spacing="16">
+                            <controls:SettingsRow IconGlyph="&#xE943;" Title="XML Minecraft Launcher" Description="项目源代码与问题反馈。">
+                                <controls:SettingsRow.Editor>
+                                    <HyperlinkButton Content="Github 仓库" NavigateUri="https://github.com/MelixLab/XMLLauncher"
+                                                     Style="{StaticResource LinkHyperlinkStyle}" AutomationProperties.Name="打开 XMLLauncher GitHub 仓库"/>
+                                </controls:SettingsRow.Editor>
+                            </controls:SettingsRow>
+                            <Rectangle Height="1" Fill="{ThemeResource DividerBrush}"/>
+                            <controls:SettingsRow IconGlyph="&#xE77B;" Title="开发者">
+                                <controls:SettingsRow.Editor>
+                                    <controls:AdaptiveWrapPanel Spacing="16">
+                                        <HyperlinkButton Content="MelixLab" NavigateUri="https://github.com/MelixLab"
+                                                         Style="{StaticResource LinkHyperlinkStyle}" AutomationProperties.Name="打开 MelixLab 的 GitHub 主页"/>
+                                        <HyperlinkButton Content="RZeroF1" NavigateUri="https://github.com/RZeroF1"
+                                                         Style="{StaticResource LinkHyperlinkStyle}" AutomationProperties.Name="打开 RZeroF1 的 GitHub 主页"/>
+                                    </controls:AdaptiveWrapPanel>
+                                </controls:SettingsRow.Editor>
+                            </controls:SettingsRow>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
             </StackPanel>
         </Grid>
     </ScrollViewer>

@@ -5,7 +5,7 @@ using Microsoft.UI.Xaml.Input;
 
 namespace LinxLauncher.Controls;
 
-/// <summary>版本详情、联机大厅与创建房间共用 Windows 设置式标题，交互由原生 BreadcrumbBar 提供。</summary>
+/// <summary>版本、联机与账户页面共用 Windows 设置式标题，交互由原生 BreadcrumbBar 提供。</summary>
 public sealed partial class PageBreadcrumb : UserControl
 {
     public static readonly DependencyProperty ParentTitleProperty = DependencyProperty.Register(

@@ -7,7 +7,7 @@ using Windows.UI.ViewManagement;
 namespace LinxLauncher.Services;
 
 /// <summary>
-/// 版本列表/详情、联机入口/大厅共用原生 Frame 导航。
+/// 版本列表/详情、联机入口/大厅、账户/皮肤共用原生 Frame 导航。
 /// 动画由 NavigationThemeTransition 与 SlideNavigationTransitionInfo 执行。
 /// </summary>
 public sealed class ViewTransition
@@ -31,7 +31,7 @@ public sealed class ViewTransition
         Grid.SetRow(_frame, Grid.GetRow(first));
         foreach (var view in _views) parent.Children.Remove(view);
         parent.Children.Add(_frame);
-        _frame.ContentTransitions = new TransitionCollection { new NavigationThemeTransition() };
+        _frame.ContentTransitions = new TransitionCollection();
         Reset(first);
         owner.Unloaded += (_, _) => Stop();
     }
@@ -41,6 +41,8 @@ public sealed class ViewTransition
         Validate(target);
         if (_current != target)
         {
+            if (_frame.ContentTransitions.Count == 0)
+                _frame.ContentTransitions.Add(new NavigationThemeTransition());
             bool goBack = !forward && target == _first && _frame.CanGoBack;
             NavigationTransitionInfo transition = _settings.AnimationsEnabled
                 ? new SlideNavigationTransitionInfo
@@ -75,8 +77,12 @@ public sealed class ViewTransition
         _current = target;
     }
 
-    // 页面离开时取消排队的焦点恢复；原生 Frame 自己管理动画生命周期。
-    public void Stop() => ++_generation;
+    public void Stop()
+    {
+        ++_generation;
+        // 缓存页面重载也会触发原生 Load 转场，不能保留上一次子导航的横向动画。
+        _frame.ContentTransitions.Clear();
+    }
 
     public bool IsShowing(FrameworkElement target) => _current == target;
 
