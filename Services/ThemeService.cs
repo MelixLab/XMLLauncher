@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.UI.Dispatching;
@@ -688,7 +688,13 @@ public static class ThemeService
         }
         catch { }
 
-        return new SolidColorBrush(Colors.Transparent);
+        // 走到这里说明所有字典里都没找到这支画笔。
+        // 返回透明会让依赖它的控件（侧栏展开背景等）直接消失，
+        // 且 LiveBrushes 会把透明笔缓存住，之后字典补上了也救不回来。
+        // 至少给一个实色兜底，深浅各一。
+        return new SolidColorBrush(IsDark
+            ? Color.FromArgb(255, 0x2B, 0x2B, 0x2B)
+            : Color.FromArgb(255, 0xF2, 0xF2, 0xF2));
     }
 
     /// <summary>取一支样式（样式本身不分深浅，里面的颜色用 {ThemeResource} 会自己跟着走）。</summary>

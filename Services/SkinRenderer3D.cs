@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -36,7 +36,7 @@ public static class SkinRenderer3D
     private static readonly Box[] Parts =
     {
         // 头：8×8×8，UV (0,0)
-        new("head",  8, 8, 8,   0, -4, 0,   0, 0),
+        new("head",  8, 8, 8,   0, -6, 0,   0, 0),
         // 身体：8×12×4，UV (16,16)
         new("body",  8, 12, 4,  0,  6, 0,  16, 16),
         // 右臂：4×12×4，UV (40,16)
