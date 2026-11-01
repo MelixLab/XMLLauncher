@@ -133,8 +133,8 @@ public sealed partial class CloudSavesPage : Page
             {
                 Padding = new Thickness(16, 12, 16, 12),
                 ColumnSpacing = 12,
-                Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["CardBackgroundBrush"],
-                BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["DividerBrush"],
+                Background = ThemeService.Brush("CardBackgroundBrush"),
+                BorderBrush = ThemeService.Brush("DividerBrush"),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(8),
             };
@@ -154,7 +154,7 @@ public sealed partial class CloudSavesPage : Page
                 Text = $"{FormatSize(s.Size)} · {s.Version} · {FormatTime(s.UpdatedAt)}",
                 FontSize = 12.5,
                 FontFamily = FontService.BodyFont,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SecondaryTextBrush"],
+                Foreground = ThemeService.Brush("SecondaryTextBrush"),
             });
             Grid.SetColumn(info, 0);
             card.Children.Add(info);
@@ -281,7 +281,7 @@ public sealed partial class CloudSavesPage : Page
                     Padding = new Thickness(12, 10, 12, 10),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(6),
-                    BorderBrush = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["DividerBrush"],
+                    BorderBrush = ThemeService.Brush("DividerBrush"),
                 };
 
                 var g = new Grid { ColumnSpacing = 10 };
@@ -568,7 +568,7 @@ public sealed partial class CloudSavesPage : Page
             Text = "同一个世界在云端只保留一份，这次上传会覆盖旧的那份。",
             FontSize = 12.5,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SecondaryTextBrush"],
+            Foreground = ThemeService.Brush("SecondaryTextBrush"),
         };
 
         var dialog = new ContentDialog

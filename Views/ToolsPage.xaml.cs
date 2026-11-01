@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -63,6 +63,8 @@ public sealed partial class ToolsPage : Page
         TranslateCard.Header = "模组汉化";
         SeedCard.Header = "种子地图";
         CacheCard.Header = "缓存清理";
+        LinkCard.Header = "链接下载";
+        RefreshLink();
     }
 
     /* ==================== 内存整理 ==================== */
@@ -595,6 +597,126 @@ public sealed partial class ToolsPage : Page
                 bw.Write(rgb[i]);       // R
             }
             if (pad.Length > 0) bw.Write(pad);
+        }
+    }
+
+    /* ==================== 链接下载 ==================== */
+
+    private void RefreshLink()
+    {
+        LinkCard.Status = "粘贴任意 http(s) 地址，交给内置下载引擎（单文件分块并发）\n" +
+                           $"当前线程数 {AppState.Settings.DownloadThreads}";
+    }
+
+    private async void LinkDownload_Click(object sender, RoutedEventArgs e)
+    {
+        if (!IsLoaded || XamlRoot is not { } root) return;
+
+        var input = new TextBox
+        {
+            PlaceholderText = "https://example.com/file.zip",
+            AcceptsReturn = true,
+            TextWrapping = TextWrapping.Wrap,
+            Height = 110,
+            FontFamily = FontService.BodyFont,
+        };
+
+        var hint = new TextBlock
+        {
+            Text = "一行一个地址。下载任务会出现在「下载中心」，可以随时取消。",
+            FontSize = 12.5,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = ThemeService.Brush("SecondaryTextBrush"),
+            FontFamily = FontService.BodyFont,
+        };
+
+        var threadsBox = new ComboBox { Header = "线程数", MinWidth = 140 };
+        foreach (var n in new[] { 4, 8, 16, 32 }) threadsBox.Items.Add(n + " 线程");
+        threadsBox.SelectedIndex = AppState.Settings.DownloadThreads switch
+        {
+            <= 4 => 0,
+            <= 8 => 1,
+            <= 16 => 2,
+            _ => 3,
+        };
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = root,
+            Title = "链接下载",
+            Content = new StackPanel { Spacing = 10, Children = { input, hint, threadsBox } },
+            PrimaryButtonText = "开始下载",
+            CloseButtonText = "取消",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        FontService.ApplyToDialog(dialog);
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+
+        var links = LinkDownloader.SplitLinks(input.Text).ToList();
+        if (links.Count == 0)
+        {
+            LinkCard.Status = "没有读到有效地址";
+            return;
+        }
+
+        // 保存目录
+        var picker = new Windows.Storage.Pickers.FolderPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(MainWindow.Instance));
+        picker.FileTypeFilter.Add("*");
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is null) return;
+
+        var jobs = LinkDownloader.BuildJobs(links, folder.Path);
+        if (jobs.Count == 0)
+        {
+            LinkCard.Status = "地址格式不对，只支持 http / https";
+            return;
+        }
+
+        int threads = threadsBox.SelectedIndex switch { 0 => 4, 1 => 8, 2 => 16, _ => 32 };
+
+        AppState.Settings.DownloadThreads = threads;
+        SettingsService.Save();
+
+        // 和模组下载同一套：开任务 → 跳到下载中心 → 上报 → 收尾
+        var job = AppState.Downloads.Begin(
+            jobs.Count == 1 ? $"{jobs[0].Label} · 链接" : $"{jobs.Count} 个链接 · 下载",
+            $"{threads} 线程");
+
+        MainWindow.Instance?.NavigateTo("downloads");
+
+        try
+        {
+            var (ok, failed, error) = await LinkDownloader.RunAsync(jobs, threads, job, job.Cts.Token);
+
+            if (error.Length > 0)
+            {
+                AppState.Downloads.Finish(job, false, error);
+                MainWindow.Instance?.Toast($"下载结束：{failed} 个失败", true);
+            }
+            else
+            {
+                AppState.Downloads.Finish(job, true);
+                MainWindow.Instance?.Toast($"下载完成（{ok} 个文件）");
+            }
+
+            LinkCard.Status = error.Length == 0
+                ? $"上次下载 {ok} 个文件成功，存到 {folder.Path}"
+                : $"完成 {ok} 个，失败 {failed} 个：{error}";
+            Log.Info($"链接下载：{ok}/{jobs.Count} → {folder.Path}");
+        }
+        catch (OperationCanceledException) when (job.Cts.IsCancellationRequested)
+        {
+            AppState.Downloads.Finish(job, false, "已取消");
+            LinkCard.Status = "已取消";
+        }
+        catch (Exception ex)
+        {
+            Log.Error("LinkDownload", ex);
+            AppState.Downloads.Finish(job, false, ex.Message);
+            LinkCard.Status = "失败：" + ex.Message.Split('\n')[0];
+            MainWindow.Instance?.Toast("下载失败：" + ex.Message.Split('\n')[0], true);
         }
     }
 }

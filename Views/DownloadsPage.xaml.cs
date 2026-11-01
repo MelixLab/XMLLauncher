@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Threading;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -55,6 +55,15 @@ public sealed partial class DownloadsPage : Page
         HistoryPanel.Visibility = history.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         EmptyPanel.Visibility = running.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ClearButton.Visibility = history.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        // DataTemplate 里的标题是填充后才实例化的，页面级的 FontService.Apply
+        // 扫不到它们（那时视觉树里还没有这些元素），所以填完要再补一次。
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_isLoaded) return;
+            FontService.Apply(RunningList);
+            FontService.Apply(HistoryList);
+        });
     }
 
     private void Page_SizeChanged(object sender, SizeChangedEventArgs e)
