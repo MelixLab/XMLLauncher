@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" ?>
-<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="LinxLauncher.Views.SettingsPage" Background="Transparent">
+<Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="LinxLauncher.Views.SettingsPage" NavigationCacheMode="Enabled" Background="Transparent">
     <Grid x:Name="PageLayout" SizeChanged="PageLayout_SizeChanged">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

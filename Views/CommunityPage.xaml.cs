@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +12,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Navigation;
 using Windows.System;
 
 namespace LinxLauncher.Views;
@@ -22,13 +22,13 @@ namespace LinxLauncher.Views;
 ///
 /// 控件全部用 WinUI 自带的：SelectorBar 做页签、ListView 承载列表、PersonPicture 显示头像、
 /// 按钮用默认外观 / AccentButtonStyle —— 不自己画按钮和卡片。
-/// 列表数据走 ObservableCollection，DataTemplate 里只用 {Binding}（不用 x:Bind，见 XAML 注释）。
+/// 列表通过 UiList 填充以兼容 Native AOT，DataTemplate 里只用 {Binding}（不用 x:Bind，见 XAML 注释）。
 /// </summary>
 public sealed partial class CommunityPage : Page
 {
-    private readonly ObservableCollection<CommunityPost> _posts = new();
-    private readonly ObservableCollection<DmThread> _threads = new();
-    private readonly ObservableCollection<DmMessage> _messages = new();
+    private readonly List<CommunityPost> _posts = new();
+    private readonly List<DmThread> _threads = new();
+    private readonly List<DmMessage> _messages = new();
     private readonly List<ToggleButton> _tagButtons = new();
     private static readonly string[] DefaultTagLabels = { "闲聊", "求助", "服务器", "作品", "资源" };
 
@@ -45,33 +45,54 @@ public sealed partial class CommunityPage : Page
     private long _activeThreadId;
     private long _lastMessageId;
     private bool _refreshingThreads;
+    private bool _active;
+    private bool _polling;
+    private string? _viewer;
     private DispatcherTimer? _chatTimer;
 
     public CommunityPage()
     {
         InitializeComponent();
 
-        // 三个列表分别兜一层：AOT 下如果封送失败，至少要能说清是哪个崩的
-        try { PostList.ItemsSource = _posts; }
-        catch (Exception ex) { Log.Error("社区页 · 帖子列表绑定失败", ex); }
-
-        try { ThreadList.ItemsSource = _threads; }
-        catch (Exception ex) { Log.Error("社区页 · 会话列表绑定失败", ex); }
-
-        try { MessageList.ItemsSource = _messages; }
-        catch (Exception ex) { Log.Error("社区页 · 消息列表绑定失败", ex); }
-
         Loaded += Page_Loaded;
-        Unloaded += (_, _) =>
-        {
-            _chatTimer?.Stop();
-            try { _cts.Cancel(); } catch { }
-        };
+        Unloaded += (_, _) => DeactivatePage();
     }
 
     private async void Page_Loaded(object sender, RoutedEventArgs e)
     {
+        _cts.Cancel();
+        _cts.Dispose();
         _cts = new CancellationTokenSource();
+        _active = true;
+        _loading = _threadsBusy = _polling = false;
+        ChatSend.IsEnabled = true;
+        var token = _cts.Token;
+
+        var viewer = LinxAccountService.IsLoggedIn ? LinxAccountService.DisplayName : "";
+        if (_viewer != viewer)
+        {
+            _viewer = viewer;
+            _posts.Clear();
+            _threads.Clear();
+            _messages.Clear();
+            UiList.Clear(PostList);
+            UiList.Clear(ThreadList);
+            UiList.Clear(MessageList);
+            _hasMore = false;
+            _page = 0;
+            MoreButton.Visibility = Visibility.Collapsed;
+            _activeThreadId = _lastMessageId = 0;
+            _refreshingThreads = false;
+            ThreadList.SelectedItem = null;
+            ChatInput.Text = "";
+            ChatAvatar.ProfilePicture = null;
+            ChatAvatar.DisplayName = ChatName.Text = ChatSub.Text = "";
+            ChatEmpty.Visibility = Visibility.Visible;
+            ChatHeader.Visibility = ChatHeaderDivider.Visibility = ChatComposer.Visibility = Visibility.Collapsed;
+            _sort = "new";
+            UpdateSortVisuals();
+        }
+        UpdateLoginState();
 
         if (!_loaded)
         {
@@ -81,14 +102,40 @@ public sealed partial class CommunityPage : Page
         }
 
         await RefreshAllAsync(silent: _posts.Count > 0);
+        if (IsCurrentRequest(token) && DmView.Visibility == Visibility.Visible && _activeThreadId > 0)
+            StartChatTimer();
     }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        DeactivatePage();
+        base.OnNavigatedFrom(e);
+    }
+
+    private void DeactivatePage()
+    {
+        _active = false;
+        _chatTimer?.Stop();
+        _cts.Cancel();
+        _loading = _threadsBusy = _polling = false;
+        SetLoading(false);
+    }
+
+    // 缓存页面重新进入后，上一轮请求不得回写新一轮的界面和忙碌状态。
+    private bool IsCurrentRequest(CancellationToken token) =>
+        _active && !token.IsCancellationRequested && token == _cts.Token
+        && _viewer == (LinxAccountService.IsLoggedIn ? LinxAccountService.DisplayName : "");
 
     private async Task RefreshAllAsync(bool silent)
     {
+        var token = _cts.Token;
+        if (!IsCurrentRequest(token)) return;
         await LoadMetaAsync();
+        if (!IsCurrentRequest(token)) return;
         await LoadPostsAsync(reset: true, silent: silent);
+        if (!IsCurrentRequest(token)) return;
         await LoadThreadsAsync();
-        UpdateLoginState();
+        if (IsCurrentRequest(token)) UpdateLoginState();
     }
 
     // ==================== 页签 ====================
@@ -138,16 +185,20 @@ public sealed partial class CommunityPage : Page
 
     private async Task LoadMetaAsync()
     {
+        var token = _cts.Token;
+        if (!IsCurrentRequest(token)) return;
         try
         {
-            _meta = await CommunityService.GetMetaAsync(_cts.Token);
+            var meta = await CommunityService.GetMetaAsync(token);
+            if (!IsCurrentRequest(token)) return;
+            _meta = meta;
             MetaText.Text = $"共 {_meta.Posts} 帖 · {_meta.Users} 位玩家";
             BuildTagRow();
         }
         catch (OperationCanceledException) { }
         catch
         {
-            MetaText.Text = "";
+            if (IsCurrentRequest(token)) MetaText.Text = "";
         }
     }
 
@@ -267,7 +318,8 @@ public sealed partial class CommunityPage : Page
 
     private async Task LoadPostsAsync(bool reset, bool silent = false)
     {
-        if (_loading) return;
+        var token = _cts.Token;
+        if (_loading || !IsCurrentRequest(token)) return;
         _loading = true;
 
         if (reset) _page = 0;
@@ -276,10 +328,19 @@ public sealed partial class CommunityPage : Page
 
         try
         {
-            var items = await CommunityService.GetPostsAsync(_sort, _tag, _page, _cts.Token);
+            var items = await CommunityService.GetPostsAsync(_sort, _tag, _page, token);
+            if (!IsCurrentRequest(token)) return;
 
-            if (reset) _posts.Clear();
-            foreach (var item in items) _posts.Add(item);
+            if (reset)
+            {
+                _posts.Clear();
+                UiList.Clear(PostList);
+            }
+            foreach (var item in items)
+            {
+                _posts.Add(item);
+                UiList.Add(PostList, item);
+            }
 
             _hasMore = items.Count >= 20;
             MoreButton.Visibility = _hasMore ? Visibility.Visible : Visibility.Collapsed;
@@ -289,16 +350,19 @@ public sealed partial class CommunityPage : Page
         catch (OperationCanceledException) { }
         catch (CommunityException ex)
         {
-            ShowState(ex.Message, withRetry: true);
+            if (IsCurrentRequest(token)) ShowState(ex.Message, withRetry: true);
         }
         catch (Exception ex)
         {
-            ShowState("连不上服务器：" + ex.Message, withRetry: true);
+            if (IsCurrentRequest(token)) ShowState("连不上服务器：" + ex.Message, withRetry: true);
         }
         finally
         {
-            _loading = false;
-            SetLoading(false);
+            if (IsCurrentRequest(token))
+            {
+                _loading = false;
+                SetLoading(false);
+            }
         }
     }
 
@@ -327,10 +391,12 @@ public sealed partial class CommunityPage : Page
 
         var post = _posts.FirstOrDefault(p => p.Id == id);
         if (post is null) return;
+        var token = _cts.Token;
 
         try
         {
-            var (liked, likes) = await CommunityService.ToggleLikeAsync(id, _cts.Token);
+            var (liked, likes) = await CommunityService.ToggleLikeAsync(id, token);
+            if (!IsCurrentRequest(token)) return;
             post.Liked = liked;
             post.Likes = likes;
         }
@@ -441,14 +507,17 @@ public sealed partial class CommunityPage : Page
 
     private async Task ShowPostAsync(long id)
     {
+        var token = _cts.Token;
+        if (!IsCurrentRequest(token)) return;
         CommunityPost post;
         List<CommunityComment> comments;
 
         try
         {
-            (post, comments) = await CommunityService.GetPostAsync(id, _cts.Token);
+            (post, comments) = await CommunityService.GetPostAsync(id, token);
+            if (!IsCurrentRequest(token)) return;
         }
-        catch (CommunityException ex) { Toast(ex.Message, true); return; }
+        catch (CommunityException ex) { if (IsCurrentRequest(token)) Toast(ex.Message, true); return; }
         catch (OperationCanceledException) { return; }
 
         var root = new StackPanel { Spacing = 12, Width = 560 };
@@ -647,7 +716,11 @@ public sealed partial class CommunityPage : Page
         {
             await CommunityService.DeletePostAsync(post.Id, _cts.Token);
             var cached = _posts.FirstOrDefault(p => p.Id == post.Id);
-            if (cached is not null) _posts.Remove(cached);
+            if (cached is not null)
+            {
+                _posts.Remove(cached);
+                PostList.Items.Remove(cached);
+            }
             Toast("已删除。");
         }
         catch (CommunityException ex) { Toast(ex.Message, true); }
@@ -767,11 +840,13 @@ public sealed partial class CommunityPage : Page
 
     private async Task LoadThreadsAsync()
     {
-        if (_threadsBusy) return;
+        var token = _cts.Token;
+        if (_threadsBusy || !IsCurrentRequest(token)) return;
 
         if (!LinxAccountService.IsLoggedIn)
         {
             _threads.Clear();
+            UiList.Clear(ThreadList);
             SetUnreadBadge(0);
             UpdateLoginState();
             return;
@@ -780,11 +855,17 @@ public sealed partial class CommunityPage : Page
         _threadsBusy = true;
         try
         {
-            var threads = await CommunityService.GetThreadsAsync(_cts.Token);
+            var threads = await CommunityService.GetThreadsAsync(token);
+            if (!IsCurrentRequest(token)) return;
 
             _refreshingThreads = true;
             _threads.Clear();
-            foreach (var thread in threads) _threads.Add(thread);
+            UiList.Clear(ThreadList);
+            foreach (var thread in threads)
+            {
+                _threads.Add(thread);
+                UiList.Add(ThreadList, thread);
+            }
 
             if (_activeThreadId > 0)
             {
@@ -799,15 +880,15 @@ public sealed partial class CommunityPage : Page
         catch (OperationCanceledException) { }
         catch (CommunityException ex)
         {
-            DmHint.Text = "私信加载失败：" + ex.Message;
+            if (IsCurrentRequest(token)) DmHint.Text = "私信加载失败：" + ex.Message;
         }
         catch (Exception ex)
         {
-            DmHint.Text = "私信加载失败：" + ex.Message;
+            if (IsCurrentRequest(token)) DmHint.Text = "私信加载失败：" + ex.Message;
         }
         finally
         {
-            _threadsBusy = false;
+            if (IsCurrentRequest(token)) _threadsBusy = false;
         }
     }
 
@@ -823,9 +904,11 @@ public sealed partial class CommunityPage : Page
 
     private async Task OpenThreadAsync(DmThread thread)
     {
+        if (!_active) return;
         _activeThreadId = thread.Id;
         _lastMessageId = 0;
         _messages.Clear();
+        UiList.Clear(MessageList);
 
         ChatEmpty.Visibility = Visibility.Collapsed;
         ChatHeader.Visibility = Visibility.Visible;
@@ -845,22 +928,30 @@ public sealed partial class CommunityPage : Page
 
     private void StartChatTimer()
     {
-        _chatTimer?.Stop();
-        _chatTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-        _chatTimer.Tick += async (_, _) => await PollMessagesAsync(quiet: true);
+        if (!_active || DmView.Visibility != Visibility.Visible) return;
+        if (_chatTimer is null)
+        {
+            _chatTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            _chatTimer.Tick += async (_, _) => await PollMessagesAsync(quiet: true);
+        }
         _chatTimer.Start();
     }
 
     private async Task PollMessagesAsync(bool quiet)
     {
-        if (_activeThreadId <= 0) return;
+        var token = _cts.Token;
+        var threadId = _activeThreadId;
+        if (threadId <= 0 || _polling || !IsCurrentRequest(token)) return;
+        _polling = true;
 
         try
         {
-            var items = await CommunityService.GetMessagesAsync(_activeThreadId, _lastMessageId, _cts.Token);
+            var items = await CommunityService.GetMessagesAsync(threadId, _lastMessageId, token);
+            if (!IsCurrentRequest(token) || threadId != _activeThreadId) return;
             foreach (var item in items)
             {
                 _messages.Add(item);
+                UiList.Add(MessageList, item);
                 _lastMessageId = Math.Max(_lastMessageId, item.Id);
             }
 
@@ -873,13 +964,19 @@ public sealed partial class CommunityPage : Page
         catch (OperationCanceledException) { }
         catch (CommunityException ex)
         {
-            if (!quiet) Toast(ex.Message, true);
+            if (IsCurrentRequest(token) && !quiet) Toast(ex.Message, true);
+        }
+        finally
+        {
+            if (IsCurrentRequest(token)) _polling = false;
         }
     }
 
     private async Task SendChatAsync()
     {
-        if (_activeThreadId <= 0) return;
+        var token = _cts.Token;
+        var threadId = _activeThreadId;
+        if (threadId <= 0 || !IsCurrentRequest(token)) return;
 
         var text = ChatInput.Text.Trim();
         if (text.Length == 0) return;
@@ -887,23 +984,25 @@ public sealed partial class CommunityPage : Page
         ChatSend.IsEnabled = false;
         try
         {
-            var message = await CommunityService.SendMessageAsync(_activeThreadId, text, _cts.Token);
+            var message = await CommunityService.SendMessageAsync(threadId, text, token);
+            if (!IsCurrentRequest(token) || threadId != _activeThreadId) return;
             _messages.Add(message);
+            UiList.Add(MessageList, message);
             _lastMessageId = Math.Max(_lastMessageId, message.Id);
             ChatInput.Text = "";
             ScrollChatToEnd();
             await LoadThreadsAsync();
         }
-        catch (CommunityException ex) { Toast(ex.Message, true); }
+        catch (CommunityException ex) { if (IsCurrentRequest(token)) Toast(ex.Message, true); }
         catch (OperationCanceledException) { }
-        finally { ChatSend.IsEnabled = true; }
+        finally { if (IsCurrentRequest(token)) ChatSend.IsEnabled = true; }
     }
 
     private void ScrollChatToEnd()
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            if (_messages.Count > 0) MessageList.ScrollIntoView(_messages[^1]);
+            if (_active && _messages.Count > 0) MessageList.ScrollIntoView(_messages[^1]);
         });
     }
 
@@ -924,6 +1023,7 @@ public sealed partial class CommunityPage : Page
 
     private async Task NewDmAsync()
     {
+        var token = _cts.Token;
         var box = new TextBox
         {
             Header = "对方用户名",
@@ -941,15 +1041,17 @@ public sealed partial class CommunityPage : Page
         };
         FontService.ApplyToDialog(dialog);
 
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || !IsCurrentRequest(token)) return;
 
         var name = box.Text.Trim();
         if (name.Length == 0) return;
 
         try
         {
-            var threadId = await CommunityService.OpenDmAsync(name, _cts.Token);
+            var threadId = await CommunityService.OpenDmAsync(name, token);
+            if (!IsCurrentRequest(token)) return;
             await LoadThreadsAsync();
+            if (!IsCurrentRequest(token)) return;
 
             var thread = _threads.FirstOrDefault(t => t.Id == threadId);
             if (thread is not null)

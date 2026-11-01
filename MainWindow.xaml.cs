@@ -286,17 +286,22 @@ public sealed partial class MainWindow : Window
 
         // 页面内容（卡片、列表项）是布局阶段才生成的，所以导航后补刷两次：
         // 一次 Low 优先级排队，一次 350ms 后兜底，否则模板里的文字会漏掉。
+        var fontTimer = DispatcherQueue.CreateTimer();
+        fontTimer.Interval = TimeSpan.FromMilliseconds(350);
+        fontTimer.IsRepeating = false;
+        fontTimer.Tick += (_, _) => FontService.RefreshAll();
         ContentFrame.Navigated += (_, _) =>
         {
+            // 主导航没有前进/后退入口，避免反复切页累计导航记录。
+            ContentFrame.BackStack.Clear();
+            ContentFrame.ForwardStack.Clear();
             FontService.RefreshAll();
             DispatcherQueue.TryEnqueue(
                 Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
                 FontService.RefreshAll);
 
-            var fontTimer = DispatcherQueue.CreateTimer();
-            fontTimer.Interval = TimeSpan.FromMilliseconds(350);
-            fontTimer.IsRepeating = false;
-            fontTimer.Tick += (_, _) => FontService.RefreshAll();
+            // 窗口内复用补刷计时器，快速切页时只为当前页面保留最后一次补刷。
+            fontTimer.Stop();
             fontTimer.Start();
         };
         ContentFrame.NavigationFailed += (_, e) => Log.Fatal("Frame", e.Exception);
@@ -313,7 +318,11 @@ public sealed partial class MainWindow : Window
         }
 
         // 关窗时清掉托盘图标，别在通知区留一个点不动的幽灵
-        Closed += (_, _) => TrayService.Dispose();
+        Closed += (_, _) =>
+        {
+            fontTimer.Stop();
+            TrayService.Dispose();
+        };
     }
 
     public void NavigateTo(string tag, object? parameter = null)

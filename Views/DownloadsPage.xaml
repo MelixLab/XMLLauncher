@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Page
     x:Class="LinxLauncher.Views.DownloadsPage"
+    NavigationCacheMode="Enabled"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:services="using:LinxLauncher.Services"
@@ -9,169 +10,172 @@
     SizeChanged="Page_SizeChanged">
 
     <ScrollViewer Style="{StaticResource PageScrollStyle}">
-        <Grid x:Name="ContentGrid" Style="{StaticResource PageContentStyle}">
-            <StackPanel Spacing="24">
-                <Grid ColumnSpacing="16" RowSpacing="11">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="下载" />
-                    <Button
-                        x:Name="ClearButton"
-                        Grid.Column="1"
-                        VerticalAlignment="Center"
-                        Click="Clear_Click"
-                        Content="清除已结束"
-                        Visibility="Collapsed" />
-                    <TextBlock
-                        Grid.Row="1"
-                        Grid.ColumnSpan="2"
-                        Style="{StaticResource PageSubtitleTextStyle}"
-                        Text="安装进度、当前文件与传输速率。任务在后台继续，切页不会中断。"
-                        TextWrapping="Wrap" />
-                </Grid>
+        <!-- 先撑满视口，再由内层 MaxWidth 容器居中，避免滚动区按期望宽度计算偏移。 -->
+        <Grid>
+            <Grid x:Name="ContentGrid" Style="{StaticResource PageContentStyle}">
+                <StackPanel Spacing="24">
+                    <Grid ColumnSpacing="16" RowSpacing="11">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Style="{StaticResource PageTitleTextStyle}" Text="下载" />
+                        <Button
+                            x:Name="ClearButton"
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Click="Clear_Click"
+                            Content="清除已结束"
+                            Visibility="Collapsed" />
+                        <TextBlock
+                            Grid.Row="1"
+                            Grid.ColumnSpan="2"
+                            Style="{StaticResource PageSubtitleTextStyle}"
+                            Text="安装进度、当前文件与传输速率。任务在后台继续，切页不会中断。"
+                            TextWrapping="Wrap" />
+                    </Grid>
 
-                <StackPanel x:Name="RunningPanel" Spacing="12" Visibility="Collapsed">
-                    <TextBlock
-                        x:Name="RunningTitle"
-                        Style="{StaticResource SectionTitleTextStyle}"
-                        Text="正在进行" />
-                    <ListView
-                        x:Name="RunningList"
-                        IsItemClickEnabled="False"
-                        SelectionMode="None"
-                        ScrollViewer.HorizontalScrollMode="Disabled"
-                        ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                        ScrollViewer.VerticalScrollMode="Disabled">
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="Margin" Value="0,0,0,12" />
-                                <Setter Property="MinHeight" Value="0" />
-                                <Setter Property="Background" Value="Transparent" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Border services:CardAppearance.IsCard="True"
-                                    Padding="20,18"
-                                    Background="{ThemeResource CardBackgroundBrush}"
-                                    BorderBrush="{ThemeResource DividerBrush}"
-                                    BorderThickness="1"
-                                    CornerRadius="8">
-                                    <StackPanel Spacing="12">
-                                        <Grid ColumnSpacing="12">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
+                    <StackPanel x:Name="RunningPanel" Spacing="12" Visibility="Collapsed">
+                        <TextBlock
+                            x:Name="RunningTitle"
+                            Style="{StaticResource SectionTitleTextStyle}"
+                            Text="正在进行" />
+                        <ListView
+                            x:Name="RunningList"
+                            IsItemClickEnabled="False"
+                            SelectionMode="None"
+                            ScrollViewer.HorizontalScrollMode="Disabled"
+                            ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                            ScrollViewer.VerticalScrollMode="Disabled">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Margin" Value="0,0,0,12" />
+                                    <Setter Property="MinHeight" Value="0" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border services:CardAppearance.IsCard="True"
+                                        Padding="20,18"
+                                        Background="{ThemeResource CardBackgroundBrush}"
+                                        BorderBrush="{ThemeResource DividerBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="8">
+                                        <StackPanel Spacing="12">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock
+                                                    FontSize="15"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="{ThemeResource PrimaryTextBrush}"
+                                                    Text="{Binding Title}"
+                                                    TextWrapping="Wrap" />
+                                                <Button
+                                                    Grid.Column="1"
+                                                    MinWidth="96"
+                                                    VerticalAlignment="Top"
+                                                    Click="Cancel_Click"
+                                                    Content="{Binding CancelButtonText, Mode=OneWay}"
+                                                    IsEnabled="{Binding CanCancel, Mode=OneWay}" />
+                                            </Grid>
+                                            <controls:DownloadSteps Job="{Binding}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </StackPanel>
+
+                    <Border services:CardAppearance.IsCard="True"
+                        x:Name="EmptyPanel"
+                        Padding="20,36"
+                        Background="{ThemeResource CardBackgroundBrush}"
+                        BorderBrush="{ThemeResource DividerBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                        <StackPanel HorizontalAlignment="Center" Spacing="8">
+                            <FontIcon
+                                HorizontalAlignment="Center"
+                                FontSize="26"
+                                Foreground="{ThemeResource SecondaryTextBrush}"
+                                Glyph="&#xE896;" />
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                Style="{StaticResource BodyTextStyle}"
+                                Text="当前没有下载任务"
+                                TextAlignment="Center"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                Style="{StaticResource CaptionTextStyle}"
+                                Text="到版本库选择版本，开始下载并安装。"
+                                TextAlignment="Center"
+                                TextWrapping="Wrap" />
+                            <Button
+                                Margin="0,8,0,0"
+                                HorizontalAlignment="Center"
+                                Click="GoVersions_Click"
+                                Content="打开版本库" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel x:Name="HistoryPanel" Spacing="12" Visibility="Collapsed">
+                        <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="历史记录" />
+                        <TextBlock
+                            Style="{StaticResource CaptionTextStyle}"
+                            Text="需要重新下载时，请回到原安装入口选择版本或 Mod。"
+                            TextWrapping="Wrap" />
+                        <ListView
+                            x:Name="HistoryList"
+                            IsItemClickEnabled="False"
+                            SelectionMode="None"
+                            ScrollViewer.HorizontalScrollMode="Disabled"
+                            ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                            ScrollViewer.VerticalScrollMode="Disabled">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Margin" Value="0,0,0,2" />
+                                    <Setter Property="MinHeight" Value="0" />
+                                    <Setter Property="CornerRadius" Value="0" />
+                                    <Setter Property="Background" Value="Transparent" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Padding="20,14"
+                                        BorderBrush="{ThemeResource DividerBrush}"
+                                        BorderThickness="0,0,0,1">
+                                        <StackPanel Spacing="8">
                                             <TextBlock
-                                                FontSize="15"
-                                                FontWeight="SemiBold"
-                                                Foreground="{ThemeResource PrimaryTextBrush}"
+                                                Style="{StaticResource BodyTextStyle}"
                                                 Text="{Binding Title}"
                                                 TextWrapping="Wrap" />
-                                            <Button
-                                                Grid.Column="1"
-                                                MinWidth="96"
-                                                VerticalAlignment="Top"
-                                                Click="Cancel_Click"
-                                                Content="{Binding CancelButtonText, Mode=OneWay}"
-                                                IsEnabled="{Binding CanCancel, Mode=OneWay}" />
-                                        </Grid>
-                                        <controls:DownloadSteps Job="{Binding}" />
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                </StackPanel>
-
-                <Border services:CardAppearance.IsCard="True"
-                    x:Name="EmptyPanel"
-                    Padding="20,36"
-                    Background="{ThemeResource CardBackgroundBrush}"
-                    BorderBrush="{ThemeResource DividerBrush}"
-                    BorderThickness="1"
-                    CornerRadius="8">
-                    <StackPanel HorizontalAlignment="Center" Spacing="8">
-                        <FontIcon
-                            HorizontalAlignment="Center"
-                            FontSize="26"
-                            Foreground="{ThemeResource SecondaryTextBrush}"
-                            Glyph="&#xE896;" />
-                        <TextBlock
-                            HorizontalAlignment="Center"
-                            Style="{StaticResource BodyTextStyle}"
-                            Text="当前没有下载任务"
-                            TextAlignment="Center"
-                            TextWrapping="Wrap" />
-                        <TextBlock
-                            HorizontalAlignment="Center"
-                            Style="{StaticResource CaptionTextStyle}"
-                            Text="到版本库选择版本，开始下载并安装。"
-                            TextAlignment="Center"
-                            TextWrapping="Wrap" />
+                                            <controls:DownloadSteps Job="{Binding}" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
                         <Button
-                            Margin="0,8,0,0"
-                            HorizontalAlignment="Center"
+                            HorizontalAlignment="Left"
                             Click="GoVersions_Click"
                             Content="打开版本库" />
                     </StackPanel>
-                </Border>
-
-                <StackPanel x:Name="HistoryPanel" Spacing="12" Visibility="Collapsed">
-                    <TextBlock Style="{StaticResource SectionTitleTextStyle}" Text="历史记录" />
-                    <TextBlock
-                        Style="{StaticResource CaptionTextStyle}"
-                        Text="需要重新下载时，请回到原安装入口选择版本或 Mod。"
-                        TextWrapping="Wrap" />
-                    <ListView
-                        x:Name="HistoryList"
-                        IsItemClickEnabled="False"
-                        SelectionMode="None"
-                        ScrollViewer.HorizontalScrollMode="Disabled"
-                        ScrollViewer.VerticalScrollBarVisibility="Disabled"
-                        ScrollViewer.VerticalScrollMode="Disabled">
-                        <ListView.ItemContainerStyle>
-                            <Style TargetType="ListViewItem">
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                                <Setter Property="Padding" Value="0" />
-                                <Setter Property="Margin" Value="0,0,0,2" />
-                                <Setter Property="MinHeight" Value="0" />
-                                <Setter Property="CornerRadius" Value="0" />
-                                <Setter Property="Background" Value="Transparent" />
-                            </Style>
-                        </ListView.ItemContainerStyle>
-                        <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Border
-                                    Padding="20,14"
-                                    BorderBrush="{ThemeResource DividerBrush}"
-                                    BorderThickness="0,0,0,1">
-                                    <StackPanel Spacing="8">
-                                        <TextBlock
-                                            Style="{StaticResource BodyTextStyle}"
-                                            Text="{Binding Title}"
-                                            TextWrapping="Wrap" />
-                                        <controls:DownloadSteps Job="{Binding}" />
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
-                    <Button
-                        HorizontalAlignment="Left"
-                        Click="GoVersions_Click"
-                        Content="打开版本库" />
                 </StackPanel>
-            </StackPanel>
+            </Grid>
         </Grid>
     </ScrollViewer>
 </Page>

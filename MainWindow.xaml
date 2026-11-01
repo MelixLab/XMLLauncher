@@ -244,7 +244,8 @@
             </NavigationView.PaneFooter>
 
             <!-- 内容层的背景和圆角由 NavigationView 自身绘制。 -->
-            <Frame x:Name="ContentFrame" Background="Transparent" />
+            <!-- 可淘汰页面缓存最多 10 项；联机页沿用 Required 缓存维持会话。 -->
+            <Frame x:Name="ContentFrame" CacheSize="10" Background="Transparent" />
         </NavigationView>
     </Grid>
 </Window>

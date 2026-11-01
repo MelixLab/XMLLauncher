@@ -6,10 +6,12 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using LinxLauncher.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
 
 namespace LinxLauncher.Views;
 
@@ -25,6 +27,9 @@ public sealed partial class CloudSavesPage : Page
     private List<CloudSave> _cloudSaves = new();
     private long _quota;
     private long _used;
+    private CancellationTokenSource _refreshCts = new();
+    private int _refreshVersion;
+    private bool _active;
 
     private sealed class CloudSave
     {
@@ -40,9 +45,35 @@ public sealed partial class CloudSavesPage : Page
         InitializeComponent();
         Loaded += async (_, _) =>
         {
+            _refreshCts.Cancel();
+            _refreshCts.Dispose();
+            _refreshCts = new CancellationTokenSource();
+            _active = true;
+            // 缓存保留页面结构；每次进入仍重新读取当前账号的数据。
+            _cloudSaves.Clear();
+            _quota = _used = 0;
+            CloudSubtitle.Text = "把世界备份到服务器，换台机器也能接着玩。";
+            SaveList.Children.Clear();
+            QuotaText.Text = "";
+            QuotaBar.Value = 0;
+            EmptyHint.Visibility = Visibility.Visible;
             FontService.Apply(this);
             await RefreshAsync();
         };
+        Unloaded += (_, _) => DeactivatePage();
+    }
+
+    protected override void OnNavigatedFrom(NavigationEventArgs e)
+    {
+        DeactivatePage();
+        base.OnNavigatedFrom(e);
+    }
+
+    private void DeactivatePage()
+    {
+        _active = false;
+        ++_refreshVersion;
+        _refreshCts.Cancel();
     }
 
     private static void Toast(string msg, bool error = false) => MainWindow.Instance?.Toast(msg, error);
@@ -51,6 +82,12 @@ public sealed partial class CloudSavesPage : Page
 
     private async Task RefreshAsync()
     {
+        if (!_active) return;
+        var token = _refreshCts.Token;
+        int request = ++_refreshVersion;
+        string viewer = LinxAccountService.DisplayName;
+        bool IsCurrentRequest() => _active && !token.IsCancellationRequested
+            && request == _refreshVersion && viewer == LinxAccountService.DisplayName;
         if (!LinxAccountService.IsLoggedIn)
         {
             CloudSubtitle.Text = "先在左下角登录 XML 账号，才能用云存档。";
@@ -63,7 +100,9 @@ public sealed partial class CloudSavesPage : Page
         try
         {
             var (ok, doc, err) = await LinxAccountService.CallAsync(
-                "/api/cloud/saves", null, default, "GET");
+                "/api/cloud/saves", null, token, "GET");
+            using var response = doc;
+            if (!IsCurrentRequest()) return;
 
             if (!ok || doc is null)
             {
@@ -71,7 +110,7 @@ public sealed partial class CloudSavesPage : Page
                 return;
             }
 
-            using (doc)
+            if (doc is not null)
             {
                 var root = doc.RootElement;
                 var quota = root.TryGetProperty("quota", out var q) ? q.GetInt64() : 0;
@@ -102,9 +141,10 @@ public sealed partial class CloudSavesPage : Page
                 RenderSaves(list);
             }
         }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            CloudSubtitle.Text = "读取失败：" + ex.Message;
+            if (IsCurrentRequest()) CloudSubtitle.Text = "读取失败：" + ex.Message;
         }
     }
 
