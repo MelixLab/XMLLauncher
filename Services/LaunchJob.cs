@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -13,9 +13,9 @@ public sealed class LaunchJob : INotifyPropertyChanged
     /// <summary>固定五步，和下载进度窗口一样不随阶段来回变。</summary>
     public static readonly string[] Captions =
     {
+        "检查账户",
         "检查版本文件",
         "定位 Java 运行时",
-        "整理启动参数",
         "启动游戏进程",
         "游戏运行中"
     };

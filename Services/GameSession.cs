@@ -35,17 +35,25 @@ public static class GameSession
         var job = new LaunchJob(versionId);
         _job = job;
 
-        // 配置在 UI 线程读好再交给后台线程（正版账号会在这里顺手续期）
-        var opt = await BuildOptionsAsync(versionId, job);
-        opt.QuickJoinAddress = quickJoin;
-
+        // 先把弹窗挂出来，再做读配置/检查账号这些耗时的准备。
+        // 之前的顺序是「先准备 → 再弹窗」，准备工作一慢，用户就会觉得点了没反应。
         LaunchProgressDialog? dialog = null;
-        if (root is not null)
+        if (root is null)
+        {
+            Log.Warn("启动：root 为空，进度窗不会显示");
+        }
+        else
         {
             try
             {
                 dialog = new LaunchProgressDialog(job) { XamlRoot = root };
                 _ = dialog.ShowAsync();
+
+                job.SetProgress("正在准备启动…", 0.05);
+
+                // 给 UI 一帧时间把窗口画上去
+                await Task.Yield();
+                Log.Info("启动弹窗已创建");
             }
             catch (Exception ex)
             {
@@ -54,6 +62,46 @@ public static class GameSession
                 dialog = null;
             }
         }
+
+        // 检查游戏账号：正版账号的令牌过期又无法续期时，直接拦下来，
+        // 省得进游戏后连服务器才报「登录失败 / 会话无效」。
+        var account = AccountService.Current;
+        job.SetProgress("正在检查游戏账号…", 0.08);
+
+        if (account is null)
+        {
+            Log.Info("启动：没有选择游戏账号，按离线处理");
+        }
+        else if (account.IsMicrosoft)
+        {
+            var expired = account.ExpiresAt is { } exp && exp <= DateTime.Now.AddMinutes(-1);
+            var canRefresh = !string.IsNullOrEmpty(account.RefreshToken);
+
+            if (expired && !canRefresh)
+            {
+                Log.Warn($"启动：正版账号 {account.Name} 令牌已过期且没有刷新令牌");
+                job.Fail("正版账号登录已过期，请重新登录");
+                HideDialog(dialog);
+
+                ShowError(new LaunchErrorInfo
+                {
+                    Title = "需要重新登录",
+                    Summary = $"正版账号「{account.Name}」的登录状态已过期。",
+                    Advice = "到「账户」页重新登录这个微软账号，或者先切到离线账号再启动。",
+                    VersionId = versionId,
+                });
+
+                _job = null;
+                return;
+            }
+
+            // 快过期但有刷新令牌的，后面 ResolveForLaunchAsync 会自动续期
+            if (expired) job.SetProgress("正版令牌已过期，稍后自动续期…", 0.08);
+        }
+
+        // 配置在 UI 线程读好再交给后台线程（正版账号会在这里顺手续期）
+        var opt = await BuildOptionsAsync(versionId, job);
+        opt.QuickJoinAddress = quickJoin;
 
         // 没有满足要求的 Java 就先自动装一个（干净机器上这是唯一的硬门槛）
         try

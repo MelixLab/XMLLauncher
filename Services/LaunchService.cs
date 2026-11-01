@@ -65,24 +65,24 @@ public sealed class LaunchService
 
         void Step(int index, string detail) => progress?.Report(new LaunchProgress(index, detail));
 
-        Step(0, $"读取版本 {versionId} 的信息…");
+        Step(1, $"读取版本 {versionId} 的信息…");
 
         var resolved = await _versions.ResolveAsync(versionId, ct);
         var detail = resolved.Detail;
 
-        Step(0, $"检查 {resolved.BaseId}.jar 与版本文件…");
+        Step(1, $"检查 {resolved.BaseId}.jar 与版本文件…");
 
         var clientJar = resolved.ClientJar
                         ?? throw new IOException($"缺少 {resolved.BaseId}.jar，请先安装原版 {resolved.BaseId}");
 
         var requiredJava = detail.JavaVersion?.MajorVersion ?? 8;
-        Step(1, $"这个版本需要 Java {requiredJava}，正在本机查找…");
+        Step(2, $"这个版本需要 Java {requiredJava}，正在本机查找…");
 
         var java = JavaService.Pick(requiredJava, opt.JavaHome)
                    ?? throw new IOException(
                        $"这个版本需要 Java {requiredJava}，本机没有满足要求的运行时。请先安装 Java {requiredJava}，或在「设置」里指定它的路径。");
 
-        Step(1, $"使用 Java {java.Major} · {java.Home}");
+        Step(2, $"使用 Java {java.Major} · {java.Home}");
 
         // 版本隔离：整个 .minecraft 等价目录换成 versions/<id>，
         // 存档 / mods / options.txt 就都跟着这个版本走了，多版本互不干扰。
@@ -93,7 +93,7 @@ public sealed class LaunchService
         Directory.CreateDirectory(nativesDir);
 
         // ---- classpath ----
-        Step(2, "整理依赖库与启动参数…");
+        Step(3, "整理依赖库，准备启动进程…");
         var cp = new List<string>();
         foreach (var lib in detail.Libraries ?? new List<Library>())
         {
