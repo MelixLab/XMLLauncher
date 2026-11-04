@@ -7,11 +7,13 @@ namespace LinxLauncher.Services;
 public static class Paths
 {
     /// <summary>启动器自己的数据目录（设置、日志、运行时）</summary>
-    public static string AppData { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LinxLauncher");
+    public static string AppData { get; } = SeedMapDiagnostics.TestRoot is { } testRoot
+        ? Path.Combine(testRoot, "data")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LinxLauncher");
 
-    private static string _gameDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".linx");
+    private static string _gameDir = SeedMapDiagnostics.TestRoot is { } testRoot
+        ? Path.Combine(testRoot, "game")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".linx");
 
     /// <summary>Minecraft 游戏根目录（.minecraft 的等价物）</summary>
     public static string GameDir

@@ -37,7 +37,7 @@ jobs:
         run: Copy-Item -LiteralPath Services/LocalSecrets.example.cs.txt -Destination Services/LocalSecrets.cs
 
       - name: Restore dependencies
-        run: dotnet restore LinxLauncher.WinUI.csproj -p:Platform=x64
+        run: dotnet restore LinxLauncher.WinUI.csproj -p:Platform=x64 -r win-x64 --source https://api.nuget.org/v3/index.json
 
       - name: Build
         run: dotnet build LinxLauncher.WinUI.csproj -c Debug -p:Platform=x64 --no-restore
@@ -73,7 +73,8 @@ jobs:
             'LinxLauncher.WinUI.exe'
             'Assets/AppIcon.ico'
             'Assets/Blocks/vanilla.png'
-            'Assets/native/cubiomes_v3.dll'
+            'rzero_seedmap.dll'
+            'THIRD-PARTY-NOTICES.md'
           )
           foreach ($file in $requiredFiles) {
             $path = Join-Path $publishDirectory $file

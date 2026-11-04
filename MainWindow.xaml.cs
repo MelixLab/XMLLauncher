@@ -21,6 +21,7 @@ namespace LinxLauncher;
 public sealed partial class MainWindow : Window
 {
     public static MainWindow? Instance { get; private set; }
+    internal LinxLauncher.Controls.SeedMapWorkbench? CurrentSeedMap => (ContentFrame.Content as SeedMapPage)?.Workbench;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr hwnd);
@@ -322,6 +323,7 @@ public sealed partial class MainWindow : Window
         {
             fontTimer.Stop();
             TrayService.Dispose();
+            SeedMapWindow.Current?.Close();
         };
     }
 
@@ -336,6 +338,7 @@ public sealed partial class MainWindow : Window
             "relay" => typeof(RelayPage),
             "community" => typeof(CommunityPage),
             "tools" => typeof(ToolsPage),
+            "seedmap" => typeof(SeedMapPage),
             "cloud" => typeof(CloudSavesPage),
             "accounts" => typeof(AccountsPage),
             "skins" => typeof(AccountsPage),

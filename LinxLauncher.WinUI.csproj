@@ -26,12 +26,13 @@
     <EnableMsixTooling>true</EnableMsixTooling>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     <!-- 内存回归工具的隔离源码和产物不参与正式构建。 -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**;tests\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -41,9 +42,10 @@
       外面那个 exe 有图标、任务栏却是白纸一张 —— 就是这么来的。
     -->
     <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="THIRD-PARTY-NOTICES.md"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
 
-    <!-- 种子地图用的地形算法库，嵌进 exe，首次运行时释放到 AppData -->
-    <EmbeddedResource Include="Assets\native\cubiomes_v3.dll" />
   </ItemGroup>
 
   <ItemGroup>
@@ -58,11 +60,18 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.7.1" />
+    <PackageReference Include="RZeroF1.Minecraft.SeedMap" Version="0.1.0" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>
+
+  <Target Name="RejectUnsupportedSeedMapRid"
+          BeforeTargets="Build"
+          Condition="'$(RuntimeIdentifier)' != '' and '$(RuntimeIdentifier)' != 'win-x64'">
+    <Error Text="XMLLauncher 的 SeedMap 功能通过 RZeroF1.Minecraft.SeedMap 仅支持 win-x64；当前 RuntimeIdentifier=$(RuntimeIdentifier)。请使用 win-x64，或在没有种子地图功能的独立项目中构建其他平台。" />
+  </Target>
 
   <PropertyGroup>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>

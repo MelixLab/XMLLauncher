@@ -8,8 +8,7 @@ public static class Log
 {
     private static readonly object Gate = new();
 
-    private static readonly string Dir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LinxLauncher");
+    private static readonly string Dir = Paths.AppData;
 
     public static string LogPath => Path.Combine(Dir, "launcher.log");
 

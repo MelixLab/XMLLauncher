@@ -1,0 +1,50 @@
+<UserControl
+    x:Class="LinxLauncher.Controls.SeedMapViewport"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid x:Name="Surface" Background="{ThemeResource LayerFillColorDefaultBrush}"
+          PointerPressed="Surface_PointerPressed" PointerMoved="Surface_PointerMoved"
+          PointerReleased="Surface_PointerReleased" PointerCanceled="Surface_PointerCanceled"
+          PointerCaptureLost="Surface_PointerCanceled" PointerWheelChanged="Surface_PointerWheelChanged"
+          PointerExited="Surface_PointerExited"
+          RightTapped="Surface_RightTapped" KeyDown="Surface_KeyDown"
+          IsTabStop="True" AutomationProperties.Name="种子地图，方向键平移，加减键缩放">
+        <Canvas x:Name="Tiles" IsHitTestVisible="False" />
+        <Canvas x:Name="Overlays" IsHitTestVisible="False" />
+        <Canvas x:Name="FocusLayer" IsHitTestVisible="False">
+            <Border x:Name="MeasurementAnchor" Width="1" Height="1">
+                <ToolTipService.ToolTip>
+                    <ToolTip x:Name="MeasurementTip" Placement="Top" MaxWidth="400" />
+                </ToolTipService.ToolTip>
+            </Border>
+            <Grid x:Name="SearchMarker" Width="28" Height="28" Visibility="Collapsed">
+                <Ellipse Stroke="White" StrokeThickness="5" />
+                <Ellipse Margin="1" Stroke="{ThemeResource AccentFillColorDefaultBrush}" StrokeThickness="3" />
+                <Ellipse Width="7" Height="7" Fill="{ThemeResource AccentFillColorDefaultBrush}" />
+            </Grid>
+            <Border x:Name="SearchBadge" Visibility="Collapsed" CornerRadius="4" Padding="8,4"
+                    Background="{ThemeResource WindowBackgroundBrush}" BorderThickness="1"
+                    BorderBrush="{ThemeResource AccentFillColorDefaultBrush}">
+                <TextBlock x:Name="SearchLabel" />
+            </Border>
+        </Canvas>
+        <Grid Width="16" Height="16" IsHitTestVisible="False">
+            <Rectangle x:Name="CrosshairOutlineX" Width="16" Height="3" />
+            <Rectangle x:Name="CrosshairOutlineZ" Width="3" Height="16" />
+            <Rectangle x:Name="CrosshairX" Width="14" Height="1" />
+            <Rectangle x:Name="CrosshairZ" Width="1" Height="14" />
+        </Grid>
+        <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12">
+            <Button x:Name="ZoomInButton" Click="ZoomIn_Click" Width="40" Height="32" ToolTipService.ToolTip="放大" AutomationProperties.Name="放大地图">
+                <SymbolIcon Symbol="ZoomIn" />
+            </Button>
+            <Button x:Name="ZoomOutButton" Click="ZoomOut_Click" Width="40" Height="32" ToolTipService.ToolTip="缩小" AutomationProperties.Name="缩小地图">
+                <SymbolIcon Symbol="ZoomOut" />
+            </Button>
+            <Button x:Name="OriginButton" Click="Origin_Click" Width="40" Height="32" ToolTipService.ToolTip="世界原点" AutomationProperties.Name="回到世界原点">
+                <SymbolIcon Symbol="Home" />
+            </Button>
+        </StackPanel>
+        <ProgressBar x:Name="MapProgress" Height="3" VerticalAlignment="Top" IsIndeterminate="True" Visibility="Collapsed" IsHitTestVisible="False" />
+    </Grid>
+</UserControl>

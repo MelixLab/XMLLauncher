@@ -1,0 +1,282 @@
+<UserControl x:Class="LinxLauncher.Controls.SeedMapWorkbench"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:LinxLauncher.Controls"
+    xmlns:models="using:LinxLauncher.Models">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <AcrylicBrush x:Key="SeedMapPopupBrush" TintColor="{ThemeResource SolidBackgroundFillColorBase}"
+                                  TintOpacity="0.25" TintLuminosityOpacity="0.65"
+                                  FallbackColor="{ThemeResource SolidBackgroundFillColorBase}" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <AcrylicBrush x:Key="SeedMapPopupBrush" TintColor="{ThemeResource SolidBackgroundFillColorBase}"
+                                  TintOpacity="0.25" TintLuminosityOpacity="0.65"
+                                  FallbackColor="{ThemeResource SolidBackgroundFillColorBase}" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="HighContrast">
+                    <SolidColorBrush x:Key="SeedMapPopupBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+            <Style x:Key="SeedMapFlyoutStyle" TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+                <Setter Property="Background" Value="{ThemeResource SeedMapPopupBrush}" />
+            </Style>
+            <Style x:Key="SeedMapJumpFlyoutStyle" TargetType="FlyoutPresenter" BasedOn="{StaticResource SeedMapFlyoutStyle}">
+                <Setter Property="AllowFocusOnInteraction" Value="True" />
+                <Setter Property="IsTabStop" Value="True" />
+            </Style>
+            <Style x:Key="SeedMapMenuStyle" TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+                <Setter Property="Background" Value="{ThemeResource SeedMapPopupBrush}" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+    <Grid x:Name="Root" RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid x:Name="WorldBar" ColumnSpacing="8" RowSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="118" />
+                <ColumnDefinition Width="112" />
+                <ColumnDefinition Width="84" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+            <Grid x:Name="SeedHost" ColumnSpacing="4">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                <AutoSuggestBox x:Name="SeedBox" Header="种子" Text="123" QueryIcon="Find"
+                            QuerySubmitted="Seed_QuerySubmitted" SuggestionChosen="Seed_SuggestionChosen"
+                            TextChanged="Seed_TextChanged" AutomationProperties.AutomationId="SeedMapSeed" />
+                <ToggleButton x:Name="FavoriteButton" Grid.Column="1" Height="32" VerticalAlignment="Bottom" Click="Favorite_Click"
+                              ToolTipService.ToolTip="收藏种子" AutomationProperties.Name="收藏种子">
+                    <FontIcon x:Name="FavoriteIcon" Glyph="&#xE734;" FontSize="16" />
+                </ToggleButton>
+                <Button x:Name="HistoryButton" Grid.Column="2" Height="32" VerticalAlignment="Bottom" Click="History_Click"
+                        ToolTipService.ToolTip="历史与收藏" AutomationProperties.Name="历史与收藏">
+                    <FontIcon Glyph="&#xE81C;" FontSize="16" />
+                    <Button.Flyout>
+                        <Flyout x:Name="HistoryFlyout" FlyoutPresenterStyle="{StaticResource SeedMapFlyoutStyle}">
+                            <Grid Width="320" RowSpacing="8">
+                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <SelectorBar x:Name="HistoryTabs" SelectionChanged="HistoryTabs_SelectionChanged">
+                                    <SelectorBarItem x:Name="FavoritesTab" Text="收藏" IsSelected="True" />
+                                    <SelectorBarItem Text="历史" />
+                                </SelectorBar>
+                                <Button x:Name="ClearHistoryButton" Grid.Column="1" Content="清除列表" Height="32"
+                                        VerticalAlignment="Center" Click="ClearHistory_Click" />
+                                <ListView x:Name="HistoryList" Grid.Row="1" Grid.ColumnSpan="2" MaxHeight="360" IsItemClickEnabled="True"
+                                          ItemClick="HistoryItem_Click" ContainerContentChanging="HistoryList_ContainerContentChanging"
+                                          ScrollViewer.VerticalScrollBarVisibility="Visible">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="models:SeedMapProfile">
+                                            <TextBlock Text="{x:Bind controls:SeedMapWorkbench.FormatHistory(SeedText, Version, Dimension)}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                                <TextBlock x:Name="HistoryEmpty" Grid.Row="2" Grid.ColumnSpan="2" Text="暂无收藏" Margin="12"
+                                           HorizontalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </Grid>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+            </Grid>
+            <ComboBox x:Name="VersionBox" Grid.Column="1" Header="Java" HorizontalAlignment="Stretch"
+                      SelectionChanged="World_SelectionChanged" AutomationProperties.AutomationId="SeedMapVersion" />
+            <ComboBox x:Name="DimensionBox" Grid.Column="2" Header="维度" HorizontalAlignment="Stretch"
+                      SelectionChanged="World_SelectionChanged" AutomationProperties.AutomationId="SeedMapDimension">
+                <ComboBoxItem Content="主世界" Tag="0" />
+                <ComboBoxItem Content="下界" Tag="-1" />
+                <ComboBoxItem Content="末地" Tag="1" />
+            </ComboBox>
+            <NumberBox x:Name="HeightBox" Grid.Column="3" Header="Y" Minimum="-64" Maximum="320" Value="64"
+                       ValueChanged="Height_Changed" SpinButtonPlacementMode="Compact" />
+        </Grid>
+        <Border x:Name="CommandSurface" Grid.Row="1">
+        <Grid>
+        <Grid x:Name="CommandHost" ColumnSpacing="8">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+        <CommandBar x:Name="MapCommands" Background="Transparent" DefaultLabelPosition="Right" IsOpen="False"
+                    HorizontalAlignment="Left" HorizontalContentAlignment="Left">
+            <CommandBar.Resources>
+                <ResourceDictionary>
+                    <ResourceDictionary.ThemeDictionaries>
+                        <ResourceDictionary x:Key="Light">
+                            <SolidColorBrush x:Key="CommandBarBackgroundOpen" Color="Transparent" />
+                            <SolidColorBrush x:Key="CommandBarBorderBrushOpen" Color="Transparent" />
+                            <Thickness x:Key="CommandBarBorderThicknessOpen">0</Thickness>
+                        </ResourceDictionary>
+                        <ResourceDictionary x:Key="Dark">
+                            <SolidColorBrush x:Key="CommandBarBackgroundOpen" Color="Transparent" />
+                            <SolidColorBrush x:Key="CommandBarBorderBrushOpen" Color="Transparent" />
+                            <Thickness x:Key="CommandBarBorderThicknessOpen">0</Thickness>
+                        </ResourceDictionary>
+                    </ResourceDictionary.ThemeDictionaries>
+                </ResourceDictionary>
+            </CommandBar.Resources>
+            <CommandBar.CommandBarOverflowPresenterStyle>
+                <Style TargetType="CommandBarOverflowPresenter" BasedOn="{StaticResource DefaultCommandBarOverflowPresenterStyle}">
+                    <Setter Property="Background" Value="{ThemeResource SeedMapPopupBrush}" />
+                </Style>
+            </CommandBar.CommandBarOverflowPresenterStyle>
+            <AppBarButton x:Name="WorldSettingsButton" Label="种子" Icon="World" Visibility="Collapsed"
+                          AllowFocusOnInteraction="True">
+                <AppBarButton.Flyout><Flyout x:Name="WorldFlyout" Placement="BottomEdgeAlignedRight"
+                                            AllowFocusOnInteraction="True" ShowMode="Standard"
+                                            FlyoutPresenterStyle="{StaticResource SeedMapFlyoutStyle}" /></AppBarButton.Flyout>
+            </AppBarButton>
+            <AppBarButton x:Name="JumpButton" Label="跳转" Icon="MapPin" AllowFocusOnInteraction="True"
+                          ToolTipService.ToolTip="输入 X/Z 坐标">
+                <AppBarButton.Flyout>
+                    <Flyout x:Name="JumpFlyout" Opening="JumpFlyout_Opening" Opened="JumpFlyout_Opened"
+                            ShowMode="Standard" AllowFocusOnInteraction="True"
+                            FlyoutPresenterStyle="{StaticResource SeedMapJumpFlyoutStyle}">
+                        <StackPanel Spacing="10" Width="230">
+                            <TextBox x:Name="JumpX" Header="X" Text="0" AllowFocusOnInteraction="True" KeyDown="JumpCoordinate_KeyDown" />
+                            <TextBox x:Name="JumpZ" Header="Z" Text="0" AllowFocusOnInteraction="True" KeyDown="JumpCoordinate_KeyDown" />
+                            <TextBlock x:Name="JumpError" Visibility="Collapsed" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+                            <Button x:Name="JumpConfirmButton" Content="跳转" Click="Jump_Click" HorizontalAlignment="Stretch" />
+                        </StackPanel>
+                    </Flyout>
+                </AppBarButton.Flyout>
+            </AppBarButton>
+            <AppBarButton Label="导出" Icon="Save" Click="Export_Click" />
+            <AppBarToggleButton x:Name="GridButton" Label="区块" Icon="ViewAll" Click="Layers_Click" />
+            <AppBarToggleButton x:Name="SlimeButton" Label="史莱姆" Icon="ShowResults" Click="Layers_Click" />
+            <AppBarToggleButton x:Name="MeasureButton" Label="测距" Icon="Edit" Click="Measure_Click" />
+            <AppBarToggleButton x:Name="PanelButton" Label="面板" Icon="OpenPane" IsChecked="True" Click="Panel_Click" />
+            <AppBarToggleButton x:Name="PinButton" Label="置顶" Icon="Pin" Checked="Pin_Changed" Unchecked="Pin_Changed" Visibility="Collapsed"
+                                ToolTipService.ToolTip="置于其他窗口上方" />
+            <CommandBar.SecondaryCommands>
+                <AppBarButton Label="清除测距" Icon="Clear" Click="ClearMeasurement_Click" />
+                <AppBarButton Label="取消当前任务" Icon="Cancel" Click="Cancel_Click" />
+                <AppBarButton Label="地图信息" Icon="Help" Click="About_Click" />
+            </CommandBar.SecondaryCommands>
+        </CommandBar>
+            <Button x:Name="DetachButton" Grid.Column="1" Click="Detach_Click" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon x:Name="DetachIcon" Glyph="&#xE8A7;" FontSize="16" />
+                    <TextBlock x:Name="DetachLabel" Text="在新窗口打开" />
+                </StackPanel>
+            </Button>
+            <Thumb x:Name="ToolbarGrip" Grid.Column="1" Width="32" Height="40" Visibility="Collapsed"
+                   VerticalAlignment="Center" DragDelta="ToolbarGrip_DragDelta" KeyDown="ToolbarGrip_KeyDown"
+                   ToolTipService.ToolTip="拖动工具栏；方向键微调，Home 复位"
+                   AutomationProperties.Name="拖动地图工具栏">
+                <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                        <Grid Background="Transparent">
+                            <FontIcon Glyph="&#xE700;" FontSize="16" />
+                        </Grid>
+                    </ControlTemplate>
+                </Thumb.Template>
+            </Thumb>
+        </Grid>
+        </Grid>
+        </Border>
+        <SplitView x:Name="Workspace" Grid.Row="2" PanePlacement="Right" DisplayMode="Inline"
+                   IsPaneOpen="True" OpenPaneLength="320" PaneBackground="{ThemeResource WindowBackgroundBrush}">
+            <SplitView.Pane>
+                <Grid Padding="12,0,8,8" RowSpacing="8">
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                    <SelectorBar x:Name="Tools" SelectionChanged="Tools_SelectionChanged">
+                        <SelectorBarItem x:Name="BiomesTab" Text="群系" IsSelected="True" />
+                        <SelectorBarItem x:Name="StructuresTab" Text="结构" />
+                        <SelectorBarItem x:Name="MarkersTab" Text="标记" />
+                    </SelectorBar>
+                    <Grid Grid.Row="1">
+                        <Grid x:Name="BiomePanel" RowSpacing="8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBox x:Name="BiomeFilter" PlaceholderText="搜索群系" TextChanged="BiomeFilter_Changed"
+                                     AutomationProperties.Name="搜索群系" />
+                            <Grid Grid.Row="1" ColumnSpacing="4">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <CheckBox x:Name="HideOthersBox" Content="隐藏未选群系" Click="HideOthers_Click"
+                                          ToolTipService.ToolTip="隐藏地图上未选中的群系；关闭时仅淡化它们" />
+                                <Button Grid.Column="1" Content="全选" Padding="8,4" Click="SelectAllBiomes_Click" />
+                                <Button Grid.Column="2" Content="清空" Padding="8,4" Click="ClearBiomes_Click" />
+                            </Grid>
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ListView x:Name="BiomeList" SelectionMode="Multiple" ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                          SelectionChanged="BiomeList_SelectionChanged" />
+                                <controls:PersistentScrollBar x:Name="BiomeScrollBar" Grid.Column="1" Target="{x:Bind BiomeList}" AutomationProperties.Name="群系列表滚动条" />
+                            </Grid>
+                            <ComboBox x:Name="LocateBiome" Grid.Row="3" Header="查找位置" HorizontalAlignment="Stretch" />
+                            <Button Grid.Row="4" Content="查找附近群系" Click="FindBiome_Click" HorizontalAlignment="Stretch" />
+                        </Grid>
+                        <Grid x:Name="StructurePanel" RowSpacing="8" Visibility="Collapsed">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <TextBox x:Name="StructureFilter" PlaceholderText="搜索结构" TextChanged="StructureFilter_Changed"
+                                     AutomationProperties.Name="搜索结构" />
+                            <Grid Grid.Row="1" ColumnSpacing="4">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <CheckBox x:Name="SelectedStructuresBox" Content="仅列出已勾选" Click="SelectedStructures_Click"
+                                          ToolTipService.ToolTip="仅筛选下方类型列表；勾选的类型会显示在地图上" />
+                                <Button Grid.Column="1" Content="全选" Padding="8,4" Click="SelectAllStructures_Click" />
+                                <Button Grid.Column="2" Content="清空" Padding="8,4" Click="ClearStructures_Click" />
+                            </Grid>
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <ListView x:Name="StructureTypes" SelectionMode="None" ScrollViewer.VerticalScrollBarVisibility="Hidden" />
+                                <controls:PersistentScrollBar x:Name="StructureScrollBar" Grid.Column="1" Target="{x:Bind StructureTypes}" AutomationProperties.Name="结构列表滚动条" />
+                            </Grid>
+                            <Expander x:Name="ResultsExpander" Grid.Row="3" Header="地图中的结构 · 0" ExpandDirection="Up"
+                                      VerticalAlignment="Bottom" HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch">
+                                <ListView x:Name="StructureResults" MaxHeight="180" IsItemClickEnabled="True"
+                                          ScrollViewer.VerticalScrollBarVisibility="Visible"
+                                          ItemClick="StructureResult_Click" SelectionMode="Single" />
+                            </Expander>
+                        </Grid>
+                        <Grid x:Name="MarkerPanel" RowSpacing="8" Visibility="Collapsed">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <Button Content="添加路径点" Click="AddWaypoint_Click" HorizontalAlignment="Stretch"
+                                    ToolTipService.ToolTip="保存当前位置，便于之后定位或测距" />
+                            <ListView x:Name="WaypointList" Grid.Row="1" IsItemClickEnabled="True" ItemClick="Waypoint_Click"
+                                      ScrollViewer.VerticalScrollBarVisibility="Visible" />
+                            <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                                <Button Content="编辑" Click="EditWaypoint_Click" />
+                                <Button Content="删除" Click="DeleteWaypoint_Click" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+                </Grid>
+            </SplitView.Pane>
+            <Border x:Name="MapBorder" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" Margin="0,0,8,0">
+                <Grid>
+                    <controls:SeedMapViewport x:Name="Viewport" />
+                    <Grid x:Name="StatusBar" Width="260" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                          Margin="12" Padding="10,8" RowSpacing="4" CornerRadius="8" BorderThickness="1"
+                          BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock x:Name="HoverText" Text="X 0 · Z 0" TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"
+                                   ToolTipService.ToolTip="{x:Bind HoverText.Text, Mode=OneWay}" />
+                        <TextBlock x:Name="CameraText" Grid.Row="1" TextTrimming="CharacterEllipsis"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"
+                                   ToolTipService.ToolTip="{x:Bind CameraText.Text, Mode=OneWay}" />
+                        <TextBlock x:Name="StatusText" Grid.Row="2" Text="加载中…" TextTrimming="CharacterEllipsis"
+                                   TextWrapping="Wrap" MaxLines="3" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"
+                                   ToolTipService.ToolTip="{x:Bind StatusText.Text, Mode=OneWay}" />
+                        <InfoBar x:Name="WaypointUndo" Grid.Row="3" IsOpen="False" Severity="Informational">
+                            <InfoBar.ActionButton><Button Content="撤销" Click="UndoWaypoint_Click" /></InfoBar.ActionButton>
+                        </InfoBar>
+                    </Grid>
+                </Grid>
+            </Border>
+        </SplitView>
+    </Grid>
+</UserControl>

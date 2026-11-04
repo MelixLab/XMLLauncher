@@ -16,6 +16,8 @@
 - **账号**：微软正版登录（OAuth 设备码流程）、离线账号、站内 XML 账号（注册 / 登录 / 头像同步）
 - **自动更新**：启动时检查新版本，软件内显示下载进度，下载完自动替换并重启
 - **原生 AOT**：冷启动快、没有 coreclr.dll，配合单文件外壳可做成一个 exe
+- **种子地图工作台**：XMLLauncher 自己维护完整的 Java 种子地图页面和独立窗口，
+  通过 `RZeroF1.Minecraft.SeedMap` NuGet 包获取群系瓦片、结构、坐标和导出能力
 
 ## 技术栈
 
@@ -32,7 +34,7 @@
 LinxLauncher.WinUI/
 ├── App.xaml / App.xaml.cs        应用入口、全局异常处理
 ├── MainWindow.xaml / .cs         主窗口：导航、账号面板、更新流程
-├── Controls/                     自绘控件：下载步骤、启动进度、首次向导
+├── Controls/                     自绘控件：下载步骤、启动进度、首次向导、种子地图工作台
 ├── Converters/                   XAML 值转换器
 ├── Models/                       Minecraft 版本 / 资源 / 清单模型
 ├── Services/                     业务层：版本、下载、账号、联机、更新、日志

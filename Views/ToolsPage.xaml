@@ -1,4 +1,4 @@
-﻿<Page
+<Page
     x:Class="LinxLauncher.Views.ToolsPage"
     NavigationCacheMode="Enabled"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -51,7 +51,7 @@
                         <controls:FeatureCard.Actions>
                             <Button
                                 Click="SeedOpen_Click"
-                                Content="解析"
+                                Content="打开"
                                 Style="{StaticResource CardActionButtonStyle}" />
                         </controls:FeatureCard.Actions>
                     </controls:FeatureCard>

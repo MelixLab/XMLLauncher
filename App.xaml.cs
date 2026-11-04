@@ -41,6 +41,11 @@ public partial class App : Application
         try
         {
             AppState.Init();
+            if (SeedMapDiagnostics.TestRoot is not null)
+            {
+                AppState.Settings.OnboardingDone = true;
+                AppState.Settings.TelemetryEnabled = false;
+            }
             // 全局控件字体：Toast / 对话框 / 浮窗这些「事后创建」的控件也一起跟上
             FontService.ApplyGlobal(AppState.Settings.UseNotoSans);
             Log.Info("XML Launcher 启动（WinUI 3）");
@@ -54,6 +59,8 @@ public partial class App : Application
 
         MainWin = new MainWindow();
         MainWin.Activate();
+        if (SeedMapDiagnostics.TestRoot is not null)
+            UI.TryEnqueue(async () => await SeedMapDiagnostics.RunAsync((MainWindow)MainWin));
 
         // 用户体验改进计划：默认开启，设置里能关；关掉后这里什么都不做
         try { Telemetry.Start(); }
