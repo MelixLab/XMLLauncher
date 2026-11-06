@@ -16,8 +16,11 @@ concurrency:
 
 jobs:
   build:
-    name: Debug / x64
+    name: ${{ matrix.configuration }} / x64
     runs-on: windows-2025
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
     timeout-minutes: 20
     defaults:
       run:
@@ -36,11 +39,25 @@ jobs:
       - name: Prepare placeholder server configuration
         run: Copy-Item -LiteralPath Services/LocalSecrets.example.cs.txt -Destination Services/LocalSecrets.cs
 
+      - name: Check source isolation
+        run: ./tools/Assert-Distribution.ps1 -CheckSource
+
+      - name: Add private file probes
+        run: |
+          New-Item -ItemType Directory -Path docs/internal, Assets/internal -Force | Out-Null
+          Set-Content docs/internal/probe.txt 'DO NOT SUBMIT'
+          Set-Content Assets/internal/probe.png 'DO NOT SUBMIT'
+          Set-Content Assets/isolation-unlisted.png 'Unapproved image probe'
+          Set-Content isolation-do-not-submit.zip 'Private archive probe'
+
       - name: Restore dependencies
         run: dotnet restore LinxLauncher.WinUI.csproj -p:Platform=x64 -r win-x64 --source https://api.nuget.org/v3/index.json
 
       - name: Build
-        run: dotnet build LinxLauncher.WinUI.csproj -c Debug -p:Platform=x64 --no-restore
+        run: dotnet build LinxLauncher.WinUI.csproj -c ${{ matrix.configuration }} -p:Platform=x64 --no-restore -o artifacts/build/${{ matrix.configuration }}
+
+      - name: Verify build output
+        run: ./tools/Assert-Distribution.ps1 -OutputDirectory artifacts/build/${{ matrix.configuration }} -ManifestPath artifacts/build-${{ matrix.configuration }}.csv
 
   publish:
     name: Release AOT / x64
@@ -63,26 +80,19 @@ jobs:
       - name: Prepare placeholder server configuration
         run: Copy-Item -LiteralPath Services/LocalSecrets.example.cs.txt -Destination Services/LocalSecrets.cs
 
+      - name: Check source isolation
+        run: ./tools/Assert-Distribution.ps1 -CheckSource
+
+      - name: Add private file probes
+        run: |
+          New-Item -ItemType Directory -Path docs/internal, Assets/internal -Force | Out-Null
+          Set-Content docs/internal/probe.txt 'DO NOT SUBMIT'
+          Set-Content Assets/internal/probe.png 'DO NOT SUBMIT'
+          Set-Content Assets/isolation-unlisted.png 'Unapproved image probe'
+          Set-Content isolation-do-not-submit.zip 'Private archive probe'
+
       - name: Publish Native AOT
         run: dotnet publish LinxLauncher.WinUI.csproj -c Release -r win-x64 -p:Platform=x64 -p:PublishAot=true -p:SelfContained=true -o artifacts/publish/win-x64
 
       - name: Verify publish output
-        run: |
-          $publishDirectory = 'artifacts/publish/win-x64'
-          $requiredFiles = @(
-            'LinxLauncher.WinUI.exe'
-            'Assets/AppIcon.ico'
-            'Assets/Blocks/vanilla.png'
-            'rzero_seedmap.dll'
-            'rzero_projection_d3d11.dll'
-            'THIRD-PARTY-NOTICES.md'
-          )
-          foreach ($file in $requiredFiles) {
-            $path = Join-Path $publishDirectory $file
-            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-              throw "Missing publish output: $file"
-            }
-          }
-          if (Test-Path -LiteralPath (Join-Path $publishDirectory 'coreclr.dll')) {
-            throw 'Native AOT output unexpectedly contains coreclr.dll.'
-          }
+        run: ./tools/Assert-Distribution.ps1 -OutputDirectory artifacts/publish/win-x64 -NativeAot -ManifestPath artifacts/publish-win-x64.csv

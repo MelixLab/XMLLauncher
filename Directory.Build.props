@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'LinxLauncher.WinUI'">
+    <!-- 主程序不作为 NuGet SDK 分发；禁止默认 None / WinUI Assets 通配符收集本地资料。 -->
+    <IsPackable>false</IsPackable>
+    <IncludeContentInPack>false</IncludeContentInPack>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+    <EnableDefaultAssets>false</EnableDefaultAssets>
+    <!-- 必须在 SDK / WinUI 的默认项目项求值前设置，不能依赖 Git 忽略规则。 -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**;tests\**;bin\**;obj\**;objc\**;publish\**;out\**;docs\**;tools\**;.obsidian\**;**\internal*\**;**\research\**;**\screenshots\**;**\samples\**;**\testdata\**;**\*do not submit*;**\*do not submit*\**;**\*do-not-submit*;**\*do-not-submit*\**;**\*donot-submit*;**\*donot-submit*\**;**\*donotsubmit*;**\*donotsubmit*\**;**\*请勿提交*;**\*请勿提交*\**;**\AGENTS.md;**\Agent.md;**\*.zip;**\*.7z;**\*.nupkg;**\*.snupkg;**\*.tmp;**\*.bak;**\*.log;**\*.binlog</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

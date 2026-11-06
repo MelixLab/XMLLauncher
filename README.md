@@ -137,8 +137,10 @@ PowerShell 中用 `Remove-Item Env:XML_LOCAL_DEV` 恢复自动判断。
   统一用 `JsonNode.ToJsonString()`
 - 需要反序列化的类型必须登记在 `Services/AppJsonContext.cs`，
   且不能是 `private` 嵌套类，否则源生成器不生成元数据
-- `Assets` 目录要整目录挂 `CopyToPublishDirectory`，否则发布产物里没有图标，
-  任务栏会显示系统默认图标
+- 运行资源和公开文档在项目文件的 `LauncherAsset` / `LauncherPublicDocument` 中逐项登记，
+  并复制到构建和发布目录；新增资源时更新清单，避免遗漏图标或混入内部资料。
+  分发前运行 `pwsh -File tools/Assert-Distribution.ps1 -OutputDirectory <产物目录>`，
+  Native AOT 产物追加 `-NativeAot`；源码检查使用 `-CheckSource`。
 
 ## 免责声明
 

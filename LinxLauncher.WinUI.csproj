@@ -31,21 +31,50 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <SelfContained>true</SelfContained>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
-    <!-- 内存回归工具的隔离源码和产物不参与正式构建。 -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);artifacts\**;tests\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <!--
-      整个 Assets 都要进发布目录：WinUI 的任务栏/标题栏图标是运行时 AppWindow.SetIcon 读文件，
-      不是内嵌在 exe 里的。只列 Blocks 的话发布出来只剩方块图标，
-      外面那个 exe 有图标、任务栏却是白纸一张 —— 就是这么来的。
-    -->
-    <Content Include="Assets\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="THIRD-PARTY-NOTICES.md"
+    <!-- 公开文件清单：新增运行资源或公开文档时显式登记，禁止递归复制本地资料。 -->
+    <LauncherAsset Include="Assets\AppIcon.ico" />
+    <LauncherAsset Include="Assets\Blocks\anvil.png" />
+    <LauncherAsset Include="Assets\Blocks\book.png" />
+    <LauncherAsset Include="Assets\Blocks\clock.png" />
+    <LauncherAsset Include="Assets\Blocks\command.png" />
+    <LauncherAsset Include="Assets\Blocks\fabric.png" />
+    <LauncherAsset Include="Assets\Blocks\forge.png" />
+    <LauncherAsset Include="Assets\Blocks\neoforge.png" />
+    <LauncherAsset Include="Assets\Blocks\quilt.png" />
+    <LauncherAsset Include="Assets\Blocks\vanilla.png" />
+    <LauncherAsset Include="Assets\LockScreenLogo.scale-200.png" />
+    <LauncherAsset Include="Assets\Skins\Alex.png" />
+    <LauncherAsset Include="Assets\Skins\Steve.png" />
+    <LauncherAsset Include="Assets\SplashScreen.scale-200.png" />
+    <LauncherAsset Include="Assets\Square150x150Logo.scale-200.png" />
+    <LauncherAsset Include="Assets\Square44x44Logo.scale-200.png" />
+    <LauncherAsset Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+    <LauncherAsset Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
+    <LauncherAsset Include="Assets\StoreLogo.png" />
+    <LauncherAsset Include="Assets\Wide310x150Logo.scale-200.png" />
+    <LauncherPublicDocument Include="README.md" />
+    <LauncherPublicDocument Include="LICENSE" />
+    <LauncherPublicDocument Include="THIRD-PARTY-NOTICES.md" />
+    <LauncherPublicDocument Include="LINX.Logo.png" />
+    <LauncherPublicDocument Include="docs\memory-performance.md" />
+    <LauncherPublicDocument Include="docs\settings-design.md" />
+    <Content Include="@(LauncherAsset);@(LauncherPublicDocument)"
              CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
-
+             CopyToPublishDirectory="PreserveNewest"
+             Pack="false" />
+    <!-- NuGet 包根目录的许可证不会自动复制；仅列出随本程序分发所需的上游声明。 -->
+    <Content Include="$(PkgRZeroF1_Minecraft_SeedMap)\licenses\cubiomes\LICENSE;$(PkgRZeroF1_Minecraft_SeedMap)\licenses\cubiomes\SOURCE.md;$(PkgRZeroF1_Minecraft_SeedMap)\licenses\cubiomes\manifest.json"
+             Link="licenses\cubiomes\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="false" />
+    <Content Include="$(PkgRZeroF1_Minecraft_Projection)\licenses\minecraft-renderer\LICENSE;$(PkgRZeroF1_Minecraft_Projection)\licenses\minecraft-renderer\SOURCE.md"
+             Link="licenses\minecraft-renderer\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="false" />
+    <Content Include="$(PkgRZeroF1_Minecraft_Projection)\licenses\schematic-editor\LICENSE;$(PkgRZeroF1_Minecraft_Projection)\licenses\schematic-editor\SOURCE.md"
+             Link="licenses\schematic-editor\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -60,8 +89,8 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.7.1" />
-    <PackageReference Include="RZeroF1.Minecraft.SeedMap" Version="0.2.1" />
-    <PackageReference Include="RZeroF1.Minecraft.Projection" Version="0.1.1" />
+    <PackageReference Include="RZeroF1.Minecraft.SeedMap" Version="0.2.1" GeneratePathProperty="true" />
+    <PackageReference Include="RZeroF1.Minecraft.Projection" Version="0.1.1" GeneratePathProperty="true" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">

@@ -81,4 +81,24 @@ Services/LocalSecrets.cs
 # AOT / 中间产物目录（不是源码）
 objc/
 *.predesign
-/docs/Internal-DONOTSUBMIT
+# 内部资料、原始截图与测试样本（不依赖本机 .git/info/exclude）
+**/[Ii][Nn][Tt][Ee][Rr][Nn][Aa][Ll]*/
+*[Dd][Oo] [Nn][Oo][Tt] [Ss][Uu][Bb][Mm][Ii][Tt]*
+*[Dd][Oo]-[Nn][Oo][Tt]-[Ss][Uu][Bb][Mm][Ii][Tt]*
+*[Dd][Oo][Nn][Oo][Tt]-[Ss][Uu][Bb][Mm][Ii][Tt]*
+*[Dd][Oo][Nn][Oo][Tt][Ss][Uu][Bb][Mm][Ii][Tt]*
+*请勿提交*
+**/[Rr]esearch/
+**/[Ss]creenshots/
+**/[Ss]amples/
+**/[Tt]est[Dd]ata/
+.obsidian/
+out/
+*.[Zz][Ii][Pp]
+*.7[Zz]
+/docs/performance/
+
+# 覆盖机器级 /tools/ 忽略规则，只公开本仓库的产物验证脚本。
+!/tools/
+/tools/*
+!/tools/Assert-Distribution.ps1

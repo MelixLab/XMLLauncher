@@ -1,0 +1,33 @@
+# 源码归档同样隔离本地资料；已跟踪文件还会由 CI 的源码检查拒绝。
+**/[Ii][Nn][Tt][Ee][Rr][Nn][Aa][Ll]*/** export-ignore
+"**/*[Dd][Oo] [Nn][Oo][Tt] [Ss][Uu][Bb][Mm][Ii][Tt]*" export-ignore
+"**/*[Dd][Oo] [Nn][Oo][Tt] [Ss][Uu][Bb][Mm][Ii][Tt]*/**" export-ignore
+**/*[Dd][Oo]-[Nn][Oo][Tt]-[Ss][Uu][Bb][Mm][Ii][Tt]* export-ignore
+**/*[Dd][Oo]-[Nn][Oo][Tt]-[Ss][Uu][Bb][Mm][Ii][Tt]*/** export-ignore
+**/*[Dd][Oo][Nn][Oo][Tt]-[Ss][Uu][Bb][Mm][Ii][Tt]* export-ignore
+**/*[Dd][Oo][Nn][Oo][Tt]-[Ss][Uu][Bb][Mm][Ii][Tt]*/** export-ignore
+**/*[Dd][Oo][Nn][Oo][Tt][Ss][Uu][Bb][Mm][Ii][Tt]* export-ignore
+**/*[Dd][Oo][Nn][Oo][Tt][Ss][Uu][Bb][Mm][Ii][Tt]*/** export-ignore
+**/*请勿提交* export-ignore
+**/*请勿提交*/** export-ignore
+artifacts/** export-ignore
+tests/** export-ignore
+bin/** export-ignore
+obj/** export-ignore
+objc/** export-ignore
+publish/** export-ignore
+out/** export-ignore
+**/AGENTS.md export-ignore
+**/Agent.md export-ignore
+**/*.sln export-ignore
+**/*.slnx export-ignore
+**/*.slnf export-ignore
+Services/LocalSecrets.cs export-ignore
+.obsidian/** export-ignore
+**/[Rr]esearch/** export-ignore
+**/[Ss]creenshots/** export-ignore
+**/[Ss]amples/** export-ignore
+**/[Tt]est[Dd]ata/** export-ignore
+docs/performance/** export-ignore
+**/*.[Zz][Ii][Pp] export-ignore
+**/*.7[Zz] export-ignore
