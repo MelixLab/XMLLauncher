@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -30,6 +31,36 @@ public sealed partial class MainWindow : Window
     private static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT Reserved;
+        public POINT MaxSize;
+        public POINT MaxPosition;
+        public POINT MinTrackSize;
+        public POINT MaxTrackSize;
+    }
+
+    private delegate IntPtr WindowSubclassProc(
+        IntPtr hwnd, uint message, UIntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr referenceData);
+
+    [System.Runtime.InteropServices.DllImport("comctl32.dll", SetLastError = true)]
+    private static extern bool SetWindowSubclass(
+        IntPtr hwnd, WindowSubclassProc callback, UIntPtr subclassId, UIntPtr referenceData);
+
+    [System.Runtime.InteropServices.DllImport("comctl32.dll", SetLastError = true)]
+    private static extern bool RemoveWindowSubclass(IntPtr hwnd, WindowSubclassProc callback, UIntPtr subclassId);
+
+    [System.Runtime.InteropServices.DllImport("comctl32.dll")]
+    private static extern IntPtr DefSubclassProc(IntPtr hwnd, uint message, UIntPtr wParam, IntPtr lParam);
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
     private struct RECT
     {
         public int Left;
@@ -42,8 +73,13 @@ public sealed partial class MainWindow : Window
     // 概览/加载器三列卡片需要约 840 DIP 宽度，另留滚动条和取整余量。
     private const double MinimumClientWidth = 860;
     private const double MinimumClientHeight = 640;
+    private const uint WmGetMinMaxInfo = 0x0024;
+    private static readonly UIntPtr WindowSubclassId = new(1);
+    private readonly WindowSubclassProc _windowSubclassProc;
     private XamlRoot? _sizeRoot;
     private bool _updatingMinimumSize;
+    private int _minimumWindowWidth;
+    private int _minimumWindowHeight;
 
     private double WindowScale()
     {
@@ -58,21 +94,47 @@ public sealed partial class MainWindow : Window
         if (_updatingMinimumSize || AppWindow.Presenter is not OverlappedPresenter presenter ||
             presenter.State == OverlappedPresenterState.Minimized) return;
 
+        var (width, height) = GetMinimumWindowSize();
+        _minimumWindowWidth = width;
+        _minimumWindowHeight = height;
+
         _updatingMinimumSize = true;
         try
         {
-            double scale = WindowScale();
-            var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
-            int frameWidth = Math.Max(0, AppWindow.Size.Width - AppWindow.ClientSize.Width);
-            int frameHeight = Math.Max(0, AppWindow.Size.Height - AppWindow.ClientSize.Height);
-            // Presenter 限制整个窗口的物理像素尺寸；逻辑客户区下限需计入缩放及非客户区。
-            // 小屏/高缩放时，以工作区为限，保证窗口仍能放进屏幕。
-            int width = Math.Min((int)Math.Ceiling(MinimumClientWidth * scale) + frameWidth, Math.Max(1, area.Width - 40));
-            int height = Math.Min((int)Math.Ceiling(MinimumClientHeight * scale) + frameHeight, Math.Max(1, area.Height - 40));
             if (presenter.PreferredMinimumWidth != width) presenter.PreferredMinimumWidth = width;
             if (presenter.PreferredMinimumHeight != height) presenter.PreferredMinimumHeight = height;
         }
         finally { _updatingMinimumSize = false; }
+    }
+
+    private (int Width, int Height) GetMinimumWindowSize()
+    {
+        double scale = WindowScale();
+        var area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        int frameWidth = Math.Max(0, AppWindow.Size.Width - AppWindow.ClientSize.Width);
+        int frameHeight = Math.Max(0, AppWindow.Size.Height - AppWindow.ClientSize.Height);
+        // Presenter 限制整个窗口的物理像素尺寸；逻辑客户区下限需计入缩放及非客户区。
+        // 小屏/高缩放时，以工作区为限，保证窗口仍能放进屏幕。
+        int width = Math.Min((int)Math.Ceiling(MinimumClientWidth * scale) + frameWidth, Math.Max(1, area.Width - 40));
+        int height = Math.Min((int)Math.Ceiling(MinimumClientHeight * scale) + frameHeight, Math.Max(1, area.Height - 40));
+        return (width, height);
+    }
+
+    private IntPtr WindowSubclassProcHandler(
+        IntPtr hwnd, uint message, UIntPtr wParam, IntPtr lParam, UIntPtr subclassId, UIntPtr referenceData)
+    {
+        if (message == WmGetMinMaxInfo && lParam != IntPtr.Zero)
+        {
+            var info = System.Runtime.InteropServices.Marshal.PtrToStructure<MINMAXINFO>(lParam);
+            var (width, height) = _minimumWindowWidth > 0 && _minimumWindowHeight > 0
+                ? (_minimumWindowWidth, _minimumWindowHeight)
+                : GetMinimumWindowSize();
+            info.MinTrackSize.X = width;
+            info.MinTrackSize.Y = height;
+            System.Runtime.InteropServices.Marshal.StructureToPtr(info, lParam, false);
+        }
+
+        return DefSubclassProc(hwnd, message, wParam, lParam);
     }
 
     private void SizeRoot_Changed(XamlRoot sender, XamlRootChangedEventArgs args)
@@ -177,10 +239,11 @@ public sealed partial class MainWindow : Window
             if (_newTitleBarActive == useNew) return;
             _newTitleBarActive = useNew;
 
-            ExtendsContentIntoTitleBar = true;
             SetTitleBar(null);
             NativeTitleBar.Visibility = useNew ? Visibility.Visible : Visibility.Collapsed;
             TitleBarStrip.Visibility = useNew ? Visibility.Collapsed : Visibility.Visible;
+
+            ExtendsContentIntoTitleBar = true;
             AppWindow.TitleBar.PreferredHeightOption = useNew ? TitleBarHeightOption.Tall : TitleBarHeightOption.Standard;
             SetTitleBar(useNew ? NativeTitleBar : TitleBarStrip);
             AppWindow.TitleBar.IconShowOptions = IconShowOptions.HideIconAndSystemMenu;
@@ -205,8 +268,13 @@ public sealed partial class MainWindow : Window
             {
                 // 原生窗口右侧保留三个系统按钮的位置，按实际 DPI 换算每个按钮的宽度。
                 double width = AppWindow.TitleBar.RightInset / (3 * scale);
-                if (width >= 24 && width <= 96) TitleBarAccountButton.Width = width;
+                if (width >= 24 && width <= 96)
+                {
+                    TitleBarAccountButton.Width = width;
+                    TitleBarThemeButton.Width = width;
+                }
                 TitleBarAccountButton.Height = NativeTitleBar.Height;
+                TitleBarThemeButton.Height = NativeTitleBar.Height;
                 return;
             }
 
@@ -220,6 +288,9 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         Instance = this;
+        _windowSubclassProc = WindowSubclassProcHandler;
+        _ = SetWindowSubclass(
+            WindowNative.GetWindowHandle(this), _windowSubclassProc, WindowSubclassId, UIntPtr.Zero);
 
         // 任务栏 / Alt-Tab 的图标走 WM_SETICON：AppWindow.SetIcon 只改标题栏，
         // 任务栏那个窗口按钮会一直是系统默认的白纸图标。
@@ -229,11 +300,13 @@ public sealed partial class MainWindow : Window
         // 设置页每次改动都会调 ThemeService.Apply()，这里只负责首次应用。
         ThemeService.Initialize(this, RootGrid, NavView);
         NavigationPaneBackground.Attach(NavView);
+        UpdateThemeButton();
 
         // 标题栏：内容延伸到标题栏，材质才铺得到最顶上。
         // 以前用系统标题栏，它由系统单独画一条实色，云母 / 亚克力下会和窗口之间出现一道缝。
         SetupTitleBar();
         ThemeService.AppearanceChanged += SetupTitleBar;
+        ThemeService.AppearanceChanged += UpdateThemeButton;
         ApplyWindowMinimumSize();
         RootGrid.Loaded += (_, _) =>
         {
@@ -246,7 +319,9 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) =>
         {
             AppWindow.Changed -= Window_Changed;
+            _ = RemoveWindowSubclass(WindowNative.GetWindowHandle(this), _windowSubclassProc, WindowSubclassId);
             ThemeService.AppearanceChanged -= SetupTitleBar;
+            ThemeService.AppearanceChanged -= UpdateThemeButton;
             if (_sizeRoot is not null) _sizeRoot.Changed -= SizeRoot_Changed;
         };
         // 尺寸必须等窗口真正激活后再设，否则会被 WinUI 的默认 1024×768 覆盖掉。
@@ -293,9 +368,8 @@ public sealed partial class MainWindow : Window
         fontTimer.Tick += (_, _) => FontService.RefreshAll();
         ContentFrame.Navigated += (_, _) =>
         {
-            // 主导航没有前进/后退入口，避免反复切页累计导航记录。
-            ContentFrame.BackStack.Clear();
-            ContentFrame.ForwardStack.Clear();
+            NavView.IsBackEnabled = ContentFrame.CanGoBack;
+            SelectNavItem(NavigationTagForPage(ContentFrame.CurrentSourcePageType));
             FontService.RefreshAll();
             DispatcherQueue.TryEnqueue(
                 Microsoft.UI.Dispatching.DispatcherQueuePriority.Low,
@@ -307,7 +381,6 @@ public sealed partial class MainWindow : Window
         };
         ContentFrame.NavigationFailed += (_, e) => Log.Fatal("Frame", e.Exception);
         ContentFrame.Navigate(typeof(OverviewPage));
-        SelectNavItem("overview");
 
         // 首次启动：直接把向导盖在页面上（不进任何页面），
         // 等这一帧布局完再铺，否则遮罩会在窗口第一次绘制时闪一下。
@@ -339,6 +412,7 @@ public sealed partial class MainWindow : Window
             "community" => typeof(CommunityPage),
             "tools" => typeof(ToolsPage),
             "seedmap" => typeof(SeedMapPage),
+            "projection" => typeof(ProjectionPage),
             "cloud" => typeof(CloudSavesPage),
             "accounts" => typeof(AccountsPage),
             "skins" => typeof(AccountsPage),
@@ -368,16 +442,47 @@ public sealed partial class MainWindow : Window
             else if (tag == "accounts") accounts.ShowAccounts();
         }
 
-        SelectNavItem(tag);
+        SelectNavItem(NavigationTagForPage(ContentFrame.CurrentSourcePageType));
     }
 
-    private void NavView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    private void NavView_ItemInvoked(NavigationView sender, NavigationViewItemInvokedEventArgs args)
     {
-        if (args.SelectedItem is not NavigationViewItem item || item.Tag is not string tag) return;
+        if (args.InvokedItemContainer is not NavigationViewItem { Tag: string tag }) return;
         NavigateTo(tag);
     }
 
-    private void SelectNavItem(string tag)
+    private void NavView_BackRequested(NavigationView sender, NavigationViewBackRequestedEventArgs args)
+    {
+        if (!ContentFrame.CanGoBack) return;
+
+        try
+        {
+            ContentFrame.GoBack();
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("导航返回失败：" + ex.Message);
+        }
+    }
+
+    private static string? NavigationTagForPage(Type? pageType) => pageType switch
+    {
+        null => null,
+        _ when pageType == typeof(OverviewPage) => "overview",
+        _ when pageType == typeof(VersionsPage) => "versions",
+        _ when pageType == typeof(DownloadsPage) => "downloads",
+        _ when pageType == typeof(ModsPage) => "mods",
+        _ when pageType == typeof(RelayPage) => "relay",
+        _ when pageType == typeof(CommunityPage) => "community",
+        _ when pageType == typeof(ToolsPage) => "tools",
+        _ when pageType == typeof(SeedMapPage) => "tools",
+        _ when pageType == typeof(ProjectionPage) => "tools",
+        _ when pageType == typeof(CloudSavesPage) => "cloud",
+        _ when pageType == typeof(SettingsPage) => "settings",
+        _ => null,
+    };
+
+    private void SelectNavItem(string? tag)
     {
         foreach (var obj in NavView.MenuItems)
         {
@@ -400,6 +505,24 @@ public sealed partial class MainWindow : Window
         // 账户 / 皮肤没有侧栏入口（从左下角头像进去）：清掉高亮，
         // 否则点了头像之后侧栏还停在「概览」上，看起来像没切走。
         NavView.SelectedItem = null;
+    }
+
+    private void UpdateThemeButton()
+    {
+        if (TitleBarThemeIcon is null || TitleBarThemeButton is null) return;
+
+        bool dark = ThemeService.IsDark;
+        TitleBarThemeIcon.Glyph = dark ? "\uE708" : "\uE706";
+        string target = dark ? "浅色" : "深色";
+        ToolTipService.SetToolTip(TitleBarThemeButton, $"切换到{target}主题");
+        AutomationProperties.SetName(TitleBarThemeButton, $"切换到{target}主题");
+    }
+
+    private void ThemeButton_Click(object sender, RoutedEventArgs e)
+    {
+        AppState.Settings.ThemeMode = ThemeService.IsDark ? "Light" : "Dark";
+        SettingsService.Save();
+        ThemeService.Apply();
     }
 
     // ================= 新手向导 =================
@@ -1355,7 +1478,7 @@ public sealed partial class MainWindow : Window
         var dots = new Dictionary<string, (Border Card, Ellipse Core)>();
         var choices = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
 
-        (Border card, TextBlock sub) MakeChoice(string tag, string title, string subtitle)
+        (Border card, TextBlock sub) MakeChoice(string tag, string title, string? subtitle)
         {
             var ring = new Ellipse
             {
@@ -1383,7 +1506,7 @@ public sealed partial class MainWindow : Window
             };
             var subText = new TextBlock
             {
-                Text = subtitle,
+                Text = subtitle ?? "",
                 FontSize = 12,
                 MaxWidth = 148,
                 TextTrimming = TextTrimming.CharacterEllipsis,

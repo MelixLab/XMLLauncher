@@ -27,8 +27,17 @@ public sealed partial class SettingsAppearancePage : Page
         UpdateAcrylicLabels();
         _loading = false;
         ActualThemeChanged += (_, _) => DispatcherQueue.TryEnqueue(UpdateMaterialPreviews);
-        Loaded += (_, _) => UpdateMaterialPreviews();
-        Unloaded += (_, _) => FlushPendingSave();
+        Loaded += (_, _) =>
+        {
+            ThemeService.AppearanceChanged += RefreshThemeMode;
+            RefreshThemeMode();
+            UpdateMaterialPreviews();
+        };
+        Unloaded += (_, _) =>
+        {
+            ThemeService.AppearanceChanged -= RefreshThemeMode;
+            FlushPendingSave();
+        };
     }
 
     private void FlushPendingSave()
@@ -131,12 +140,7 @@ public sealed partial class SettingsAppearancePage : Page
     /// <summary>把设置里的主题字段灌进控件（不触发任何应用动作）。</summary>
     private void LoadThemeSettings(AppSettings s)
     {
-        ThemeModeBox.SelectedIndex = (s.ThemeMode ?? "System").Trim().ToLowerInvariant() switch
-        {
-            "light" => 1,
-            "dark" => 2,
-            _ => 0,
-        };
+        RefreshThemeMode();
 
         SurfaceSlider.Value = Math.Clamp(s.SurfaceOpacity, 0.15, 1.0);
         OpacityValue.Text = $"{SurfaceSlider.Value * 100:0}%";
@@ -146,6 +150,25 @@ public sealed partial class SettingsAppearancePage : Page
         UpdateMaterialSelection();
         UpdateAccentSelection();
         UpdateThemeNotes();
+    }
+
+    private void RefreshThemeMode()
+    {
+        bool wasLoading = _loading;
+        _loading = true;
+        try
+        {
+            ThemeModeBox.SelectedIndex = (AppState.Settings.ThemeMode ?? "System").Trim().ToLowerInvariant() switch
+            {
+                "light" => 1,
+                "dark" => 2,
+                _ => 0,
+            };
+        }
+        finally
+        {
+            _loading = wasLoading;
+        }
     }
 
     private void ThemeMode_Changed(object sender, SelectionChangedEventArgs e)

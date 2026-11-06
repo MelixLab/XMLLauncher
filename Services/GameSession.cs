@@ -646,7 +646,7 @@ public static class GameSession
         return null;
     }
 
-    private static string FirstLine(string text)
+    private static string FirstLine(string? text)
     {
         if (string.IsNullOrWhiteSpace(text)) return "未知错误";
         var line = text.Split('\n').FirstOrDefault(l => !string.IsNullOrWhiteSpace(l))?.Trim() ?? text.Trim();

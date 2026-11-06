@@ -1,6 +1,7 @@
 using System.Text.Json;
-using LinxLauncher.Models;
-using SeedMapSdk = RZeroF1.Minecraft.SeedMap.SeedMap;
+using SeedMap = RZeroF1.Minecraft.SeedMap;
+using SeedMapProfile = LinxLauncher.Models.SeedMapProfile;
+using SeedMapWorkspace = LinxLauncher.Models.SeedMapWorkspace;
 
 namespace LinxLauncher.Services;
 
@@ -41,16 +42,16 @@ public sealed class SeedMapSession
 
     private static void Normalize(SeedMapProfile p)
     {
-        p.CenterX = SeedMapSdk.ClampCoordinate(p.CenterX); p.CenterZ = SeedMapSdk.ClampCoordinate(p.CenterZ);
+        p.CenterX = SeedMap.Api.ClampCoordinate(p.CenterX); p.CenterZ = SeedMap.Api.ClampCoordinate(p.CenterZ);
         p.PixelsPerBlock = Math.Clamp(double.IsFinite(p.PixelsPerBlock) ? p.PixelsPerBlock : 0.25, 1.0 / 256, 8);
         p.Y = Math.Clamp(p.Y, -64, 320);
         p.Biomes ??= new(); p.Structures ??= new(); p.Waypoints ??= new();
-        p.Seed = SeedMapSdk.ParseSeed(p.SeedText);
+        p.Seed = SeedMap.Api.ParseSeed(p.SeedText);
     }
 
     public void Select(string seed, string version, int dimension, int y, object? source)
     {
-        long value = SeedMapSdk.ParseSeed(seed);
+        long value = SeedMap.Api.ParseSeed(seed);
         var p = Workspace.Profiles.FirstOrDefault(p => p.Seed == value && p.Version == version && p.Dimension == dimension);
         if (p is null)
         {

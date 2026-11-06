@@ -78,6 +78,15 @@ public sealed partial class CloudSavesPage : Page
 
     private static void Toast(string msg, bool error = false) => MainWindow.Instance?.Toast(msg, error);
 
+    private void CloudHeader_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        bool narrow = e.NewSize.Width < 720;
+        Grid.SetRow(SyncActions, narrow ? 1 : 0);
+        Grid.SetColumn(SyncActions, narrow ? 0 : 1);
+        Grid.SetColumnSpan(SyncActions, narrow ? 2 : 1);
+        SyncActions.HorizontalAlignment = narrow ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+    }
+
     /* ==================== 数据 ==================== */
 
     private async Task RefreshAsync()

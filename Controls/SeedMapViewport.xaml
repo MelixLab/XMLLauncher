@@ -34,15 +34,22 @@
             <Rectangle x:Name="CrosshairX" Width="14" Height="1" />
             <Rectangle x:Name="CrosshairZ" Width="1" Height="14" />
         </Grid>
-        <StackPanel Orientation="Vertical" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12">
-            <Button x:Name="ZoomInButton" Click="ZoomIn_Click" Width="40" Height="32" ToolTipService.ToolTip="放大" AutomationProperties.Name="放大地图">
-                <SymbolIcon Symbol="ZoomIn" />
+        <StackPanel x:Name="ViewportControls" Orientation="Vertical" Spacing="4"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="12">
+            <Button x:Name="ZoomInButton" Click="ZoomIn_Click" Width="40" MinWidth="0" Height="32"
+                    Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    ToolTipService.ToolTip="放大" AutomationProperties.Name="放大地图">
+                <SymbolIcon Width="20" Height="20" Symbol="ZoomIn" />
             </Button>
-            <Button x:Name="ZoomOutButton" Click="ZoomOut_Click" Width="40" Height="32" ToolTipService.ToolTip="缩小" AutomationProperties.Name="缩小地图">
-                <SymbolIcon Symbol="ZoomOut" />
+            <Button x:Name="ZoomOutButton" Click="ZoomOut_Click" Width="40" MinWidth="0" Height="32"
+                    Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    ToolTipService.ToolTip="缩小" AutomationProperties.Name="缩小地图">
+                <SymbolIcon Width="20" Height="20" Symbol="ZoomOut" />
             </Button>
-            <Button x:Name="OriginButton" Click="Origin_Click" Width="40" Height="32" ToolTipService.ToolTip="世界原点" AutomationProperties.Name="回到世界原点">
-                <SymbolIcon Symbol="Home" />
+            <Button x:Name="OriginButton" Click="Origin_Click" Width="40" MinWidth="0" Height="32"
+                    Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                    ToolTipService.ToolTip="世界原点" AutomationProperties.Name="回到世界原点">
+                <SymbolIcon Width="20" Height="20" Symbol="Home" />
             </Button>
         </StackPanel>
         <ProgressBar x:Name="MapProgress" Height="3" VerticalAlignment="Top" IsIndeterminate="True" Visibility="Collapsed" IsHitTestVisible="False" />

@@ -500,7 +500,7 @@ public static class ThemeService
             SetBrush(slot.Dict, "ToggleSwitchFillOnPointerOver", dark ? Mix(brand, Colors.White, 0.18) : Mix(brand, Colors.Black, 0.10));
             SetBrush(slot.Dict, "ToggleSwitchFillOnPressed", dark ? Mix(brand, Colors.White, 0.10) : Mix(brand, Colors.Black, 0.18));
 
-            // 系统控件（按钮、进度条、复选框、输入框）的强调色跟着一起走
+            // 系统控件（按钮、进度条、复选框）的强调色跟着一起走
             if (!slot.Ours)
             {
                 SetBrushKeepAlpha(slot.Dict, "AccentFillColorDefaultBrush", brand);
@@ -512,12 +512,6 @@ public static class ThemeService
                 SetBrushKeepAlpha(slot.Dict, "TextOnAccentFillColorPrimaryBrush", onBrand);
                 SetBrushKeepAlpha(slot.Dict, "AccentFillColorSelectedTextBackgroundBrush", brand);
 
-                // 输入框聚焦边框是渐变画刷：首个色标画底部强调线，其余色标保留原生边框。
-                if (TryGet(slot.Dict, "TextControlBorderBrushFocused", out var focusedBorder)
-                    && focusedBorder is LinearGradientBrush gradient && gradient.GradientStops.Count > 0)
-                {
-                    gradient.GradientStops[0].Color = brand;
-                }
             }
         }
 

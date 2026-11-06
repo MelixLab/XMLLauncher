@@ -12,38 +12,62 @@ namespace LinxLauncher.Services;
 /// </summary>
 public sealed class ViewTransition
 {
-    private readonly FrameworkElement _first;
     private readonly FrameworkElement[] _views;
-    private readonly Frame _frame = new();
+    private readonly Frame _frame;
     private readonly UISettings _settings = new();
     private FrameworkElement _current;
     private int _generation;
 
     public ViewTransition(FrameworkElement owner, Panel parent, FrameworkElement first, params FrameworkElement[] children)
+        : this(owner, new Frame(), parent, true, first, children)
     {
-        _first = first;
+    }
+
+    public ViewTransition(FrameworkElement owner, Frame frame, Panel parent, FrameworkElement first, params FrameworkElement[] children)
+        : this(owner, frame, parent, false, first, children)
+    {
+    }
+
+    private ViewTransition(
+        FrameworkElement owner,
+        Frame frame,
+        Panel parent,
+        bool attachFrame,
+        FrameworkElement first,
+        params FrameworkElement[] children)
+    {
         _views = [first, .. children];
         _current = first;
+        _frame = frame;
         // InitializeComponent 后、首次布局前 Parent 可能仍为 null，检查已建立的 Children 集合。
         if (_views.Any(view => !parent.Children.Contains(view)))
             throw new ArgumentException("转场视图必须属于同一个容器。");
         // 标题留在父容器的固定行，Frame 只替换下面的内容行。
-        Grid.SetRow(_frame, Grid.GetRow(first));
+        _frame.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _frame.VerticalAlignment = VerticalAlignment.Stretch;
+        _frame.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        _frame.VerticalContentAlignment = VerticalAlignment.Stretch;
         foreach (var view in _views) parent.Children.Remove(view);
-        parent.Children.Add(_frame);
+        if (attachFrame)
+        {
+            Grid.SetRow(_frame, Grid.GetRow(first));
+            parent.Children.Add(_frame);
+        }
         _frame.ContentTransitions = new TransitionCollection();
         Reset(first);
         owner.Unloaded += (_, _) => Stop();
     }
 
-    public void Show(FrameworkElement target, bool forward, Action focus)
+    public void Show(FrameworkElement target, bool forward, Action? focus = null)
     {
         Validate(target);
         if (_current != target)
         {
             if (_frame.ContentTransitions.Count == 0)
                 _frame.ContentTransitions.Add(new NavigationThemeTransition());
-            bool goBack = !forward && target == _first && _frame.CanGoBack;
+            var backEntry = _frame.CanGoBack ? _frame.BackStack[_frame.BackStack.Count - 1] : null;
+            var backTarget = backEntry?.Parameter as FrameworkElement;
+            bool goBack = !forward && backEntry is not null && ReferenceEquals(backTarget, target);
             NavigationTransitionInfo transition = _settings.AnimationsEnabled
                 ? new SlideNavigationTransitionInfo
                 {
@@ -60,6 +84,9 @@ public sealed class ViewTransition
             else navigated = _frame.Navigate(typeof(TransitionPage), target, transition);
             if (navigated) _current = target;
         }
+        if (focus is null)
+            return;
+
         int generation = ++_generation;
         target.DispatcherQueue.TryEnqueue(Microsoft.UI.Dispatching.DispatcherQueuePriority.Low, () =>
         {

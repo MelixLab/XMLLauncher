@@ -2,15 +2,13 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using LinxLauncher.Controls;
-using LinxLauncher.Models;
 using LinxLauncher.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using SeedMap = RZeroF1.Minecraft.SeedMap.SeedMap;
-using SeedMapEngine = RZeroF1.Minecraft.SeedMap.SeedMapEngine;
+using SeedMap = RZeroF1.Minecraft.SeedMap;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
 
@@ -177,7 +175,7 @@ internal static class SeedMapDiagnostics
             Assert(map.Map.Engine!.World.Seed == SeedMapSession.Current.Profile.Seed &&
                 map.Map.Engine.World.Dimension == SeedMapSession.Current.Profile.Dimension, "rapid seed/dimension changes discard old results");
             p = SeedMapSession.Current.Profile;
-            p.Biomes.Add(SeedMap.Biomes(map.Map.Engine.World.Version, p.Dimension)[0].Id);
+            p.Biomes.Add(SeedMap.Api.Biomes(map.Map.Engine.World.Version, p.Dimension)[0].Id);
             p.HideOtherBiomes = true;
             p.Waypoints.Add(new() { Name = "AOT 样本", X = -123, Z = 456, Dimension = p.Dimension });
             SeedMapSession.Current.Notify(null);
@@ -290,7 +288,7 @@ internal static class SeedMapDiagnostics
                 exploring.Map.Jump(i * 1907 - 95000, i * 733 - 36000);
                 await WaitMapAsync(exploring);
                 latencies.Add(clock.Elapsed.TotalMilliseconds);
-                if (exploring.Map.Engine!.CacheBytes > SeedMapEngine.CacheBudget)
+                if (exploring.Map.Engine!.CacheBytes > SeedMap.Engine.CacheBudget)
                     throw new InvalidOperationException("Exploration exceeded the tile cache budget.");
                 if (i % 20 == 19)
                 {

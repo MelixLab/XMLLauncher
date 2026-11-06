@@ -51,6 +51,8 @@ public sealed partial class FeatureCard : UserControl
 
     private RadialGradientBrush? _revealBrush;
     private readonly TranslateTransform _surfacePosition = new();
+    private Point _lastPointer;
+    private bool _hasPointer;
     private bool _inside;
     private readonly UISettings _uiSettings = new();
     private readonly AccessibilitySettings _accessibilitySettings = new();
@@ -65,9 +67,12 @@ public sealed partial class FeatureCard : UserControl
         InteractionMotion.SetHoverScale(NavigationButton, 1.008);
         InteractionMotion.SetPressedScale(NavigationButton, 0.985);
         InteractionMotion.Attach(NavigationButton, Root);
-        ActualThemeChanged += (_, _) => BuildRevealBrush();
         Loaded += (_, _) =>
         {
+            // OverviewPage is cached. A card can be loaded after the global
+            // theme changed while it was detached from the visual tree, so
+            // ActualThemeChanged is not sufficient to refresh runtime brushes.
+            BuildRevealBrush();
             UpdateNavigation();
             ConfigureMotion();
             _pressedToken = NavigationButton.RegisterPropertyChangedCallback(
@@ -150,6 +155,8 @@ public sealed partial class FeatureCard : UserControl
         double dx = Math.Max(0.0, Math.Max(-px, px - w));
         double dy = Math.Max(0.0, Math.Max(-py, py - h));
         bool inside = dx <= 0.0 && dy <= 0.0;
+        _lastPointer = new Point(px, py);
+        _hasPointer = true;
 
         if (_inside != inside)
         {
@@ -170,6 +177,7 @@ public sealed partial class FeatureCard : UserControl
 
     public void ResetReveal()
     {
+        _hasPointer = false;
         _inside = false;
         HoverFill.Opacity = 0;
         SurfaceGlow.Opacity = 0;
@@ -178,7 +186,7 @@ public sealed partial class FeatureCard : UserControl
 
     private void BuildRevealBrush()
     {
-        bool dark = ActualTheme == ElementTheme.Dark;
+        bool dark = ThemeService.IsDark;
 
         // 深色白光、浅色柔和阴影；表面开关不改变相邻卡片的边缘追光。
         Color Shade(byte alpha) => dark
@@ -206,7 +214,15 @@ public sealed partial class FeatureCard : UserControl
             AlignmentY = AlignmentY.Top,
             Transform = _surfacePosition,
         };
-        ResetReveal();
+        if (_hasPointer)
+        {
+            UpdateReveal(_lastPointer.X, _lastPointer.Y);
+            UpdateHoverFeedback();
+        }
+        else
+        {
+            ResetReveal();
+        }
     }
 
     private static WriteableBitmap GetSurfaceTexture(bool dark)
@@ -245,13 +261,13 @@ public sealed partial class FeatureCard : UserControl
     private void UpdateHoverFeedback()
     {
         bool hovered = _inside && IsEnabled && !_accessibilitySettings.HighContrast;
-        bool useGlow = ActualTheme == ElementTheme.Dark || AppState.Settings.LightCardGlowEnabled;
+        bool useGlow = ThemeService.IsDark || AppState.Settings.LightCardGlowEnabled;
         SurfaceGlow.Opacity = hovered && useGlow ? 1 : 0;
         // 仅在用户关闭浅色光晕时，用整卡灰底提供替代悬停反馈。
         HoverFill.Opacity = hovered && !useGlow ? 1 : 0;
     }
 
-    private void AppearanceChanged() => UpdateHoverFeedback();
+    private void AppearanceChanged() => BuildRevealBrush();
 
     // ==================================================================
     //  点击跳转

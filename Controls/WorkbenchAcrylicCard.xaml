@@ -1,0 +1,17 @@
+<UserControl
+    x:Class="LinxLauncher.Controls.WorkbenchAcrylicCard"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Acrylic 必须直接采样卡片后方；实色衬底会遮住地图和窗口背景。 -->
+    <Border Background="{ThemeResource WorkbenchPopupBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="8">
+        <ContentPresenter Content="{x:Bind CardContent, Mode=OneWay}"
+                          Padding="{x:Bind CardPadding, Mode=OneWay}"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          VerticalContentAlignment="Stretch" />
+    </Border>
+</UserControl>

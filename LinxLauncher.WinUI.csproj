@@ -60,7 +60,8 @@
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.7.1" />
-    <PackageReference Include="RZeroF1.Minecraft.SeedMap" Version="0.1.0" />
+    <PackageReference Include="RZeroF1.Minecraft.SeedMap" Version="0.2.1" />
+    <PackageReference Include="RZeroF1.Minecraft.Projection" Version="0.1.1" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
@@ -72,7 +73,6 @@
           Condition="'$(RuntimeIdentifier)' != '' and '$(RuntimeIdentifier)' != 'win-x64'">
     <Error Text="XMLLauncher 的 SeedMap 功能通过 RZeroF1.Minecraft.SeedMap 仅支持 win-x64；当前 RuntimeIdentifier=$(RuntimeIdentifier)。请使用 win-x64，或在没有种子地图功能的独立项目中构建其他平台。" />
   </Target>
-
   <PropertyGroup>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
     <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>

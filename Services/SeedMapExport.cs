@@ -1,5 +1,5 @@
-using LinxLauncher.Models;
-using SeedMap = RZeroF1.Minecraft.SeedMap.SeedMap;
+using SeedMap = RZeroF1.Minecraft.SeedMap;
+using SeedMapProfile = LinxLauncher.Models.SeedMapProfile;
 
 namespace LinxLauncher.Services;
 
@@ -9,7 +9,7 @@ namespace LinxLauncher.Services;
 /// </summary>
 internal static class SeedMapExport
 {
-    public static Task<RZeroF1.Minecraft.SeedMap.SeedMapExport.Image> RenderAsync(
+    public static Task<SeedMap.Export.Image> RenderAsync(
         SeedMap.World world,
         SeedMap.Bounds bounds,
         int step,
@@ -17,7 +17,7 @@ internal static class SeedMapExport
         SeedMapProfile profile,
         CancellationToken cancellationToken)
     {
-        var sdkProfile = new RZeroF1.Minecraft.SeedMap.SeedMapProfile
+        var sdkProfile = new SeedMap.Profile
         {
             SeedText = profile.SeedText,
             Seed = profile.Seed,
@@ -35,7 +35,7 @@ internal static class SeedMapExport
             OnlySelectedStructures = profile.OnlySelectedStructures,
             Biomes = new(profile.Biomes),
             Structures = new(profile.Structures),
-            Waypoints = profile.Waypoints.Select(w => new RZeroF1.Minecraft.SeedMap.SeedMapWaypoint
+            Waypoints = profile.Waypoints.Select(w => new SeedMap.Waypoint
             {
                 Id = w.Id,
                 Name = w.Name,
@@ -47,7 +47,7 @@ internal static class SeedMapExport
             }).ToList(),
             LastUsedUtc = profile.LastUsedUtc
         };
-        return RZeroF1.Minecraft.SeedMap.SeedMapExport.RenderAsync(
+        return SeedMap.Export.RenderAsync(
             world, bounds, step, colors, sdkProfile, cancellationToken);
     }
 }

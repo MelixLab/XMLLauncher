@@ -34,7 +34,7 @@
 LinxLauncher.WinUI/
 ├── App.xaml / App.xaml.cs        应用入口、全局异常处理
 ├── MainWindow.xaml / .cs         主窗口：导航、账号面板、更新流程
-├── Controls/                     自绘控件：下载步骤、启动进度、首次向导、种子地图工作台
+├── Controls/                     自绘控件：下载步骤、启动进度、首次向导、种子地图工作台(Beta)、3D投影预览(Beta)
 ├── Converters/                   XAML 值转换器
 ├── Models/                       Minecraft 版本 / 资源 / 清单模型
 ├── Services/                     业务层：版本、下载、账号、联机、更新、日志

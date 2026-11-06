@@ -34,6 +34,7 @@ public sealed partial class ToolsPage : Page
             RefreshMem();
             RefreshTranslate();
             RefreshSeed();
+        RefreshProjection();
             RefreshCache();
         };
     }
@@ -62,6 +63,7 @@ public sealed partial class ToolsPage : Page
         MemCard.Header = "内存整理";
         TranslateCard.Header = "模组汉化";
         SeedCard.Header = "种子地图";
+        ProjectionCard.Header = "3D 投影预览";
         CacheCard.Header = "缓存清理";
         LinkCard.Header = "链接下载";
         RefreshLink();
@@ -295,6 +297,10 @@ public sealed partial class ToolsPage : Page
     private void RefreshSeed() => SeedCard.Status = "探索 Java 世界";
 
     private void SeedOpen_Click(object sender, RoutedEventArgs e) => MainWindow.Instance?.NavigateTo("seedmap");
+
+    private void ProjectionOpen_Click(object sender, RoutedEventArgs e) => MainWindow.Instance?.NavigateTo("projection");
+
+    private void RefreshProjection() => ProjectionCard.Status = "使用本机 Minecraft JAR 预览 .litematic 和 .schem";
 
     /* ==================== 链接下载 ==================== */
 

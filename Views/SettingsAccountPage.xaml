@@ -2,7 +2,7 @@
 <Page xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:services="using:LinxLauncher.Services" xmlns:controls="using:LinxLauncher.Controls" x:Class="LinxLauncher.Views.SettingsAccountPage" NavigationCacheMode="Required" Background="Transparent">
     <ScrollViewer Style="{StaticResource SettingsScrollStyle}">
-        <Grid Style="{StaticResource PageContentStyle}" Padding="32,16,32,24">
+        <Grid Padding="0,16,0,24">
             <StackPanel Spacing="28">
                 <StackPanel>
                     <TextBlock Text="XML 账户" Style="{StaticResource SettingsGroupHeadingStyle}"/>

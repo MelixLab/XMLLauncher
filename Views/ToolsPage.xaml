@@ -14,7 +14,7 @@
                     <TextBlock
                         x:Name="ToolsSubtitle"
                         Style="{StaticResource PageSubtitleTextStyle}"
-                        Text="内存整理、模组汉化、种子地图。" />
+                        Text="内存整理、模组汉化、种子地图和 3D 投影预览。" />
                 </StackPanel>
 
                 <controls:AdaptiveWrapPanel x:Name="ToolCardsHost" Background="Transparent" Margin="0,28,0,0" ItemMinWidth="232" MaxColumns="3" Spacing="8" ContentPadding="6,4,6,4"
@@ -51,6 +51,18 @@
                         <controls:FeatureCard.Actions>
                             <Button
                                 Click="SeedOpen_Click"
+                                Content="打开"
+                                Style="{StaticResource CardActionButtonStyle}" />
+                        </controls:FeatureCard.Actions>
+                    </controls:FeatureCard>
+
+                    <!-- 3D 投影预览 -->
+                    <controls:FeatureCard
+                        x:Name="ProjectionCard"
+                        IconTemplate="{StaticResource IconCardGame}">
+                        <controls:FeatureCard.Actions>
+                            <Button
+                                Click="ProjectionOpen_Click"
                                 Content="打开"
                                 Style="{StaticResource CardActionButtonStyle}" />
                         </controls:FeatureCard.Actions>

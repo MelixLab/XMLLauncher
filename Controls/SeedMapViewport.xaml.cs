@@ -1,14 +1,8 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Runtime.CompilerServices;
 using System.Diagnostics;
-using LinxLauncher.Models;
 using LinxLauncher.Services;
-using SeedMap = RZeroF1.Minecraft.SeedMap.SeedMap;
-using SeedMapCamera = RZeroF1.Minecraft.SeedMap.SeedMapCamera;
-using SeedMapEngine = RZeroF1.Minecraft.SeedMap.SeedMapEngine;
-using SeedMapGeometry = RZeroF1.Minecraft.SeedMap.SeedMapGeometry;
-using SeedMapPalette = RZeroF1.Minecraft.SeedMap.SeedMapPalette;
-using SeedMapTilePlanner = RZeroF1.Minecraft.SeedMap.SeedMapTilePlanner;
+using SeedMap = RZeroF1.Minecraft.SeedMap;
 using SeedMapProfile = LinxLauncher.Models.SeedMapProfile;
 using SeedMapWaypoint = LinxLauncher.Models.SeedMapWaypoint;
 using Microsoft.UI.Dispatching;
@@ -34,36 +28,39 @@ public sealed partial class SeedMapViewport : UserControl
     // that native allocation to GC; keep pressure until the wrapper is collected.
     private sealed class BitmapMemory
     {
-        private const long Bytes = SeedMapEngine.TileSize * SeedMapEngine.TileSize * 4;
+        private const long Bytes = SeedMap.Engine.TileSize * SeedMap.Engine.TileSize * 4;
         public BitmapMemory() => GC.AddMemoryPressure(Bytes);
         ~BitmapMemory() => GC.RemoveMemoryPressure(Bytes);
     }
     private static readonly ConditionalWeakTable<WriteableBitmap, BitmapMemory> BitmapAllocations = new();
-    private readonly Dictionary<SeedMapEngine.TileKey, VisualTile> _tiles = new();
+    private readonly Dictionary<SeedMap.Engine.TileKey, VisualTile> _tiles = new();
     private readonly Stack<Image> _imagePool = new();
     private readonly Stack<Rectangle> _slimePool = new();
     private readonly Stack<Line> _linePool = new();
     private readonly Stack<Ellipse> _dotPool = new();
     private readonly Stack<Border> _labelPool = new();
     private readonly List<SeedMap.StructureHit> _displayedStructures = new();
-    private readonly Dictionary<SeedMapEngine.TileKey, CancellationTokenSource> _pending = new();
-    private HashSet<SeedMapEngine.TileKey> _wanted = new();
-    private HashSet<SeedMapEngine.TileKey> _visible = new();
+    private readonly Dictionary<SeedMap.Engine.TileKey, CancellationTokenSource> _pending = new();
+    private HashSet<SeedMap.Engine.TileKey> _wanted = new();
+    private HashSet<SeedMap.Engine.TileKey> _visible = new();
     private int _tileStep;
     private bool _pumping, _tilePumpQueued;
     private readonly Dictionary<int, SeedMap.BiomeInfo> _biomes = new();
     private readonly Dictionary<int, SeedMap.StructureInfo> _types = new();
     private DispatcherQueueTimer? _refresh;
+    private DispatcherQueueTimer? _structureRefresh;
     private DispatcherQueueTimer? _zoomAnimation;
     private readonly Stopwatch _zoomClock = new();
     private double _zoomStart, _zoomTarget;
     private int _zoomDirection;
     private Point _zoomAnchor, _zoomWorld;
     private CancellationTokenSource? _structuresCts;
+    private long _structureRequestId;
     private CancellationTokenSource? _flight;
     private (int X, int Z, string Name)? _searchResult;
     private SeedMap.StructureHit? _hoveredStructure;
-    private SeedMapEngine? _engine;
+    private SeedMap.StructureHit? _selectedStructure;
+    private SeedMap.Engine? _engine;
     private SeedMapProfile? _profile;
     private List<SeedMap.StructureHit> _structures = new();
     private readonly List<Point> _measure = new();
@@ -82,7 +79,7 @@ public sealed partial class SeedMapViewport : UserControl
     public event Action<int, int>? WaypointRequested;
     public event Action<SeedMapWaypoint, Point>? WaypointContextRequested;
     public event Action<IReadOnlyList<SeedMap.StructureHit>>? StructuresChanged;
-    public SeedMapEngine? Engine => _engine;
+    public SeedMap.Engine? Engine => _engine;
     public SeedMapProfile? Profile => _profile;
     public int VisibleTileCount => _tiles.Count;
     public int PendingTileCount => _pending.Count;
@@ -95,10 +92,10 @@ public sealed partial class SeedMapViewport : UserControl
         get
         {
             if (_profile is null) return false;
-            int step = CurrentStep(), span = SeedMapEngine.TileSize * step;
+            int step = CurrentStep(), span = SeedMap.Engine.TileSize * step;
             var bounds = VisibleBounds();
-            for (int z = SeedMap.FloorDiv(bounds.MinZ, span); z <= SeedMap.FloorDiv(bounds.MaxZ - 1, span); z++)
-                for (int x = SeedMap.FloorDiv(bounds.MinX, span); x <= SeedMap.FloorDiv(bounds.MaxX - 1, span); x++)
+            for (int z = SeedMap.Api.FloorDiv(bounds.MinZ, span); z <= SeedMap.Api.FloorDiv(bounds.MaxZ - 1, span); z++)
+                for (int x = SeedMap.Api.FloorDiv(bounds.MinX, span); x <= SeedMap.Api.FloorDiv(bounds.MaxX - 1, span); x++)
                     if (!_tiles.ContainsKey(new(step, x, z))) return false;
             return true;
         }
@@ -107,20 +104,28 @@ public sealed partial class SeedMapViewport : UserControl
     public SeedMapViewport()
     {
         InitializeComponent();
-        Loaded += (_, _) => { RefreshChromeMaterial(); if (_profile is not null) Configure(_profile); };
+        Loaded += (_, _) =>
+        {
+            RefreshChromeMaterial();
+            UpdateViewportControlMargin();
+            if (_profile is not null) Configure(_profile);
+        };
         Unloaded += (_, _) => { if (!IsLoaded) Release(); };
         SizeChanged += (_, _) =>
         {
             StopZoomAnimation();
             Surface.Clip = new RectangleGeometry { Rect = new Rect(0, 0, ActualWidth, ActualHeight) };
-            MoveVisuals(); QueueRefresh();
+            UpdateViewportControlMargin();
+            MoveVisuals();
+            if (!ShouldShowStructures()) HideStructures(redraw: true);
+            QueueRefresh();
         };
         SearchBadge.SizeChanged += (_, _) => UpdateSearchMarker();
     }
 
     public void Configure(SeedMapProfile profile)
     {
-        var version = SeedMap.Versions.FirstOrDefault(v => v.Key == profile.Version)
+        var version = SeedMap.Api.Versions.FirstOrDefault(v => v.Key == profile.Version)
             ?? throw new InvalidOperationException($"不支持 Java {profile.Version}。");
         var world = new SeedMap.World(profile.Seed, version.Id, profile.Dimension, profile.Y);
         bool reset = _engine is null || _engine.World != world;
@@ -132,8 +137,8 @@ public sealed partial class SeedMapViewport : UserControl
             _engine = new(world);
             StructuresChanged?.Invoke(Array.Empty<SeedMap.StructureHit>());
             _biomes.Clear(); _types.Clear();
-            foreach (var biome in SeedMap.Biomes(version.Id, profile.Dimension)) _biomes[biome.Id] = biome;
-            foreach (var type in SeedMap.Structures(version.Id, profile.Dimension)) _types[type.Id] = type;
+            foreach (var biome in SeedMap.Api.Biomes(version.Id, profile.Dimension)) _biomes[biome.Id] = biome;
+            foreach (var type in SeedMap.Api.Structures(version.Id, profile.Dimension)) _types[type.Id] = type;
             _measure.Clear();
         }
         if (_refresh is null)
@@ -152,6 +157,7 @@ public sealed partial class SeedMapViewport : UserControl
         ClearMeasurement();
         _searchResult = null;
         _hoveredStructure = null;
+        _selectedStructure = null;
         SearchMarker.Visibility = SearchBadge.Visibility = Visibility.Collapsed;
         _worldGeneration++;
         if (_refresh is not null) { _refresh.Stop(); _refresh.Tick -= Refresh_Tick; _refresh = null; }
@@ -164,7 +170,14 @@ public sealed partial class SeedMapViewport : UserControl
         _pending.Clear();
         _wanted.Clear(); _visible.Clear();
         _tileStep = 0;
-        _structuresCts?.Cancel(); _structuresCts = null;
+        _structureRefresh?.Stop();
+        if (_structureRefresh is not null)
+        {
+            _structureRefresh.Tick -= StructureRefresh_Tick;
+            _structureRefresh = null;
+        }
+        CancelStructureQuery();
+        _structuresCts = null;
         _engine?.Dispose(); _engine = null;
         foreach (var tile in _tiles.Values)
         {
@@ -178,23 +191,22 @@ public sealed partial class SeedMapViewport : UserControl
 
     // In-app Acrylic samples the map. Mica is an opaque desktop backdrop, so it
     // cannot provide the translucent map overlays requested for this workbench.
-    internal static Brush CreateChromeBrush()
-    {
-        var background = ThemeService.Brush("WindowBackgroundBrush");
-        if (new Windows.UI.ViewManagement.AccessibilitySettings().HighContrast) return background;
-        var color = background is SolidColorBrush solid ? solid.Color
-            : ThemeService.IsDark ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White;
-        return new AcrylicBrush
-        {
-            TintColor = color, TintOpacity = .25, TintLuminosityOpacity = .65, FallbackColor = color
-        };
-    }
+    internal static Brush CreateChromeBrush() => WorkbenchTemplate.CreateChromeBrush();
 
     internal void RefreshChromeMaterial()
     {
         ZoomInButton.Background = CreateChromeBrush();
         ZoomOutButton.Background = CreateChromeBrush();
         OriginButton.Background = CreateChromeBrush();
+    }
+
+    private void UpdateViewportControlMargin()
+    {
+        double buttonWidth = Math.Clamp(ActualWidth - 24, 0, 40);
+        double buttonHeight = Math.Clamp((ActualHeight - 32) / 3, 0, 32);
+        ZoomInButton.Width = ZoomOutButton.Width = OriginButton.Width = buttonWidth;
+        ZoomInButton.Height = ZoomOutButton.Height = OriginButton.Height = buttonHeight;
+        ViewportControls.Margin = new Thickness(12);
     }
 
     public Point ScreenToWorld(Point point)
@@ -219,9 +231,11 @@ public sealed partial class SeedMapViewport : UserControl
     {
         if (_profile is null) return;
         MeasurementTip.IsOpen = false;
-        _profile.CenterX = SeedMap.ClampCoordinate(x); _profile.CenterZ = SeedMap.ClampCoordinate(z);
-        _structuresCts?.Cancel();
+        _profile.CenterX = SeedMap.Api.ClampCoordinate(x); _profile.CenterZ = SeedMap.Api.ClampCoordinate(z);
+        CancelStructureQuery();
+        _structureRefresh?.Stop();
         MoveVisuals();
+        if (!ShouldShowStructures()) HideStructures(redraw: true);
         if (refresh) QueueRefresh();
         CameraChanged?.Invoke();
     }
@@ -241,7 +255,8 @@ public sealed partial class SeedMapViewport : UserControl
         if (_profile is null || token.IsCancellationRequested) return;
         CancelFlight();
         _hoveredStructure = null;
-        x = SeedMap.ClampCoordinate(x); z = SeedMap.ClampCoordinate(z);
+        _selectedStructure = null;
+        x = SeedMap.Api.ClampCoordinate(x); z = SeedMap.Api.ClampCoordinate(z);
         _searchResult = name is null ? null : ((int)Math.Floor(x), (int)Math.Floor(z), name);
         UpdateSearchMarker();
         var point = WorldToScreen(x, z);
@@ -363,10 +378,11 @@ public sealed partial class SeedMapViewport : UserControl
         return Camera.VisibleBounds(ActualWidth, ActualHeight);
     }
 
-    private SeedMapCamera Camera => new(
+    private SeedMap.Camera Camera => new(
         _profile!.CenterX, _profile.CenterZ, _profile.PixelsPerBlock);
 
     private int CurrentStep() => Camera.SelectSamplingStep();
+    private bool ShouldShowStructures() => _profile is not null && CurrentStep() < 64;
 
     private void QueueRefresh()
     {
@@ -374,13 +390,65 @@ public sealed partial class SeedMapViewport : UserControl
         if (_refresh is { IsRunning: false }) _refresh.Start();
     }
 
+    private void QueueStructureRefresh()
+    {
+        if (!IsLoaded || _engine is null || _profile is null) return;
+        if (!ShouldShowStructures())
+        {
+            HideStructures(redraw: false);
+            return;
+        }
+        if (_structureRefresh is null)
+        {
+            _structureRefresh = DispatcherQueue.CreateTimer();
+            _structureRefresh.Interval = TimeSpan.FromMilliseconds(180);
+            _structureRefresh.IsRepeating = false;
+            _structureRefresh.Tick += StructureRefresh_Tick;
+        }
+        _structureRefresh.Stop();
+        _structureRefresh.Start();
+    }
+
+    private void StructureRefresh_Tick(DispatcherQueueTimer sender, object args)
+    {
+        if (!ReferenceEquals(sender, _structureRefresh)) return;
+        if (!ShouldShowStructures())
+        {
+            HideStructures(redraw: true);
+            return;
+        }
+        _ = LoadStructuresAsync(VisibleBounds());
+    }
+
+    private void CancelStructureQuery()
+    {
+        _structureRequestId++;
+        _structuresCts?.Cancel();
+    }
+
+    private void HideStructures(bool redraw)
+    {
+        CancelStructureQuery();
+        _structureRefresh?.Stop();
+        bool notify = _structures.Count > 0;
+        bool hadVisuals = _displayedStructures.Count > 0 ||
+            _selectedStructure is not null || _hoveredStructure is not null;
+        _structures.Clear();
+        _displayedStructures.Clear();
+        _selectedStructure = null;
+        _hoveredStructure = null;
+        if (notify) StructuresChanged?.Invoke(Array.Empty<SeedMap.StructureHit>());
+        UpdateSearchMarker();
+        if (redraw && hadVisuals) DrawOverlays();
+    }
+
     private void MoveVisuals()
     {
         if (_profile is null) return;
         foreach (var (key, tile) in _tiles)
         {
-            Point screen = WorldToScreen((double)key.X * SeedMapEngine.TileSize * key.Step, (double)key.Z * SeedMapEngine.TileSize * key.Step);
-            double size = SeedMapEngine.TileSize * key.Step * _profile.PixelsPerBlock;
+            Point screen = WorldToScreen((double)key.X * SeedMap.Engine.TileSize * key.Step, (double)key.Z * SeedMap.Engine.TileSize * key.Step);
+            double size = SeedMap.Engine.TileSize * key.Step * _profile.PixelsPerBlock;
             tile.Image.Width = size + 0.15; tile.Image.Height = size + 0.15;
             Canvas.SetLeft(tile.Image, screen.X); Canvas.SetTop(tile.Image, screen.Y);
         }
@@ -404,11 +472,11 @@ public sealed partial class SeedMapViewport : UserControl
         // A previous zoom level can still be the visible underlay while loading.
         foreach (var (key, tile) in _tiles)
         {
-            int span = key.Step * SeedMapEngine.TileSize;
+            int span = key.Step * SeedMap.Engine.TileSize;
             int px = (int)Math.Floor((_profile.CenterX - (double)key.X * span) / key.Step);
             int pz = (int)Math.Floor((_profile.CenterZ - (double)key.Z * span) / key.Step);
-            if (px < 0 || pz < 0 || px >= SeedMapEngine.TileSize || pz >= SeedMapEngine.TileSize || key.Step >= bestStep) continue;
-            color = PixelColor(tile.Ids[pz * SeedMapEngine.TileSize + px]); bestStep = key.Step;
+            if (px < 0 || pz < 0 || px >= SeedMap.Engine.TileSize || pz >= SeedMap.Engine.TileSize || key.Step >= bestStep) continue;
+            color = PixelColor(tile.Ids[pz * SeedMap.Engine.TileSize + px]); bestStep = key.Step;
         }
         double luminance = .2126 * ((color >> 16) & 255) + .7152 * ((color >> 8) & 255) + .0722 * (color & 255);
         bool dark = luminance < 140;
@@ -422,9 +490,11 @@ public sealed partial class SeedMapViewport : UserControl
 
     private void UpdateSearchMarker()
     {
-        var target = _hoveredStructure is { } hit
-            ? (hit.X, hit.Z, Name: _types.GetValueOrDefault(hit.Type)?.Name ?? "结构")
-            : _searchResult;
+        var target = _selectedStructure is { } selected
+            ? (selected.X, selected.Z, Name: _types.GetValueOrDefault(selected.Type)?.Name ?? "结构")
+            : _hoveredStructure is { } hovered
+                ? (hovered.X, hovered.Z, Name: _types.GetValueOrDefault(hovered.Type)?.Name ?? "结构")
+                : _searchResult;
         if (_profile is null || target is not { } result)
         {
             SearchMarker.Visibility = SearchBadge.Visibility = Visibility.Collapsed;
@@ -444,6 +514,7 @@ public sealed partial class SeedMapViewport : UserControl
 
     private SeedMap.StructureHit? HitTestStructure(Point at)
     {
+        if (!ShouldShowStructures()) return null;
         SeedMap.StructureHit? nearest = null;
         double distance = 14 * 14;
         foreach (var hit in _displayedStructures)
@@ -459,17 +530,18 @@ public sealed partial class SeedMapViewport : UserControl
     private void SelectStructure(SeedMap.StructureHit hit)
     {
         _hoveredStructure = null;
-        _searchResult = (hit.X, hit.Z, _types.GetValueOrDefault(hit.Type)?.Name ?? "结构");
+        _selectedStructure = hit;
+        _searchResult = null;
         UpdateSearchMarker();
     }
 
     private void RefreshVisible()
     {
         if (_engine is null || _profile is null || ActualWidth < 1 || ActualHeight < 1) return;
-        int step = CurrentStep(), span = SeedMapEngine.TileSize * step;
+        int step = CurrentStep(), span = SeedMap.Engine.TileSize * step;
         var bounds = VisibleBounds();
-        var visible = new HashSet<SeedMapEngine.TileKey>(SeedMapTilePlanner.Visible(bounds, step));
-        var wanted = new HashSet<SeedMapEngine.TileKey>(SeedMapTilePlanner.WithPrefetch(bounds, step));
+        var visible = new HashSet<SeedMap.Engine.TileKey>(SeedMap.TilePlanner.Visible(bounds, step));
+        var wanted = new HashSet<SeedMap.Engine.TileKey>(SeedMap.TilePlanner.WithPrefetch(bounds, step));
         _wanted = wanted; _visible = visible; _tileStep = step;
         foreach (var (key, cts) in _pending.ToArray())
             if (!wanted.Contains(key)) cts.Cancel();
@@ -479,8 +551,11 @@ public sealed partial class SeedMapViewport : UserControl
                 RemoveTile(key);
         PumpTiles();
         RemovePreviousScale();
+        if (ShouldShowStructures())
+            QueueStructureRefresh();
+        else
+            HideStructures(redraw: false);
         DrawOverlays();
-        _ = LoadStructuresAsync(bounds);
         UpdateLoading();
     }
 
@@ -494,7 +569,7 @@ public sealed partial class SeedMapViewport : UserControl
         {
             // A cache hit may finish synchronously. Select a bounded batch
             // once; completion cannot extend this batch or recurse into it.
-            var next = SeedMapTilePlanner.OrderForLoading(
+            var next = SeedMap.TilePlanner.OrderForLoading(
                     _wanted.Where(k => !_tiles.ContainsKey(k) && !_pending.ContainsKey(k)),
                     _visible,
                     _profile.CenterX,
@@ -530,13 +605,13 @@ public sealed partial class SeedMapViewport : UserControl
         foreach (var key in _tiles.Keys.Where(k => k.Step != _tileStep).ToArray()) RemoveTile(key);
     }
 
-    private void RemoveTile(SeedMapEngine.TileKey key)
+    private void RemoveTile(SeedMap.Engine.TileKey key)
     {
         var tile = _tiles[key]; tile.Image.Source = null; Tiles.Children.Remove(tile.Image); _tiles.Remove(key);
         if (_imagePool.Count < 128) _imagePool.Push(tile.Image);
     }
 
-    private async Task LoadTileAsync(SeedMapEngine.TileKey key)
+    private async Task LoadTileAsync(SeedMap.Engine.TileKey key)
     {
         var engine = _engine!;
         int generation = _worldGeneration;
@@ -570,7 +645,7 @@ public sealed partial class SeedMapViewport : UserControl
     public uint PixelColor(int id)
     {
         var profile = _profile!;
-        return SeedMapPalette.ResolveBiomeColor(
+        return SeedMap.Palette.ResolveBiomeColor(
             id,
             _biomes,
             profile.Biomes.Count == 0 ? null : profile.Biomes.ToHashSet(),
@@ -581,13 +656,13 @@ public sealed partial class SeedMapViewport : UserControl
     private WriteableBitmap Bitmap(int[] ids)
     {
         var profile = _profile!;
-        var pixels = SeedMapPalette.ToBgra(
+        var pixels = SeedMap.Palette.ToBgra(
             ids,
             _biomes,
             profile.Biomes.Count == 0 ? null : profile.Biomes.ToHashSet(),
             profile.HideOtherBiomes,
             ThemeService.IsDark);
-        var bitmap = new WriteableBitmap(SeedMapEngine.TileSize, SeedMapEngine.TileSize);
+        var bitmap = new WriteableBitmap(SeedMap.Engine.TileSize, SeedMap.Engine.TileSize);
         BitmapAllocations.Add(bitmap, new BitmapMemory());
         using var stream = bitmap.PixelBuffer.AsStream();
         stream.Write(pixels);
@@ -602,28 +677,41 @@ public sealed partial class SeedMapViewport : UserControl
         DrawOverlays(); UpdateCrosshair(); UpdateSearchMarker();
     }
 
-    public void RefreshLayers() { DrawOverlays(); QueueRefresh(); }
+    public void RefreshLayers()
+    {
+        if (!ShouldShowStructures()) HideStructures(redraw: false);
+        DrawOverlays(); QueueRefresh();
+    }
 
     private async Task LoadStructuresAsync(SeedMap.Bounds bounds)
     {
         var engine = _engine;
-        if (engine is null || _profile is null) return;
-        _structuresCts?.Cancel();
+        var profile = _profile;
+        if (engine is null || profile is null || !ShouldShowStructures()) return;
+        CancelStructureQuery();
+        long requestId = _structureRequestId;
         using var cts = new CancellationTokenSource();
         _structuresCts = cts;
         int generation = _worldGeneration;
         try
         {
-            var types = _types.Values.Where(t => _profile.Structures.Contains(t.Id)).ToArray();
+            var types = _types.Values.Where(t => profile.Structures.Contains(t.Id)).ToArray();
             var result = await engine.QueryStructuresAsync(bounds, types, cts.Token);
-            if (cts.IsCancellationRequested || generation != _worldGeneration) return;
+            if (cts.IsCancellationRequested || requestId != _structureRequestId ||
+                generation != _worldGeneration || !ReferenceEquals(profile, _profile) ||
+                !ShouldShowStructures()) return;
             _structures = result.Hits;
             StructuresChanged?.Invoke(_structures);
             DrawOverlays();
             LoadStatusChanged?.Invoke(result.Limited ? "部分结构在此缩放下已暂停；放大后显示。" : $"已加载 · {_structures.Count} 个结构");
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { if (generation == _worldGeneration) StatusChanged?.Invoke(ex.Message); }
+        catch (Exception ex)
+        {
+            if (requestId == _structureRequestId && generation == _worldGeneration &&
+                ReferenceEquals(profile, _profile))
+                StatusChanged?.Invoke(ex.Message);
+        }
         finally { if (ReferenceEquals(_structuresCts, cts)) _structuresCts = null; }
     }
 
@@ -654,17 +742,17 @@ public sealed partial class SeedMapViewport : UserControl
         double chunkSize = 16 * _profile.PixelsPerBlock;
         if ((_profile.Grid || _profile.Slime && _profile.Dimension == 0) && chunkSize >= 8)
         {
-            int x0 = Math.Max(-1875000, SeedMap.FloorDiv(bounds.MinX, 16)), x1 = Math.Min(1874999, SeedMap.FloorDiv(bounds.MaxX, 16));
-            int z0 = Math.Max(-1875000, SeedMap.FloorDiv(bounds.MinZ, 16)), z1 = Math.Min(1874999, SeedMap.FloorDiv(bounds.MaxZ, 16));
+            int x0 = Math.Max(-1875000, SeedMap.Api.FloorDiv(bounds.MinX, 16)), x1 = Math.Min(1874999, SeedMap.Api.FloorDiv(bounds.MaxX, 16));
+            int z0 = Math.Max(-1875000, SeedMap.Api.FloorDiv(bounds.MinZ, 16)), z1 = Math.Min(1874999, SeedMap.Api.FloorDiv(bounds.MaxZ, 16));
             if (_profile.Slime && _profile.Dimension == 0 && (long)(x1 - x0 + 1) * (z1 - z0 + 1) <= 18000)
                 for (int z = z0; z <= z1; z++)
                     for (int x = x0; x <= x1; x++)
-                        if (SeedMap.IsSlimeChunk(_profile.Seed, x, z))
+                        if (SeedMap.Api.IsSlimeChunk(_profile.Seed, x, z))
                         {
                             var rect = _slimePool.Count > 0 ? _slimePool.Pop() : new Rectangle();
                             rect.Width = chunkSize; rect.Height = chunkSize;
                             rect.Fill = Brush("SystemFillColorSuccessBrush"); rect.Opacity = .48;
-                            var chunk = SeedMapGeometry.ChunkBounds(x, z);
+                            var chunk = SeedMap.Geometry.ChunkBounds(x, z);
                             var at = WorldToScreen(chunk.MinX, chunk.MinZ);
                             Canvas.SetLeft(rect, at.X); Canvas.SetTop(rect, at.Y); Overlays.Children.Add(rect);
                         }
@@ -674,19 +762,30 @@ public sealed partial class SeedMapViewport : UserControl
                 for (int z = z0; z <= z1; z++) { double sz = WorldToScreen(0, z * 16).Y; Line(0, sz, ActualWidth, sz, .35); }
             }
         }
-        // Bound overview density while retaining simple reusable markers.
-        // A combined GeometryGroup needlessly retessellates every marker when
-        // the overlay changes.
-        var cells = new HashSet<(int X, int Z)>();
-        int cellSize = Math.Max(18, (int)Math.Ceiling(Math.Sqrt(ActualWidth * ActualHeight / 900)));
-        foreach (var hit in _structures)
+        // Bound overview density with world-anchored buckets. Screen buckets
+        // change their representative when the camera moves across a pixel
+        // boundary, even if the visible world barely changes.
+        if (ShouldShowStructures())
         {
-            if (!_profile.Structures.Contains(hit.Type)) continue;
-            var point = WorldToScreen(hit.X, hit.Z);
-            if (point.X < -12 || point.Y < -12 || point.X > ActualWidth + 12 || point.Y > ActualHeight + 12) continue;
-            if (!cells.Add(((int)Math.Floor(point.X / cellSize), (int)Math.Floor(point.Y / cellSize)))) continue;
-            Dot(point, false);
-            _displayedStructures.Add(hit);
+            var cells = new HashSet<(int X, int Z)>();
+            int cellSize = Math.Max(18, (int)Math.Ceiling(Math.Sqrt(ActualWidth * ActualHeight / 900)));
+            int worldCellSize = Math.Max(1, (int)Math.Ceiling(
+                cellSize / Math.Max(_profile.PixelsPerBlock, double.Epsilon)));
+            foreach (var hit in _structures
+                .Where(hit => _profile.Structures.Contains(hit.Type))
+                .OrderBy(hit => hit.X)
+                .ThenBy(hit => hit.Z)
+                .ThenBy(hit => hit.Type))
+            {
+                var point = WorldToScreen(hit.X, hit.Z);
+                if (point.X < -12 || point.Y < -12 || point.X > ActualWidth + 12 || point.Y > ActualHeight + 12) continue;
+                if (!cells.Add((
+                    SeedMap.Api.FloorDiv(hit.X, worldCellSize),
+                    SeedMap.Api.FloorDiv(hit.Z, worldCellSize))))
+                    continue;
+                Dot(point, false);
+                _displayedStructures.Add(hit);
+            }
         }
         foreach (var marker in _profile.Waypoints.Where(w => w.Dimension == _profile.Dimension))
         {
@@ -799,7 +898,7 @@ public sealed partial class SeedMapViewport : UserControl
             _last = at;
             e.Handled = true;
         }
-        var hovered = _dragging || Measuring ? null : HitTestStructure(at);
+        var hovered = _dragging || Measuring || _selectedStructure is not null ? null : HitTestStructure(at);
         if (_hoveredStructure != hovered)
         {
             _hoveredStructure = hovered;
@@ -808,13 +907,13 @@ public sealed partial class SeedMapViewport : UserControl
         Point world = ScreenToWorld(at);
         int x = (int)Math.Floor(world.X), z = (int)Math.Floor(world.Y);
         string biome = "加载中";
-        int step = CurrentStep(), span = SeedMapEngine.TileSize * step;
-        var key = new SeedMapEngine.TileKey(step, SeedMap.FloorDiv(x, span), SeedMap.FloorDiv(z, span));
+        int step = CurrentStep(), span = SeedMap.Engine.TileSize * step;
+        var key = new SeedMap.Engine.TileKey(step, SeedMap.Api.FloorDiv(x, span), SeedMap.Api.FloorDiv(z, span));
         if (_tiles.TryGetValue(key, out var tile))
         {
-            int px = SeedMap.FloorDiv(x, step) - key.X * SeedMapEngine.TileSize;
-            int pz = SeedMap.FloorDiv(z, step) - key.Z * SeedMapEngine.TileSize;
-            int id = tile.Ids[pz * SeedMapEngine.TileSize + px];
+            int px = SeedMap.Api.FloorDiv(x, step) - key.X * SeedMap.Engine.TileSize;
+            int pz = SeedMap.Api.FloorDiv(z, step) - key.Z * SeedMap.Engine.TileSize;
+            int id = tile.Ids[pz * SeedMap.Engine.TileSize + px];
             biome = _biomes.TryGetValue(id, out var value) ? value.Name : $"ID {id}";
         }
         HoverChanged?.Invoke($"X {x:N0} · Z {z:N0} · {biome}");
@@ -864,6 +963,10 @@ public sealed partial class SeedMapViewport : UserControl
             flyout.ShowAt(Surface, new Microsoft.UI.Xaml.Controls.Primitives.FlyoutShowOptions { Position = at });
             return;
         }
+        _selectedStructure = null;
+        _searchResult = null;
+        _hoveredStructure = null;
+        UpdateSearchMarker();
         StatusChanged?.Invoke($"X {(int)Math.Floor(world.X)} · Z {(int)Math.Floor(world.Y)}");
     }
 

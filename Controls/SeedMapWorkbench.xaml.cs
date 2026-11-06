@@ -1,15 +1,14 @@
 using System.Globalization;
-using LinxLauncher.Models;
 using LinxLauncher.Services;
-using SeedMap = RZeroF1.Minecraft.SeedMap.SeedMap;
-using SeedMapGeometry = RZeroF1.Minecraft.SeedMap.SeedMapGeometry;
+using SeedMapProfile = LinxLauncher.Models.SeedMapProfile;
+using SeedMapWaypoint = LinxLauncher.Models.SeedMapWaypoint;
+using SeedMap = RZeroF1.Minecraft.SeedMap;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Media.Animation;
 using Windows.UI.ViewManagement;
 using Windows.Graphics.Imaging;
 using Windows.Storage;
@@ -28,20 +27,32 @@ public sealed partial class SeedMapWorkbench : UserControl
     private readonly List<ListViewItem> _resultRows = new();
     private readonly Dictionary<int, CheckBox> _structureRows = new();
     private (int Version, int Dimension)? _capabilities;
-    private bool _filling, _active, _narrow, _showNotice;
+    private bool _filling, _active, _showNotice;
     private bool _immersive;
     private readonly TranslateTransform _toolbarOffset = new();
     private bool _syncingPin;
     private (SeedMapProfile Profile, SeedMapWaypoint Waypoint, int Index)? _deletedWaypoint;
-    private Storyboard? _panelAnimation;
+    private readonly ViewTransition _toolPanelTransition;
+    private int _selectedToolIndex;
     private CancellationTokenSource? _operation;
     public Window? OwnerWindow { get; set; }
     public event Action? DetachRequested;
     public SeedMapViewport Map => Viewport;
+    private SplitView Workspace => WorkspaceTemplate.Workspace;
+    private Border CommandSurface => WorkspaceTemplate.CommandSurface;
+    private Border MapBorder => WorkspaceTemplate.ViewportBorder;
 
     public SeedMapWorkbench()
     {
         InitializeComponent();
+        WorkspaceTemplate.PaneNavigationView.SelectionChanged += Tools_SelectionChanged;
+        _toolPanelTransition = new ViewTransition(
+            this,
+            WorkspaceTemplate.PaneFrame,
+            ToolPanelHost,
+            BiomePanel,
+            StructurePanel,
+            MarkerPanel);
         Loaded += (_, _) => Start();
         Unloaded += (_, _) => { if (!IsLoaded) Stop(); };
         SizeChanged += (_, _) => Adapt();
@@ -72,7 +83,7 @@ public sealed partial class SeedMapWorkbench : UserControl
             ConfigurePresentation();
             _filling = true;
             if (VersionBox.Items.Count == 0)
-                UiList.Fill(VersionBox, SeedMap.Versions.Select(v => new ComboBoxItem { Content = v.Key, Tag = v.Key }));
+                UiList.Fill(VersionBox, SeedMap.Api.Versions.Select(v => new ComboBoxItem { Content = v.Key, Tag = v.Key }));
             _filling = false;
             Restore();
             Adapt(); AppearanceChanged();
@@ -86,7 +97,7 @@ public sealed partial class SeedMapWorkbench : UserControl
         _active = false;
         if (_save is not null) { _save.Stop(); _save.Tick -= Save_Tick; _save = null; }
         _operation?.Cancel(); _operation = null;
-        _panelAnimation?.Stop(); _panelAnimation = null;
+        _toolPanelTransition.Stop();
         ResultsExpander.IsExpanded = false;
         WorldFlyout.Hide(); JumpFlyout.Hide(); HistoryButton.Flyout.Hide();
         _session.Changed -= Session_Changed;
@@ -110,7 +121,6 @@ public sealed partial class SeedMapWorkbench : UserControl
         RequestedTheme = ThemeService.IsDark ? ElementTheme.Dark : ElementTheme.Light;
         FontService.Apply(this);
         Viewport.Recolor();
-        StatusBar.Background = SeedMapViewport.CreateChromeBrush();
         if (_immersive) SetChromeMaterial();
         UpdateFavorite();
     }
@@ -121,7 +131,7 @@ public sealed partial class SeedMapWorkbench : UserControl
         _showNotice = false;
         WaypointUndo.IsOpen = false; _deletedWaypoint = null;
         var p = _session.Profile;
-        if (!SeedMap.Versions.Any(v => v.Key == p.Version))
+        if (!SeedMap.Api.Versions.Any(v => v.Key == p.Version))
             throw new InvalidOperationException($"不支持 Java {p.Version}；请选择能力表内的版本。");
         _filling = true;
         try
@@ -132,14 +142,14 @@ public sealed partial class SeedMapWorkbench : UserControl
             HeightBox.Value = p.Y;
             GridButton.IsChecked = p.Grid; SlimeButton.IsChecked = p.Slime; SlimeButton.IsEnabled = p.Dimension == 0;
             FavoriteButton.IsChecked = p.Favorite; HideOthersBox.IsChecked = p.HideOtherBiomes;
-            int version = SeedMap.Versions.First(v => v.Key == p.Version).Id;
+            int version = SeedMap.Api.Versions.First(v => v.Key == p.Version).Id;
             bool capabilitiesChanged = _capabilities != (version, p.Dimension);
             if (capabilitiesChanged)
             {
                 _capabilities = (version, p.Dimension);
                 _biomes.Clear(); _types.Clear(); _biomeRows.Clear(); _structureRows.Clear();
-                foreach (var b in SeedMap.Biomes(version, p.Dimension)) _biomes[b.Id] = b;
-                foreach (var t in SeedMap.Structures(version, p.Dimension)) _types[t.Id] = t;
+                foreach (var b in SeedMap.Api.Biomes(version, p.Dimension)) _biomes[b.Id] = b;
+                foreach (var t in SeedMap.Api.Structures(version, p.Dimension)) _types[t.Id] = t;
                 UiList.Fill(LocateBiome, _biomes.Values.Select(b => new ComboBoxItem { Content = b.Name, Tag = b.Id }));
                 if (LocateBiome.Items.Count > 0) LocateBiome.SelectedIndex = 0;
             }
@@ -160,15 +170,8 @@ public sealed partial class SeedMapWorkbench : UserControl
 
     private void Adapt()
     {
-        bool narrow = ActualWidth < 900;
-        Workspace.DisplayMode = narrow || _immersive ? SplitViewDisplayMode.Overlay : SplitViewDisplayMode.Inline;
-        Workspace.OpenPaneLength = Math.Min(320, Math.Max(260, ActualWidth - 32));
+        WorkspaceTemplate.Adapt();
         StructureResults.MaxHeight = Math.Clamp(ActualHeight * .25, 64, 180);
-        if (narrow != _narrow)
-        {
-            if (!_immersive) Workspace.IsPaneOpen = !narrow;
-            _narrow = narrow;
-        }
         bool toolbarNarrow = ActualWidth < 620 || _immersive;
         Grid.SetRow(SeedHost, 0); Grid.SetColumnSpan(SeedHost, toolbarNarrow ? 4 : 1);
         Grid.SetRow(VersionBox, toolbarNarrow ? 1 : 0); Grid.SetColumn(VersionBox, toolbarNarrow ? 0 : 1);
@@ -190,7 +193,8 @@ public sealed partial class SeedMapWorkbench : UserControl
     {
         if (_immersive || OwnerWindow is not Views.SeedMapWindow) return;
         _immersive = true;
-        Root.Children.Remove(WorldBar);
+        WorkspaceTemplate.IsImmersive = true;
+        WorkspaceTemplate.HeaderContent = null;
         WorldFlyout.Content = WorldBar;
         WorldBar.ColumnDefinitions[0].Width = WorldBar.ColumnDefinitions[1].Width = new GridLength(1, GridUnitType.Star);
         WorldBar.ColumnDefinitions[2].Width = new GridLength(84);
@@ -198,12 +202,6 @@ public sealed partial class SeedMapWorkbench : UserControl
         WorldSettingsButton.Visibility = PinButton.Visibility = Visibility.Visible;
         DetachButton.Visibility = Visibility.Collapsed;
         ToolbarGrip.Visibility = Visibility.Visible;
-        Root.Children.Remove(Workspace); Root.Children.Insert(0, Workspace);
-        Root.RowDefinitions[0].Height = new GridLength(1, GridUnitType.Star);
-        for (int i = 1; i < Root.RowDefinitions.Count; i++) Root.RowDefinitions[i].Height = new GridLength(0);
-        Root.RowSpacing = 0;
-        Grid.SetRow(Workspace, 0);
-        Grid.SetRow(CommandSurface, 0);
         CommandSurface.HorizontalAlignment = HorizontalAlignment.Right;
         CommandSurface.VerticalAlignment = VerticalAlignment.Top;
         CommandSurface.Margin = new Thickness(12, 56, 12, 0);
@@ -214,7 +212,7 @@ public sealed partial class SeedMapWorkbench : UserControl
         CommandSurface.BorderBrush = ThemeService.Brush("CardStrokeColorDefaultBrush");
         MapCommands.HorizontalAlignment = HorizontalAlignment.Right;
         Workspace.IsPaneOpen = false;
-        if (Workspace.Pane is Grid pane) pane.Padding = new Thickness(12, 112, 12, 48);
+        WorkspaceTemplate.PaneContainer.Padding = new Thickness(12, 112, 12, 48);
         MapBorder.Margin = new Thickness(0); MapBorder.CornerRadius = new CornerRadius(0);
         MapBorder.BorderThickness = new Thickness(0);
         SetChromeMaterial();
@@ -231,7 +229,6 @@ public sealed partial class SeedMapWorkbench : UserControl
     internal void SetChromeMaterial()
     {
         CommandSurface.Background = SeedMapViewport.CreateChromeBrush();
-        StatusBar.Background = SeedMapViewport.CreateChromeBrush();
         Viewport.RefreshChromeMaterial();
     }
 
@@ -342,7 +339,10 @@ public sealed partial class SeedMapWorkbench : UserControl
         row.ContextFlyout = null;
         if (args.InRecycleQueue || args.Item is not SeedMapProfile profile) return;
         bool favorites = HistoryTabs.SelectedItem == FavoritesTab;
-        var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Resources["SeedMapMenuStyle"] };
+        var menu = new MenuFlyout
+        {
+            MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["WorkbenchMenuStyle"]
+        };
         var open = new MenuFlyoutItem { Text = "打开", Icon = new SymbolIcon(Symbol.OpenFile) };
         open.Click += (_, _) => OpenHistory(profile);
         menu.Items.Add(open);
@@ -424,7 +424,7 @@ public sealed partial class SeedMapWorkbench : UserControl
     }
     private static bool TryReadCoordinate(TextBox box, out double value) =>
         double.TryParse(box.Text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
-        double.IsFinite(value) && value >= -SeedMap.WorldLimit + 1 && value <= SeedMap.WorldLimit - 1;
+        double.IsFinite(value) && value >= -SeedMap.Api.WorldLimit + 1 && value <= SeedMap.Api.WorldLimit - 1;
 
     private static bool TryReadNumber(NumberBox box, out double value)
     {
@@ -493,23 +493,25 @@ public sealed partial class SeedMapWorkbench : UserControl
             _session.Profile.Favorite ? "取消收藏" : "收藏种子");
     }
 
-    private void Tools_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs e)
+    private void Tools_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs e)
     {
-        if (BiomePanel is null || StructurePanel is null || MarkerPanel is null) return;
-        Grid selected = sender.SelectedItem == StructuresTab ? StructurePanel : sender.SelectedItem == MarkersTab ? MarkerPanel : BiomePanel;
-        _panelAnimation?.Stop();
-        foreach (var panel in new[] { BiomePanel, StructurePanel, MarkerPanel })
+        int selectedIndex = ((sender.SelectedItem as NavigationViewItem)?.Tag as string) switch
         {
-            panel.Opacity = 1;
-            panel.Visibility = panel == selected ? Visibility.Visible : Visibility.Collapsed;
-        }
-        if (_active && new UISettings().AnimationsEnabled)
+            "Structures" => 1,
+            "Markers" => 2,
+            _ => 0
+        };
+        if (!_active || selectedIndex == _selectedToolIndex) return;
+        int previousIndex = _selectedToolIndex;
+        FrameworkElement selected = selectedIndex switch
         {
-            var fade = new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(160) };
-            Storyboard.SetTarget(fade, selected); Storyboard.SetTargetProperty(fade, "Opacity");
-            _panelAnimation = new Storyboard(); _panelAnimation.Children.Add(fade); _panelAnimation.Begin();
-        }
-        if (_active) FontService.Apply(selected);
+            1 => StructurePanel,
+            2 => MarkerPanel,
+            _ => BiomePanel
+        };
+        _selectedToolIndex = selectedIndex;
+        _toolPanelTransition.Show(selected, selectedIndex > previousIndex);
+        FontService.Apply(selected);
     }
 
     private void FillBiomes()
@@ -605,14 +607,17 @@ public sealed partial class SeedMapWorkbench : UserControl
     private void FillResults(IReadOnlyList<SeedMap.StructureHit> hits)
     {
         var p = _session.Profile;
-        var ordered = hits.OrderBy(h => SeedMapGeometry.Distance(h.X, h.Z, p.CenterX, p.CenterZ)).Take(300).ToArray();
+        var ordered = hits.OrderBy(h => SeedMap.Geometry.Distance(h.X, h.Z, p.CenterX, p.CenterZ)).Take(300).ToArray();
         ResultsExpander.Header = $"地图中的结构 · {ordered.Length}";
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ResultsExpander, (string)ResultsExpander.Header);
         while (_resultRows.Count < ordered.Length)
         {
             var row = new ListViewItem();
             row.RightTapped += StructureResult_RightTapped;
-            var menu = new MenuFlyout { MenuFlyoutPresenterStyle = (Style)Resources["SeedMapMenuStyle"] };
+            var menu = new MenuFlyout
+            {
+                MenuFlyoutPresenterStyle = (Style)Application.Current.Resources["WorkbenchMenuStyle"]
+            };
             var locate = new MenuFlyoutItem { Text = "导航到此处", Icon = new SymbolIcon(Symbol.MapPin) };
             locate.Click += async (_, _) => { if (row.Tag is SeedMap.StructureHit h) await NavigateStructureAsync(h); };
             var copy = new MenuFlyoutItem { Text = "复制坐标", Icon = new SymbolIcon(Symbol.Copy) };
@@ -640,9 +645,16 @@ public sealed partial class SeedMapWorkbench : UserControl
     {
         if (sender is ListViewItem row) StructureResults.SelectedItem = row;
     }
-    private async void StructureResult_Click(object sender, ItemClickEventArgs e)
+    private async void StructureResults_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
-        if (e.ClickedItem is ListViewItem { Tag: SeedMap.StructureHit h }) await NavigateStructureAsync(h);
+        for (var node = e.OriginalSource as DependencyObject; node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is not ListViewItem { Tag: SeedMap.StructureHit hit })
+                continue;
+            await NavigateStructureAsync(hit);
+            e.Handled = true;
+            return;
+        }
     }
     private async Task NavigateStructureAsync(SeedMap.StructureHit hit)
     {
@@ -803,7 +815,7 @@ public sealed partial class SeedMapWorkbench : UserControl
         if (await dialog.ShowAsync() != ContentDialogResult.Primary || !_active) return;
         if (!TryReadNumber(x0, out double minX) || !TryReadNumber(z0, out double minZ) ||
             !TryReadNumber(x1, out double maxX) || !TryReadNumber(z1, out double maxZ) ||
-            new[] { minX, minZ, maxX, maxZ }.Any(v => v < -SeedMap.WorldLimit || v > SeedMap.WorldLimit)) { StatusText.Text = "导出坐标无效。"; return; }
+            new[] { minX, minZ, maxX, maxZ }.Any(v => v < -SeedMap.Api.WorldLimit || v > SeedMap.Api.WorldLimit)) { StatusText.Text = "导出坐标无效。"; return; }
         bounds = new((int)minX, (int)minZ, (int)maxX, (int)maxZ);
         int sample = (int)((ComboBoxItem)resolution.SelectedItem).Tag;
         if (bounds.MaxX <= bounds.MinX || bounds.MaxZ <= bounds.MinZ ||
@@ -839,7 +851,7 @@ public sealed partial class SeedMapWorkbench : UserControl
             XamlRoot = XamlRoot,
             Title = "种子地图",
             CloseButtonText = "关闭",
-            Content = new TextBlock { Text = "Java 1.16.5 – 1.21.3 · Cubiomes\n固定 Y 高度的群系切片；低倍率为群系采样网格。\n结构为算法预测，不能证明完整方块世界中的生成结果。\n史莱姆区块不代表已满足 Y、光照等生成条件。\n超出 64 位范围的数字按 Java 文本种子处理。\n\nMIT · Cubitect\n" + SeedMap.Revision, TextWrapping = TextWrapping.Wrap, MaxWidth = 420 }
+            Content = new TextBlock { Text = "Java 1.16.5 – 1.21.3 · Cubiomes\n固定 Y 高度的群系切片；低倍率为群系采样网格。\n结构为算法预测，不能证明完整方块世界中的生成结果。\n史莱姆区块不代表已满足 Y、光照等生成条件。\n超出 64 位范围的数字按 Java 文本种子处理。\n\nMIT · Cubitect\n" + SeedMap.Api.Revision, TextWrapping = TextWrapping.Wrap, MaxWidth = 420 }
         };
         FontService.ApplyToDialog(dialog); await dialog.ShowAsync();
     }

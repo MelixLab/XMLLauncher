@@ -81,3 +81,4 @@ Services/LocalSecrets.cs
 # AOT / 中间产物目录（不是源码）
 objc/
 *.predesign
+/docs/Internal-DONOTSUBMIT

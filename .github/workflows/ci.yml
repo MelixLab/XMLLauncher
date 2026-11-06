@@ -74,6 +74,7 @@ jobs:
             'Assets/AppIcon.ico'
             'Assets/Blocks/vanilla.png'
             'rzero_seedmap.dll'
+            'rzero_projection_d3d11.dll'
             'THIRD-PARTY-NOTICES.md'
           )
           foreach ($file in $requiredFiles) {

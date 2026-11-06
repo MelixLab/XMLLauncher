@@ -42,15 +42,24 @@
                 </Canvas>
             </TitleBar.Content>
             <TitleBar.RightHeader>
-                <Button x:Name="TitleBarAccountButton" Width="46" Height="48" Padding="0"
-                        Background="Transparent" BorderThickness="0" CornerRadius="0"
-                        Click="AccountButton_Click" ToolTipService.ToolTip="账户与皮肤"
-                        AutomationProperties.Name="账户与皮肤">
-                    <PersonPicture Width="30" Height="30"
-                                   ProfilePicture="{x:Bind AvatarBrush.ImageSource, Mode=OneWay}"
-                                   Initials="{x:Bind AvatarText.Text, Mode=OneWay}"
-                                   DisplayName="{x:Bind AccountName.Text, Mode=OneWay}"/>
-                </Button>
+                <StackPanel Orientation="Horizontal" Height="48">
+                    <Button x:Name="TitleBarThemeButton" Width="46" Height="48" Padding="0"
+                            Background="Transparent" BorderThickness="0" CornerRadius="0"
+                            Click="ThemeButton_Click"
+                            ToolTipService.ToolTip="切换到深色主题"
+                            AutomationProperties.Name="切换主题">
+                        <FontIcon x:Name="TitleBarThemeIcon" Glyph="&#xE706;" FontSize="16" />
+                    </Button>
+                    <Button x:Name="TitleBarAccountButton" Width="46" Height="48" Padding="0"
+                            Background="Transparent" BorderThickness="0" CornerRadius="0"
+                            Click="AccountButton_Click" ToolTipService.ToolTip="账户与皮肤"
+                            AutomationProperties.Name="账户与皮肤">
+                        <PersonPicture Width="30" Height="30"
+                                       ProfilePicture="{x:Bind AvatarBrush.ImageSource, Mode=OneWay}"
+                                       Initials="{x:Bind AvatarText.Text, Mode=OneWay}"
+                                       DisplayName="{x:Bind AccountName.Text, Mode=OneWay}"/>
+                    </Button>
+                </StackPanel>
             </TitleBar.RightHeader>
         </TitleBar>
 
@@ -76,14 +85,16 @@
             CompactModeThresholdWidth="0"
             CompactPaneLength="48"
             ExpandedModeThresholdWidth="0"
-            IsBackButtonVisible="Collapsed"
+            IsBackButtonVisible="Visible"
+            IsBackEnabled="False"
             IsPaneOpen="False"
             IsPaneToggleButtonVisible="True"
             IsSettingsVisible="False"
             IsTitleBarAutoPaddingEnabled="False"
+            BackRequested="NavView_BackRequested"
             OpenPaneLength="212"
             PaneDisplayMode="LeftCompact"
-            SelectionChanged="NavView_SelectionChanged">
+            ItemInvoked="NavView_ItemInvoked">
 
             <NavigationView.Resources>
                 <ResourceDictionary>

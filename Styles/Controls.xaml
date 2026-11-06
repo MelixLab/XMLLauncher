@@ -8,6 +8,64 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:services="using:LinxLauncher.Services">
 
+    <!-- SeedMapWorkbench 的工作台外壳与 3D 投影共用的弹出层、CommandBar 和亚克力样式。 -->
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <AcrylicBrush x:Key="WorkbenchPopupBrush" TintColor="{ThemeResource SolidBackgroundFillColorBase}"
+                          TintOpacity="0.25" TintLuminosityOpacity="0.65"
+                          FallbackColor="{ThemeResource SolidBackgroundFillColorBase}" />
+            <SolidColorBrush x:Key="CommandBarBackgroundOpen" Color="Transparent" />
+            <SolidColorBrush x:Key="CommandBarBorderBrushOpen" Color="Transparent" />
+            <Thickness x:Key="CommandBarBorderThicknessOpen">0</Thickness>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <AcrylicBrush x:Key="WorkbenchPopupBrush" TintColor="{ThemeResource SolidBackgroundFillColorBase}"
+                          TintOpacity="0.25" TintLuminosityOpacity="0.65"
+                          FallbackColor="{ThemeResource SolidBackgroundFillColorBase}" />
+            <SolidColorBrush x:Key="CommandBarBackgroundOpen" Color="Transparent" />
+            <SolidColorBrush x:Key="CommandBarBorderBrushOpen" Color="Transparent" />
+            <Thickness x:Key="CommandBarBorderThicknessOpen">0</Thickness>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+            <SolidColorBrush x:Key="WorkbenchPopupBrush" Color="{ThemeResource SystemColorWindowColor}" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <Style x:Key="WorkbenchFlyoutStyle" TargetType="FlyoutPresenter" BasedOn="{StaticResource DefaultFlyoutPresenterStyle}">
+        <Setter Property="Background" Value="{ThemeResource WorkbenchPopupBrush}" />
+    </Style>
+    <Style x:Key="WorkbenchJumpFlyoutStyle" TargetType="FlyoutPresenter" BasedOn="{StaticResource WorkbenchFlyoutStyle}">
+        <Setter Property="AllowFocusOnInteraction" Value="True" />
+        <Setter Property="IsTabStop" Value="True" />
+    </Style>
+    <Style x:Key="WorkbenchMenuStyle" TargetType="MenuFlyoutPresenter" BasedOn="{StaticResource DefaultMenuFlyoutPresenterStyle}">
+        <Setter Property="Background" Value="{ThemeResource WorkbenchPopupBrush}" />
+    </Style>
+    <Style x:Key="WorkbenchCommandBarOverflowPresenterStyle"
+           TargetType="CommandBarOverflowPresenter"
+           BasedOn="{StaticResource DefaultCommandBarOverflowPresenterStyle}">
+        <Setter Property="Background" Value="{ThemeResource WorkbenchPopupBrush}" />
+    </Style>
+    <Style x:Key="WorkbenchCommandBarStyle"
+           TargetType="CommandBar"
+           BasedOn="{StaticResource DefaultCommandBarStyle}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="DefaultLabelPosition" Value="Right" />
+        <Setter Property="IsOpen" Value="False" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+        <Setter Property="CommandBarOverflowPresenterStyle"
+                Value="{StaticResource WorkbenchCommandBarOverflowPresenterStyle}" />
+    </Style>
+    <Style x:Key="WorkbenchPaneNavigationViewStyle" TargetType="NavigationView">
+        <Setter Property="PaneDisplayMode" Value="Top" />
+        <Setter Property="IsBackButtonVisible" Value="Collapsed" />
+        <Setter Property="IsSettingsVisible" Value="False" />
+        <Setter Property="IsPaneToggleButtonVisible" Value="False" />
+        <Setter Property="IsTitleBarAutoPaddingEnabled" Value="False" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
     <!-- 原生 Button 模板：常态保留旧灰底，悬停/按压使用主题色，并叠加一次性扫光。 -->
     <Style x:Key="CardActionButtonStyle" TargetType="Button" BasedOn="{StaticResource DefaultButtonStyle}">
         <Setter Property="FontFamily" Value="{StaticResource TextFontFamily}" />
